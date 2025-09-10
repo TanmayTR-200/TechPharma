@@ -1,0 +1,47 @@
+[
+  {
+    "id": 6,
+    "name": "Machine 1",
+    "description": "Solo",
+    "price": 2000,
+    "category": "machinery",
+    "stock": 50,
+    "images": [
+      "https://res.cloudinary.com/dj92mesew/image/upload/v1757353685/techpharma_products/71fRsB4x_UL_hzv760.jpg"
+    ],
+    "status": "active",
+    "userId": "68b3398d3f23632f198a57ad",
+    "createdAt": "2025-09-08T17:48:20.186Z",
+    "updatedAt": "2025-09-08T17:48:20.186Z"
+  },
+  {
+    "id": 7,
+    "name": "Electrobot Starter Kit",
+    "description": "A kit",
+    "price": 1500,
+    "category": "electronics",
+    "stock": 15,
+    "images": [
+      "https://res.cloudinary.com/dj92mesew/image/upload/v1757424728/techpharma_products/electrobot_starter_kit_o7evtm.webp"
+    ],
+    "status": "active",
+    "userId": "68b3398d3f23632f198a57ad",
+    "createdAt": "2025-09-09T13:32:25.792Z",
+    "updatedAt": "2025-09-09T13:32:25.792Z"
+  },
+  {
+    "id": 8,
+    "name": "Firefighter Suit",
+    "description": "A very safe firefighting suit",
+    "price": 5000,
+    "category": "safety",
+    "stock": 10,
+    "images": [
+      "https://res.cloudinary.com/dj92mesew/image/upload/v1757425960/techpharma_products/firefighting_suit_xoyiyg.jpg"
+    ],
+    "status": "active",
+    "userId": "68c030aaac734272f4225138",
+    "createdAt": "2025-09-09T13:52:51.474Z",
+    "updatedAt": "2025-09-09T13:52:51.474Z"
+  }
+]

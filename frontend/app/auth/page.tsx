@@ -1,0 +1,108 @@
+"use client"
+
+import { useEffect } from "react"
+import { Building2 } from "lucide-react"
+import Link from "next/link"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useSearchParams } from "next/navigation"
+import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { LoginForm } from "@/components/auth/login-form"
+import { SignupForm } from "@/components/auth/signup-form"
+
+export default function AuthPage() {
+  const searchParams = useSearchParams();
+  const { toast } = useToast();
+  
+  useEffect(() => {
+    // Handle the message parameter if it exists
+    const message = searchParams.get('message');
+    const mode = searchParams.get('mode') || 'login';
+    
+    if (message === 'existing_user') {
+      toast({
+        title: 'Account Exists',
+        description: 'An account with this email already exists. Please sign in.',
+        variant: 'default'
+      });
+    }
+  }, [searchParams, toast]);
+
+  return (
+    <div className="min-h-screen flex">
+      {/* Left side - Illustration */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-primary/5 to-background items-center justify-center p-12">
+        <div className="max-w-md text-center">
+          <div className="mb-8">
+            <div className="w-32 h-32 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
+              <Building2 className="w-16 h-16 text-primary" />
+            </div>
+            <h2 className="text-3xl font-bold text-foreground mb-4">Connect with Global Suppliers</h2>
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              Join thousands of businesses finding trusted suppliers and growing their operations through our B2B
+              marketplace platform.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="text-2xl font-bold text-primary">50K+</div>
+              <div className="text-sm text-muted-foreground">Suppliers</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-primary">1M+</div>
+              <div className="text-sm text-muted-foreground">Products</div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-primary">100+</div>
+              <div className="text-sm text-muted-foreground">Countries</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Right side - Auth Forms */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12">
+        <div className="w-full max-w-md">
+          <div className="mb-8 text-center lg:text-left">
+            <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold text-primary mb-2">
+              <Building2 className="w-8 h-8" />
+              TradeConnect
+            </Link>
+            <p className="text-muted-foreground">Welcome to the future of B2B commerce</p>
+          </div>
+
+          <Tabs defaultValue={searchParams.get('mode') || 'login'} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6">
+              <TabsTrigger value="login">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="login">
+              <Card>
+                <CardHeader className="space-y-1">
+                  <CardTitle className="text-2xl">Sign in to your account</CardTitle>
+                  <CardDescription>Enter your credentials to access your dashboard</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <LoginForm />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="signup">
+              <Card>
+                <CardHeader className="space-y-1">
+                  <CardTitle className="text-2xl">Create your account</CardTitle>
+                  <CardDescription>Join our marketplace and start connecting with suppliers</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <SignupForm />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </div>
+  )
+}
