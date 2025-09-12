@@ -23,7 +23,7 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
       process.env.FRONTEND_URL || 'https://techpharma.vercel.app',
       /\.vercel\.app$/ // Allow all Vercel preview deployments
     ]
-  : ['http://localhost:3000'];
+  : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
 
 app.use(cors({
   origin: function (origin, callback) {

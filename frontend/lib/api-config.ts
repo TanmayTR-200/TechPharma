@@ -4,13 +4,8 @@ const getBaseUrl = () => {
     return process.env.NEXT_PUBLIC_API_URL;
   }
 
-  // For local development
-  if (process.env.NODE_ENV === 'development') {
-    return 'http://localhost:5000';
-  }
-
-  // Fallback for preview deployments
-  return 'https://techpharma-api.onrender.com';
+  // Always use localhost:5000 for development
+  return 'http://localhost:5000';
 };
 
 export const API_BASE_URL = getBaseUrl();
@@ -43,25 +38,28 @@ export const API_ENDPOINTS = {
 async function checkServerHealth(): Promise<boolean> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // Reduced timeout to 3s for faster feedback
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased timeout to 5s for better reliability
 
     const response = await fetch(`${API_BASE_URL}/health`, {
       signal: controller.signal,
       headers: {
         'Accept': 'application/json'
       },
-      cache: 'no-cache' // Ensure fresh response
+      cache: 'no-cache', // Ensure fresh response
+      mode: 'cors'  // Explicitly set CORS mode
     });
 
     clearTimeout(timeoutId);
     
     if (!response.ok) {
+      console.warn('Health check failed:', response.status, response.statusText);
       return false;
     }
 
     const data = await response.json();
-    return data.status === 'ok';
+    return data.status === 'ok' || data.message === 'Server is running';
   } catch (error) {
+    console.warn('Health check error:', error instanceof Error ? error.message : 'Unknown error');
     return false;
   }
 }
@@ -149,16 +147,17 @@ async function makeRequest(url: string, options: RequestInit): Promise<any> {
 
 export const fetcher = async (url: string, options: RequestInit = {}): Promise<any> => {
   try {
-    // Check server health for non-health-check requests
-    if (!url.includes('/health')) {
+    // Only perform health check for non-health-check endpoints and non-GET requests
+    if (!url.includes('/health') && options.method !== 'GET') {
       try {
+        console.log('Checking server health before request...');
         const isHealthy = await checkServerHealth();
         if (!isHealthy) {
-          throw new Error('Server is not responding. Please check if the server is running.');
+          throw new Error('Server connection check failed. Please try again in a moment.');
         }
       } catch (error: any) {
         console.error('Health check failed:', error);
-        throw new Error('Cannot connect to server. Please ensure the backend server is running.');
+        throw new Error('Unable to connect to the server. Please check your network connection and try again.');
       }
     }
 
@@ -168,6 +167,7 @@ export const fetcher = async (url: string, options: RequestInit = {}): Promise<a
     // Safely construct error details object
     const errorDetails: Record<string, any> = {
       url,
+      method: options.method || 'GET',
       error: error instanceof Error ? error.message : 'Unknown error',
       type: error instanceof Error ? error.constructor.name : typeof error,
     };

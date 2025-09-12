@@ -46,12 +46,19 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/dashboard');
     } catch (error: any) {
       console.error('Login error:', error);
-      if (error.message.includes('Server is not responding')) {
-        throw new Error('The server is currently unavailable. Please try again in a moment.');
+      
+      // Handle specific error cases
+      const errorMessage = error.message.toLowerCase();
+      if (errorMessage.includes('server') || errorMessage.includes('connect')) {
+        throw new Error('Connection to server failed. Please ensure you have a stable internet connection and try again.');
       }
-      if (error.message.includes('Cannot connect')) {
-        throw new Error('Unable to reach the server. Please check your connection and try again.');
+      if (errorMessage.includes('network')) {
+        throw new Error('Network connection issue detected. Please check your internet connection.');
       }
+      if (errorMessage.includes('timeout')) {
+        throw new Error('Request timed out. Please try again.');
+      }
+      // For invalid credentials or other server errors, pass through the original error
       throw error;
     }
   };
