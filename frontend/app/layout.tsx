@@ -37,7 +37,7 @@ export default function RootLayout({
             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://upload-widget.cloudinary.com;
             font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:;
             img-src 'self' data: blob: https://*.cloudinary.com https://res.cloudinary.com;
-            connect-src 'self' http://localhost:* https://*.cloudinary.com https://api.cloudinary.com https://fonts.googleapis.com https://fonts.gstatic.com;
+            connect-src 'self' http://localhost:* https://*.cloudinary.com https://api.cloudinary.com https://fonts.googleapis.com https://fonts.gstatic.com https://techpharma-backend.onrender.com;
             worker-src 'self' blob:;
           `.replace(/\s+/g, ' ').trim()}
         />
