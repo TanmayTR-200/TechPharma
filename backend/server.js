@@ -133,10 +133,25 @@ const transporter = nodemailer.createTransport({
 
 // Enable CORS for frontend
 app.use(cors({
-  origin: ['http://localhost:3000', 'https://techpharma-frontend.onrender.com'],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://techpharma-frontend.onrender.com'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all for now
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'If-None-Match', 'ETag']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'If-None-Match', 'ETag'],
+  exposedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Handle preflight requests
