@@ -139,6 +139,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'If-None-Match', 'ETag']
 }));
 
+// Handle preflight requests
+app.options('*', cors());
+
 // Middleware
 app.use(express.json());
 app.use(morgan('dev'));
