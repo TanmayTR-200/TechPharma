@@ -133,7 +133,7 @@ const transporter = nodemailer.createTransport({
 
 // Enable CORS for frontend
 app.use(cors({
-  origin: true,
+  origin: ['http://localhost:3000', 'https://techpharma-frontend.onrender.com'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'If-None-Match', 'ETag']
