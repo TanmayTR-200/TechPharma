@@ -6,8 +6,9 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files
-COPY package.json pnpm-lock.yaml* package-lock.json* yarn.lock* ./
+# Copy package files from frontend directory
+# This assumes the build context is the repository root
+COPY frontend/package.json frontend/pnpm-lock.yaml* frontend/package-lock.json* frontend/yarn.lock* ./
 
 # Install dependencies based on the preferred package manager
 RUN \
@@ -25,7 +26,8 @@ RUN \
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+# Copy frontend source files from the build context
+COPY frontend/ .
 
 # Set environment variables for build
 ENV NEXT_TELEMETRY_DISABLED=1
