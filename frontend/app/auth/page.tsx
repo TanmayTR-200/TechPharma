@@ -66,7 +66,7 @@ function AuthContent() {
           <div className="mb-8 text-center lg:text-left">
             <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold text-primary mb-2">
               <Building2 className="w-8 h-8" />
-              TradeConnect
+              TechPharma
             </Link>
             <p className="text-muted-foreground">Welcome to the future of B2B commerce</p>
           </div>
