@@ -25,32 +25,8 @@ export function ImageUpload({
   const { toast } = useToast();
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://upload-widget.cloudinary.com/global/all.js';
-    script.async = true;
-    script.defer = true;
-
-    script.onload = () => {
-      console.log('Cloudinary widget loaded successfully');
-      setIsCloudinaryReady(true);
-    };
-
-    script.onerror = () => {
-      console.error('Failed to load Cloudinary widget');
-      toast({
-        title: 'Error',
-        description: 'Failed to initialize upload functionality. Please refresh the page.',
-        variant: 'destructive',
-      });
-    };
-
-    document.body.appendChild(script);
-
-    return () => {
-      document.body.removeChild(script);
-      setIsCloudinaryReady(false);
-    };
-  }, [toast]);
+    setIsCloudinaryReady(true);
+  }, []);
   
   const handleUpload = () => {
     setUploading(true);
@@ -142,11 +118,15 @@ export function ImageUpload({
             <div className="p-3 rounded-full bg-gray-50">
               <ImageIcon className="w-6 h-6 text-gray-400" />
             </div>
-            <div className="mt-2">
+            <div className="flex flex-col items-center gap-3">
               <Button
                 disabled={uploading}
                 variant="secondary"
-                className="font-medium text-sm"
+                className="font-medium text-sm w-full max-w-[200px]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUpload();
+                }}
               >
                 {uploading ? (
                   'Uploading...'
@@ -157,8 +137,61 @@ export function ImageUpload({
                   </>
                 )}
               </Button>
+
+              <div className="flex items-center gap-2">
+                <div className="h-px w-16 bg-gray-200" />
+                <span className="text-sm text-gray-500">or</span>
+                <div className="h-px w-16 bg-gray-200" />
+              </div>
+
+              <Button
+                disabled={uploading}
+                variant="outline"
+                className="font-medium text-sm w-full max-w-[200px]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const widget = createUploadWidget(
+                    (url) => {
+                      setUploading(false);
+                      setImageUrl(url);
+                      toast({
+                        title: 'Success',
+                        description: 'Photo captured successfully',
+                      });
+                      if (onUploadComplete) {
+                        onUploadComplete(url);
+                      }
+                    },
+                    (error) => {
+                      setUploading(false);
+                      toast({
+                        title: 'Capture Failed',
+                        description: error || 'Failed to capture photo',
+                        variant: 'destructive',
+                      });
+                    }
+                  );
+
+                  if (widget) {
+                    widget.open();
+                    // Force camera source after widget opens
+                    const intervalId = setInterval(() => {
+                      const cameraButton = document.querySelector('[data-source="camera"]');
+                      if (cameraButton) {
+                        (cameraButton as HTMLElement).click();
+                        clearInterval(intervalId);
+                      }
+                    }, 100);
+                    // Clear interval after 3 seconds if camera button not found
+                    setTimeout(() => clearInterval(intervalId), 3000);
+                  }
+                }}
+              >
+                <ImageIcon className="w-4 h-4 mr-2" />
+                Take Photo
+              </Button>
             </div>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 mt-3">
               PNG, JPG, GIF up to 10MB
             </p>
           </div>

@@ -1,47 +1,51 @@
 [
   {
-    "id": 6,
-    "name": "Machine 1",
+    "name": "Drilling Machine",
     "description": "Solo",
     "price": 2000,
     "category": "machinery",
-    "stock": 50,
+    "stock": 14,
     "images": [
-      "https://res.cloudinary.com/dj92mesew/image/upload/v1757353685/techpharma_products/71fRsB4x_UL_hzv760.jpg"
+      "https://res.cloudinary.com/dj92mesew/image/upload/v1760700899/71fRsB4x_UL_l5srdn.jpg",
+      "https://res.cloudinary.com/dj92mesew/image/upload/v1761291550/drilling_1_sotwy7.webp"
     ],
     "status": "active",
-    "userId": "68b3398d3f23632f198a57ad",
-    "createdAt": "2025-09-08T17:48:20.186Z",
-    "updatedAt": "2025-09-08T17:48:20.186Z"
+    "userId": "1760257427529",
+    "_id": "1760700902110",
+    "createdAt": "2025-10-17T11:35:02.110Z",
+    "updatedAt": "2025-10-25T14:21:52.202Z",
+    "supplierId": "1760257427529"
   },
   {
-    "id": 7,
-    "name": "Electrobot Starter Kit",
-    "description": "A kit",
-    "price": 1500,
-    "category": "electronics",
-    "stock": 15,
-    "images": [
-      "https://res.cloudinary.com/dj92mesew/image/upload/v1757424728/techpharma_products/electrobot_starter_kit_o7evtm.webp"
-    ],
-    "status": "active",
-    "userId": "68b3398d3f23632f198a57ad",
-    "createdAt": "2025-09-09T13:32:25.792Z",
-    "updatedAt": "2025-09-09T13:32:25.792Z"
-  },
-  {
-    "id": 8,
     "name": "Firefighter Suit",
-    "description": "A very safe firefighting suit",
+    "description": "Firefighting",
     "price": 5000,
     "category": "safety",
-    "stock": 10,
+    "stock": 18,
     "images": [
-      "https://res.cloudinary.com/dj92mesew/image/upload/v1757425960/techpharma_products/firefighting_suit_xoyiyg.jpg"
+      "https://res.cloudinary.com/dj92mesew/image/upload/v1761400591/firefighting_suit_d9x6ux.jpg"
     ],
     "status": "active",
-    "userId": "68c030aaac734272f4225138",
-    "createdAt": "2025-09-09T13:52:51.474Z",
-    "updatedAt": "2025-09-09T13:52:51.474Z"
+    "userId": "1760360335467",
+    "_id": "1761400602737",
+    "createdAt": "2025-10-25T13:56:42.737Z",
+    "updatedAt": "2025-10-25T13:56:42.737Z",
+    "supplierId": "1760360335467"
+  },
+  {
+    "name": "Arduino set",
+    "description": "Arduino",
+    "price": 1000,
+    "category": "electronics",
+    "stock": 13,
+    "images": [
+      "https://res.cloudinary.com/dj92mesew/image/upload/v1761573294/Arduino_Set_w9z1vh.webp"
+    ],
+    "status": "active",
+    "userId": "1760360335467",
+    "_id": "1761573298298",
+    "createdAt": "2025-10-27T13:54:58.298Z",
+    "updatedAt": "2025-10-27T13:54:58.299Z",
+    "supplierId": "1760360335467"
   }
 ]

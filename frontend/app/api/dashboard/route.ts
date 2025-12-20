@@ -1,96 +1,104 @@
 import { NextResponse } from 'next/server';
-import { fetchFromApi, handleApiError } from '@/lib/api-helper';
+
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 2000; // 2 seconds
+const TIMEOUT = 5000; // 5 seconds
+
+// Helper function to delay execution
+const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+// Fetch dashboard data with retries and timeout
+async function fetchDashboardData(authHeader: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT);
+  
+  try {
+    const response = await fetch(`${BASE_URL}/api/dashboard`, {
+      method: 'GET',
+      headers: {
+        'Authorization': authHeader,
+        'Accept': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Request timed out');
+      }
+    }
+    throw error;
+  }
+}
 
 export async function GET(request: Request) {
   try {
-    let orders, products, conversations;
-
-    // Get the token from the request headers
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    try {
-      // First get essential data
-      const [ordersResponse, productsResponse] = await Promise.all([
-        fetch('http://localhost:5000/api/orders', {
+      return new NextResponse(
+        JSON.stringify({ error: 'Authentication required' }), 
+        { 
+          status: 401,
           headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store'
           }
-        }),
-        fetch('http://localhost:5000/api/products', {
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/json'
-          }
-        })
-      ]);
-
-      if (!ordersResponse.ok || !productsResponse.ok) {
-        // Handle specific error cases
-        if (ordersResponse.status === 401 || productsResponse.status === 401) {
-          return NextResponse.json(
-            { error: 'Authentication expired' },
-            { status: 401 }
-          );
         }
-        throw new Error('Failed to fetch essential data');
-      }
-
-      orders = await ordersResponse.json();
-      products = await productsResponse.json();
-    } catch (error) {
-      console.error('Error fetching essential data:', error);
-      return NextResponse.json(
-        { error: 'Failed to fetch orders and products' },
-        { status: 500 }
       );
     }
 
-    // Try to get conversations, but don't fail if it errors
-    try {
-      const conversationsResponse = await fetch('http://localhost:5000/api/messages/conversations', {
+    // Fetch dashboard data directly
+    const response = await fetchDashboardData(authHeader);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      return new NextResponse(
+        JSON.stringify({ 
+          error: data.error || 'Failed to fetch dashboard data',
+          status: response.status 
+        }), 
+        { 
+          status: response.status,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store'
+          }
+        }
+      );
+    }
+
+    // Return successful response with caching headers
+    return new NextResponse(
+      JSON.stringify(data), 
+      { 
+        status: 200,
         headers: {
-          'Authorization': authHeader,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=0, must-revalidate',
+          'Vary': 'Authorization'
         }
-      });
-
-      if (conversationsResponse.ok) {
-        conversations = await conversationsResponse.json();
-      } else {
-        conversations = [];
       }
-    } catch (error) {
-      console.error('Error fetching conversations:', error);
-      conversations = [];
-    }
+    );
 
-    // Calculate statistics
-    const totalProducts = products?.length || 0;
-    const productViews = products?.reduce((sum: number, product: any) => sum + (product.views || 0), 0) || 0;
-    const inquiries = products?.reduce((sum: number, product: any) => sum + (product.inquiries || 0), 0) || 0;
-    const revenue = orders
-      ?.filter((order: any) => order.paymentDetails?.status === 'COMPLETED')
-      ?.reduce((sum: number, order: any) => sum + (order.totalAmount || 0), 0) || 0;
-
-    return NextResponse.json({
-      orders: orders || [],
-      messages: conversations.slice(0, 5), // Get latest 5 conversations
-      totalProducts,
-      productViews,
-      inquiries,
-      revenue
-    });
-  } catch (error: any) {
-    console.error('Error fetching dashboard data:', error);
+  } catch (error) {
+    console.error('Dashboard API error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch dashboard data' },
+      { 
+        success: false,
+        error: 'Failed to fetch dashboard data',
+        details: process.env.NODE_ENV === 'development' ? 
+          (error instanceof Error ? error.message : String(error)) 
+          : undefined
+      },
       { status: 500 }
     );
   }

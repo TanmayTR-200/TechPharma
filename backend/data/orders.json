@@ -1,0 +1,117 @@
+[
+  {
+    "_id": "1761400740123",
+    "userId": "1760360335467",
+    "userName": "Tanmay T",
+    "items": [
+      {
+        "productId": "1760700902110",
+        "name": "Drilling Machine",
+        "price": 2000,
+        "quantity": 2,
+        "image": "https://res.cloudinary.com/dj92mesew/image/upload/v1760700899/71fRsB4x_UL_l5srdn.jpg"
+      }
+    ],
+    "totalAmount": 4000,
+    "status": "pending",
+    "createdAt": "2025-10-25T14:05:40.123Z",
+    "paymentDetails": {
+      "status": "pending",
+      "method": "card"
+    }
+  },
+  {
+    "_id": "1761400952456",
+    "userId": "1760360335467",
+    "userName": "Tanmay T",
+    "items": [
+      {
+        "productId": "1761400602737",
+        "name": "Firefighter Suit",
+        "price": 5000,
+        "quantity": 1,
+        "image": "https://res.cloudinary.com/dj92mesew/image/upload/v1761400591/firefighting_suit_d9x6ux.jpg"
+      }
+    ],
+    "totalAmount": 5000,
+    "status": "completed",
+    "createdAt": "2025-10-25T14:09:12.456Z",
+    "paymentDetails": {
+      "status": "paid",
+      "method": "card"
+    }
+  },
+  {
+    "_id": "1761650634650",
+    "userId": "1760257427529",
+    "items": [
+      {
+        "productId": "1761400602737",
+        "quantity": 1,
+        "price": 5000,
+        "product": {
+          "name": "Firefighter Suit",
+          "images": [
+            "https://res.cloudinary.com/dj92mesew/image/upload/v1761400591/firefighting_suit_d9x6ux.jpg"
+          ]
+        }
+      },
+      {
+        "productId": "1761573298298",
+        "quantity": 2,
+        "price": 1000,
+        "product": {
+          "name": "Arduino set",
+          "images": [
+            "https://res.cloudinary.com/dj92mesew/image/upload/v1761573294/Arduino_Set_w9z1vh.webp"
+          ]
+        }
+      }
+    ],
+    "totalAmount": 7000,
+    "status": "pending",
+    "paymentDetails": {
+      "method": "online",
+      "status": "pending"
+    },
+    "shippingAddress": {
+      "street": "Basavangudi",
+      "city": "Bangalore",
+      "state": "Karnataka",
+      "pincode": "560019",
+      "country": "India"
+    },
+    "createdAt": "2025-10-28T11:23:54.650Z"
+  },
+  {
+    "_id": "1761664164864",
+    "userId": "1760257427529",
+    "items": [
+      {
+        "productId": "1761400602737",
+        "quantity": 1,
+        "price": 5000,
+        "product": {
+          "name": "Firefighter Suit",
+          "images": [
+            "https://res.cloudinary.com/dj92mesew/image/upload/v1761400591/firefighting_suit_d9x6ux.jpg"
+          ]
+        }
+      }
+    ],
+    "totalAmount": 5000,
+    "status": "pending",
+    "paymentDetails": {
+      "method": "online",
+      "status": "pending"
+    },
+    "shippingAddress": {
+      "street": "Basavangudi",
+      "city": "Bangalore",
+      "state": "Karnataka",
+      "pincode": "560019",
+      "country": "India"
+    },
+    "createdAt": "2025-10-28T15:09:24.864Z"
+  }
+]

@@ -1,0 +1,311 @@
+'use strict';
+
+const express = require('express');
+const cors = require('cors');
+const mongoose = require('mongoose');
+
+const app = express();
+const PORT = 5000;
+
+// Enable CORS
+app.use(cors({
+  origin: 'http://localhost:3000',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Middleware
+app.use(express.json());
+
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'ok',
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// MongoDB Connection function
+const connectDB = async () => {
+  try {
+    await mongoose.connect('mongodb://127.0.0.1:27017/techpharma', {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000
+    });
+    console.log('✅ Connected to MongoDB successfully');
+  } catch (err) {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+  }
+};
+
+// Start server
+const startServer = async () => {
+  const PORT = 5000;
+  try {
+    // Try to start the server
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.clear();
+      console.log('='.repeat(50));
+      console.log('Backend Server Running');
+      console.log('-'.repeat(50));
+      console.log(`• Port: ${PORT}`);
+      console.log(`• Database: MongoDB (local)`);
+      console.log(`• URL: http://localhost:${PORT}`);
+      console.log(`• Test Login:`);
+      console.log(`  - Email: tanmaytr05@gmail.com`);
+      console.log(`  - Password: tanmaytr0`);
+      console.log('='.repeat(50));
+    });
+
+    return server;
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Please try these steps:`);
+      console.error('1. Run: taskkill /F /IM node.exe');
+      console.error(`2. Then run: npm run dev`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  }
+};
+
+// Initialize server
+const initServer = async () => {
+  try {
+    const mongoConnected = await connectDB();
+    if (!mongoConnected) {
+      console.error('Could not connect to MongoDB. Starting server anyway...');
+    }
+
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.clear();
+      console.log('='.repeat(50));
+      console.log('Backend Server Running');
+      console.log('-'.repeat(50));
+      console.log(`• Port: ${PORT}`);
+      console.log(`• Database: MongoDB (local)`);
+      console.log(`• URL: http://localhost:${PORT}`);
+      console.log(`• Test Login:`);
+      console.log(`  - Email: tanmaytr05@gmail.com`);
+      console.log(`  - Password: tanmaytr0`);
+      console.log('='.repeat(50));
+    });
+
+    // Handle graceful shutdown
+    const shutdown = () => {
+      server.close(() => {
+        console.log('Server shut down');
+        mongoose.connection.close(false, () => {
+          console.log('MongoDB connection closed');
+          process.exit(0);
+        });
+      });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Please try these steps:`);
+      console.error('1. Run: taskkill /F /IM node.exe');
+      console.error(`2. Then run: npm run dev`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  }
+};
+
+// Dashboard endpoint
+app.get('/api/dashboard', async (req, res) => {
+  try {
+    // Mock dashboard data
+    const dashboardData = {
+      data: {
+        orders: [
+          {
+            _id: '1234',
+            user: 'John Doe',
+            items: [{ product: { name: 'Test Product', _id: '1' }, quantity: 2, price: 99.99 }],
+            totalAmount: 199.98,
+            status: 'PENDING',
+            createdAt: new Date().toISOString(),
+            paymentDetails: { status: 'pending', method: 'card' }
+          }
+        ],
+        messages: [
+          {
+            id: 1,
+            sender: 'Jane Smith',
+            company: 'ABC Corp',
+            message: 'Interested in your products',
+            time: new Date().toISOString(),
+            unread: true
+          }
+        ],
+        totalProducts: 5,
+        productViews: 120,
+        inquiries: 3,
+        revenue: 1999.98
+      }
+    };
+
+    res.json(dashboardData);
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching dashboard data'
+    });
+  }
+});
+
+// Basic schemas
+const UserSchema = new mongoose.Schema({
+  email: String,
+  password: String,
+  name: String,
+  role: String
+});
+
+const ProductSchema = new mongoose.Schema({
+  name: String,
+  price: Number,
+  description: String,
+  category: String
+});
+
+// Models
+const User = mongoose.model('User', UserSchema);
+const Product = mongoose.model('Product', ProductSchema);
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    console.log('Login attempt:', { email });
+
+    // Test credentials
+    if (email === 'tanmaytr05@gmail.com' && password === 'tanmaytr0') {
+      const response = {
+        success: true,
+        user: {
+          _id: '1',
+          email: email,
+          name: 'Test User',
+          role: 'user'
+        },
+        token: 'test-token-' + Date.now()
+      };
+      console.log('Login successful');
+      return res.json(response);
+    }
+
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid credentials'
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Products endpoint
+app.get('/api/products', async (req, res) => {
+  try {
+    const products = [
+      {
+        id: '1',
+        name: 'Test Product 1',
+        price: 99.99,
+        description: 'A test product'
+      },
+      {
+        id: '2',
+        name: 'Test Product 2',
+        price: 149.99,
+        description: 'Another test product'
+      }
+    ];
+
+    res.json(products);
+  } catch (error) {
+    console.error('Products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching products'
+    });
+  }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error'
+  });
+});
+
+// Start server initialization
+initServer();
+      console.clear();
+      console.log('='.repeat(50));
+      console.log('Backend Server Running');
+      console.log('-'.repeat(50));
+      console.log(`• Port: ${PORT}`);
+      console.log(`• Database: MongoDB (local)`);
+      console.log(`• URL: http://localhost:${PORT}`);
+      console.log(`• Test Login:`);
+      console.log(`  - Email: tanmaytr05@gmail.com`);
+      console.log(`  - Password: tanmaytr0`);
+      console.log('='.repeat(50));
+    });
+
+    // Graceful shutdown
+    const shutdown = () => {
+      server.close(() => {
+        console.log('Server shut down');
+        mongoose.connection.close(false, () => {
+          console.log('MongoDB connection closed');
+          process.exit(0);
+        });
+      });
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+
+  } catch (err) {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`Port ${PORT} is already in use. Please try these steps:`);
+      console.error('1. Run: taskkill /F /IM node.exe');
+      console.error(`2. Then run: npm run dev`);
+      process.exit(1);
+    } else {
+      console.error('Server error:', err);
+      process.exit(1);
+    }
+  }
+}
+
+// Start the server
+startServer();

@@ -1,18 +1,24 @@
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Button } from './ui/button';
+import { useAuth } from '@/contexts/auth';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useToast } from './ui/use-toast';
-import { createUploadWidget } from '@/lib/cloudinary';
-import { Plus, Loader2 } from 'lucide-react';
-import { CloudinaryScriptLoader } from './cloudinary-script-loader';
+import { useToast } from '@/hooks/use-toast';
+import { useProduct } from '@/contexts/product-context';
+import { Loader2 } from 'lucide-react';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 export function AddProductDialog() {
   const { toast } = useToast();
+  const router = useRouter();
+  const { createProduct } = useProduct();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [product, setProduct] = useState({
     name: '',
     description: '',
@@ -23,68 +29,82 @@ export function AddProductDialog() {
   });
 
   const handleImageUpload = () => {
-    try {
-      // Check if cloudinary is loaded
-      if (!window.cloudinary) {
-        console.error('Cloudinary not loaded');
-        toast({
-          title: 'Please Wait',
-          description: 'Image upload service is initializing. Please try again in a moment.',
-          variant: 'default',
-        });
-        return;
-      }
+    // Create a hidden file input element
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/png, image/jpeg, image/gif';
+    fileInput.multiple = true;
 
-      let uploadWidget = createUploadWidget(
-        // Success callback
-        (url) => {
-          console.log('Upload success, URL:', url);
-          // Keep track of the new image
-          setProduct(prev => ({
-            ...prev,
-            images: [...prev.images, url]
-          }));
-          // Show success message
-          toast({
-            title: 'Image Added',
-            description: 'Image uploaded successfully',
-          });
-          // Close the widget programmatically
-          if (uploadWidget) {
-            uploadWidget.close();
-          }
-        },
-        // Error callback
-        (error) => {
-          console.error('Upload widget error:', error);
-          toast({
-            title: 'Upload Failed',
-            description: error || 'Failed to upload image. Please try again.',
-            variant: 'destructive',
-          });
-        }
-      );
+    // Handle file selection
+    fileInput.onchange = async (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (!files || files.length === 0) return;
 
-      if (!uploadWidget) {
+      // Validate number of images
+      if (files.length + product.images.length > 5) {
         toast({
-          title: 'Upload Error',
-          description: 'Image upload service is not responding. Please refresh the page and try again.',
+          title: 'Too Many Images',
+          description: `You can only upload up to 5 images total. You can select ${5 - product.images.length} more images.`,
           variant: 'destructive',
         });
         return;
       }
 
-      console.log('Opening upload widget...');
-      uploadWidget.open();
+      // Validate file sizes
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].size > 5 * 1024 * 1024) { // 5MB
+          toast({
+            title: 'File Too Large',
+            description: `${files[i].name} is larger than 5MB`,
+            variant: 'destructive',
+          });
+          return;
+        }
+      }
 
-    } catch (error) {
-      console.error('Image upload error:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to initialize upload widget. Please refresh the page and try again.',
-        variant: 'destructive',
-      });
-    }
+      let uploadedCount = 0;
+      const errors = [];
+
+      // Upload files one by one
+      for (const file of Array.from(files)) {
+        try {
+          const result = await uploadToCloudinary(file);
+          
+          if (result.url) {
+            setProduct(prev => ({
+              ...prev,
+              images: [...prev.images, result.url]
+            }));
+            uploadedCount++;
+          } else {
+            throw new Error(`Failed to upload ${file.name}`);
+          }
+        } catch (error) {
+          console.error('Upload error:', error);
+          errors.push(file.name);
+        }
+      }
+
+      // Show final status
+      if (uploadedCount > 0) {
+        toast({
+          title: 'Upload Complete',
+          description: `Successfully uploaded ${uploadedCount} image${uploadedCount !== 1 ? 's' : ''}`,
+          variant: 'default',
+        });
+      }
+
+      if (errors.length > 0) {
+        toast({
+          title: 'Some Uploads Failed',
+          description: `Failed to upload: ${errors.join(', ')}`,
+          variant: 'destructive',
+        });
+      }
+    };
+
+    // Trigger file selection
+    fileInput.click();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -92,7 +112,10 @@ export function AddProductDialog() {
     setLoading(true);
 
     try {
-      // Validate required fields
+      if (!user?._id) {
+        throw new Error('You must be logged in to create a product');
+      }
+
       if (!product.name || !product.description || !product.price || !product.category || !product.stock) {
         throw new Error('Please fill in all required fields');
       }
@@ -101,65 +124,19 @@ export function AddProductDialog() {
         throw new Error('Please upload at least one product image');
       }
 
-      // Get auth token
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication required');
-      }
-
-      // Format the data
       const productData = {
+        userId: user._id,
         name: product.name.trim(),
         description: product.description.trim(),
         price: parseFloat(product.price),
         category: product.category,
         stock: parseInt(product.stock),
         images: product.images,
-        status: 'active'
+        status: 'active' as const
       };
 
-      console.log('Sending product data:', productData);
-
-      // Create product with already uploaded image URLs
-      const response = await fetch('/api/products', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(productData),
-      });
-
-      console.log('Creating product:', productData);
-      const data = await response.json();
-      console.log('Server response:', data);
-
-      if (!response.ok) {
-        throw new Error(data.message || data.error || 'Failed to create product');
-      }
-
-      // Handle different response structures to get the product ID
-      let createdProductId;
-      if (data._id) {
-        createdProductId = data._id; // Direct product object
-      } else if (data.product?._id) {
-        createdProductId = data.product._id; // Nested product object
-      } else if (data.id) {
-        createdProductId = data.id; // Alternative ID field
-      } else if (typeof data === 'string') {
-        createdProductId = data; // Direct ID return
-      }
-
-      if (!createdProductId) {
-        console.error('Problematic server response:', data);
-        throw new Error('Could not find product ID in server response');
-      }
-
-      toast({
-        title: 'Success!',
-        description: 'Your product has been created and is now live in the marketplace.',
-        variant: 'default',
-      });
+      // Create the product
+      await createProduct(productData);
 
       // Reset form
       setProduct({
@@ -171,22 +148,20 @@ export function AddProductDialog() {
         images: [],
       });
 
-      // Add a small delay to ensure the toast is visible
-      setTimeout(() => {
-        // Redirect to the products page with the new product highlighted
-        window.location.href = `/products?created=true&highlight=${createdProductId}#${createdProductId}`;
-      }, 1000);
+      // Close dialog
+      setIsOpen(false);
+
+      toast({
+        title: 'Success',
+        description: 'Product created successfully',
+        variant: 'default',
+      });
     } catch (error) {
       console.error('Error creating product:', error);
       
       let errorMessage = 'Failed to create product. Please try again.';
       if (error instanceof Error) {
-        if (error.message === 'Authentication required') {
-          errorMessage = 'Please log in to create a product';
-          window.location.href = '/auth?mode=login&message=auth_required';
-        } else {
-          errorMessage = error.message;
-        }
+        errorMessage = error.message;
       }
       
       toast({
@@ -200,19 +175,34 @@ export function AddProductDialog() {
   };
 
   return (
-    <>
-      <CloudinaryScriptLoader />
-      <Dialog>
-        <DialogTrigger asChild>
-          <Button className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            Add New Product
-          </Button>
-        </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="flex items-center gap-2 border-white hover:bg-zinc-800" disabled={loading}>
+          Add New Product
+          <span>+</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-black text-white border-zinc-800"
+        aria-describedby="add-product-description"
+        onPointerDownOutside={(e) => {
+          // Prevent closing dialog if form is submitting
+          if (loading) {
+            e.preventDefault();
+          }
+        }}
+        onInteractOutside={(e) => {
+          // Prevent closing dialog if form is submitting
+          if (loading) {
+            e.preventDefault();
+          }
+        }}
+      >
         <DialogHeader>
-          <DialogTitle>Add New Product</DialogTitle>
-          <DialogDescription>Fill out the form below to add a new product to your inventory.</DialogDescription>
+          <DialogTitle className="text-white">Add New Product</DialogTitle>
+          <DialogDescription id="add-product-description">
+            Fill out the form below to add a new product to your inventory.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           <div className="space-y-2">
@@ -261,50 +251,52 @@ export function AddProductDialog() {
 
           <div className="space-y-2">
             <Label htmlFor="category">Category</Label>
-            <Select
+            <select
+              id="category"
               value={product.category}
-              onValueChange={(value) => setProduct({ ...product, category: value })}
+              onChange={(e) => setProduct({ ...product, category: e.target.value })}
+              className="flex h-9 w-[200px] items-center justify-between rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="electronics">Electronics</SelectItem>
-                <SelectItem value="machinery">Machinery</SelectItem>
-                <SelectItem value="tools">Tools</SelectItem>
-                <SelectItem value="safety">Safety Equipment</SelectItem>
-                <SelectItem value="lighting">Lighting</SelectItem>
-              </SelectContent>
-            </Select>
+              <option value="" disabled>Select Category</option>
+              <option value="electronics">Electronics</option>
+              <option value="machinery">Machinery</option>
+              <option value="tools">Tools</option>
+              <option value="safety">Safety Equipment</option>
+              <option value="lighting">Lighting</option>
+            </select>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="images">Product Images</Label>
             <div className="space-y-4">
-              <Button
-                type="button"
-                variant="outline"
+              <Button 
+                type="button" 
+                variant="secondary" 
+                className="w-full h-auto py-4 flex flex-col items-center gap-2"
                 onClick={handleImageUpload}
-                className="w-full"
               >
-                Upload Images
+                <Loader2 className="w-6 h-6" />
+                <span>Upload Product Images</span>
+                <p className="text-sm text-gray-400 font-normal">PNG, JPG, GIF up to 5MB each (max 5 images)</p>
               </Button>
+              
               {product.images.length > 0 && (
                 <div className="grid grid-cols-2 gap-4">
                   {product.images.map((image, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-zinc-700">
                       <img
                         src={image}
                         alt={`Product image ${index + 1}`}
-                        className="w-full h-full object-contain bg-white"
+                        className="w-full h-full object-contain bg-zinc-900"
                       />
                       <button
                         type="button"
-                        onClick={() => setProduct(prev => ({
-                          ...prev,
-                          images: prev.images.filter((_, i) => i !== index)
-                        }))}
+                        onClick={() => {
+                          setProduct(prev => ({
+                            ...prev,
+                            images: prev.images.filter((_, i) => i !== index)
+                          }));
+                        }}
                         className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-sm"
                       >
                         ×
@@ -329,6 +321,5 @@ export function AddProductDialog() {
         </form>
       </DialogContent>
     </Dialog>
-    </>
   );
 }

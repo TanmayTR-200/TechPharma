@@ -2,12 +2,18 @@ import { NextResponse } from 'next/server';
 
 export async function PUT(request: Request) {
   try {
+    const token = request.headers.get('Authorization')?.split(' ')[1];
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const profileData = await request.json();
 
     const response = await fetch('http://localhost:5000/api/profile', {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
       },
       body: JSON.stringify(profileData),
     });
@@ -30,7 +36,16 @@ export async function PUT(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const response = await fetch('http://localhost:5000/api/profile');
+    const token = request.headers.get('Authorization')?.split(' ')[1];
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const response = await fetch('http://localhost:5000/api/profile', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
     const profile = await response.json();
     return NextResponse.json(profile);
   } catch (error: any) {

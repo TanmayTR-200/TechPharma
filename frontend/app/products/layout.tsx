@@ -7,8 +7,6 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <ProtectedRoute>
-      <DashboardLayout>{children}</DashboardLayout>
-    </ProtectedRoute>
+    <DashboardLayout>{children}</DashboardLayout>
   );
 }

@@ -24,22 +24,12 @@ export default function SellerOnboardingPage() {
               <CardTitle>Basic Plan</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-4">Free</div>
-              <ul className="space-y-2">
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  List up to 10 products
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Basic analytics
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Email support
-                </li>
-              </ul>
-              <Button className="w-full mt-6">Get Started</Button>
+                <div className="text-3xl font-bold mb-4">—</div>
+                <p className="text-sm text-muted-foreground mb-4">Plan details will be available after completing a verified payment.</p>
+                <ul className="space-y-2">
+                  <li className="text-sm text-muted-foreground">Feature details hidden</li>
+                </ul>
+                <Button className="w-full mt-6" disabled aria-disabled title="Requires payment">Requires payment</Button>
             </CardContent>
           </Card>
 
@@ -48,26 +38,12 @@ export default function SellerOnboardingPage() {
               <CardTitle>Professional</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-4">$49/mo</div>
-              <ul className="space-y-2">
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Unlimited products
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Advanced analytics
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Priority support
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Marketing tools
-                </li>
-              </ul>
-              <Button className="w-full mt-6" variant="default">Start Free Trial</Button>
+                <div className="text-3xl font-bold mb-4">—</div>
+                <p className="text-sm text-muted-foreground mb-4">Plan details will be available after completing a verified payment.</p>
+                <ul className="space-y-2">
+                  <li className="text-sm text-muted-foreground">Feature details hidden</li>
+                </ul>
+                <Button className="w-full mt-6" variant="default" disabled aria-disabled title="Requires payment">Requires payment</Button>
             </CardContent>
           </Card>
 
@@ -76,22 +52,12 @@ export default function SellerOnboardingPage() {
               <CardTitle>Enterprise</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-4">Custom</div>
-              <ul className="space-y-2">
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Custom solutions
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Dedicated account manager
-                </li>
-                <li className="flex items-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-500 mr-2" />
-                  Premium features
-                </li>
-              </ul>
-              <Button className="w-full mt-6" variant="outline">Contact Sales</Button>
+                <div className="text-3xl font-bold mb-4">—</div>
+                <p className="text-sm text-muted-foreground mb-4">Plan details will be available after completing a verified payment.</p>
+                <ul className="space-y-2">
+                  <li className="text-sm text-muted-foreground">Feature details hidden</li>
+                </ul>
+                <Button className="w-full mt-6" variant="outline" disabled aria-disabled title="Contact your account manager after payment">Contact Sales</Button>
             </CardContent>
           </Card>
         </div>

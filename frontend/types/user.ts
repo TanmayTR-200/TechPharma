@@ -3,6 +3,9 @@ interface Company {
   address?: string;
   gst?: string;
   phone?: string;
+  website?: string;
+  description?: string;
+  logo?: string;
 }
 
 export interface User {
@@ -10,9 +13,10 @@ export interface User {
   id?: string; // For backward compatibility
   name: string;
   email: string;
+  phone?: string;
   role: 'buyer' | 'supplier' | 'admin';
   company?: Company;
-  createdAt?: string;
+  createdAt: string;
   updatedAt?: string;
 }
 

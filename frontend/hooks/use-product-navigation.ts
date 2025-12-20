@@ -21,8 +21,9 @@ export const useProductNavigation = () => {
     priceMin?: string;
     priceMax?: string;
   }) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams();
     
+    // Only set parameters that are explicitly provided
     if (category) {
       params.set('category', category);
     }
@@ -32,13 +33,13 @@ export const useProductNavigation = () => {
     if (page && page > 1) {
       params.set('page', page.toString());
     }
-    if (sortBy) {
+    if (sortBy && sortBy !== 'featured') {
       params.set('sort', sortBy);
     }
-    if (priceMin) {
+    if (priceMin && priceMin !== '0') {
       params.set('priceMin', priceMin);
     }
-    if (priceMax) {
+    if (priceMax && priceMax !== '10000') {
       params.set('priceMax', priceMax);
     }
 

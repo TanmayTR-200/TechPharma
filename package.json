@@ -1,6 +1,25 @@
 {
+  "name": "techpharma",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \"cd frontend && npm run dev\" \"cd backend && npm run dev\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "start": "cd backend && npm start",
+    "build": "cd frontend && npm run build"
+  },
   "dependencies": {
     "cloudinary": "^2.7.0",
-    "razorpay": "^2.9.6"
+    "concurrently": "^8.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "next": "^15.5.4",
+    "nodemailer": "^7.0.9",
+    "razorpay": "^2.9.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }

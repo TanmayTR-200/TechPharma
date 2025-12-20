@@ -1,0 +1,566 @@
+﻿const express = require('express');
+const cors = require('cors');
+const morgan = require('morgan');
+const path = require('path');
+const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Helper to read JSON files
+function readJsonFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+// Helper to write JSON files
+function writeJsonFile(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+}
+
+// Initialize storage
+function initStorage() {
+  try {
+    const dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    const productsFile = path.join(dataDir, 'products.json');
+    if (!fs.existsSync(productsFile)) {
+      writeJsonFile(productsFile, []);
+    }
+    
+    const usersFile = path.join(dataDir, 'users.json');
+    if (!fs.existsSync(usersFile)) {
+      writeJsonFile(usersFile, []);
+    }
+    
+    console.log('✅ File storage initialized');
+    return true;
+  } catch (err) {
+    console.error('Storage initialization error:', err);
+    return false;
+  }
+}
+
+// Authentication middleware
+const authenticate = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'No token provided'
+      });
+    }
+
+    // Check if it's a test token
+    if (token.startsWith('test-token-')) {
+      const email = req.headers['x-user-email'] || 'tanmaytr05@gmail.com';
+      const name = email === 'tanmaytr05@gmail.com' ? 'Tanmay T R' : email.split('@')[0];
+      
+      req.user = { 
+        _id: '1',
+        id: '1',
+        email: email,
+        name: name,
+        role: 'user'
+      };
+      return next();
+    }
+
+    // For JWT tokens
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
+      req.user = decoded;
+      return next();
+    } catch (jwtError) {
+      console.error('JWT verification failed:', jwtError);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token'
+      });
+    }
+  } catch (error) {
+    console.error('Auth error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication failed'
+    });
+  }
+};
+
+// Enable CORS for frontend
+app.use(cors({
+  origin: true, // Allow all origins
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'If-None-Match', 'ETag']
+}));
+
+// Middleware
+app.use(express.json());
+app.use(morgan('dev'));
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    console.log('Login attempt for email:', email);
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
+
+    const usersFile = path.join(__dirname, 'data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    
+    if (!user) {
+      console.log('User not found:', email);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    console.log('Password match result:', isMatch);
+    
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const token = jwt.sign(
+      { 
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role || 'user'
+      },
+      process.env.JWT_SECRET || 'dev_jwt_secret',
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role || 'user'
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Get current user info endpoint with authentication
+app.get('/api/auth/me', authenticate, async (req, res) => {
+  try {
+    // User info is already attached by authenticate middleware
+    const { user } = req;
+    
+    // Find fresh user data from storage
+    const usersFile = path.join(__dirname, 'data/users.json');
+    const users = readJsonFile(usersFile);
+    const freshUserData = users.find(u => u._id === user._id || u.email === user.email);
+    
+    if (!freshUserData) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Return user info without sensitive data
+    const { password, resetToken, ...userInfo } = freshUserData;
+    res.json({
+      success: true,
+      user: userInfo
+    });
+  } catch (error) {
+    console.error('Auth/me error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+//
+
+
+const User = require('./src/models/User');
+const { sendPasswordResetEmail } = require('./src/services/email');
+
+// Configure nodemailer transporter
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_APP_PASSWORD
+  },
+  debug: true
+});
+
+// Forgot password endpoint
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    // File-based user lookup for dev mode
+    const usersFile = path.join(__dirname, 'data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    // Generate reset token even if user not found (for security)
+    const resetToken = jwt.sign(
+      { userId: user?._id || 'invalid', purpose: 'reset' },
+      process.env.JWT_SECRET || 'dev_jwt_secret',
+      { expiresIn: '1h' }
+    );
+    // If user exists, store token and send email
+    if (user) {
+      // Update user with reset token and expiry
+      const userIndex = users.findIndex(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+      users[userIndex].resetToken = {
+        token: resetToken,
+        expiresAt: new Date(Date.now() + 3600000) // 1 hour from now
+      };
+      writeJsonFile(usersFile, users);
+
+      try {
+        console.log('Testing SMTP connection...');
+        await transporter.verify();
+        console.log('SMTP connection verified successfully');
+        
+        // Send the email with our configured transporter
+        const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/reset-password?token=${resetToken}`;
+        const mailOptions = {
+          from: {
+            name: 'TechPharma Support',
+            address: process.env.EMAIL_USER
+          },
+          to: email,
+          subject: 'Reset Your Password - TechPharma',
+          html: `
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+              <h2>Reset Your Password</h2>
+              <p>You have requested to reset your password. Click the link below to set a new password:</p>
+              <p>
+                <a href="${resetLink}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 20px 0;">
+                  Reset Password
+                </a>
+              </p>
+              <p>If you didn't request this, please ignore this email.</p>
+              <p>This link will expire in 1 hour for security reasons.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+              <p style="color: #666; font-size: 12px;">
+                This is an automated email from TechPharma. Please do not reply to this email.
+              </p>
+            </div>
+          `
+        };
+        
+        const info = await transporter.sendMail(mailOptions);
+        console.log('Password reset email sent successfully:', info.messageId);
+      } catch (emailError) {
+        console.error('Detailed email error:', emailError);
+        // Log all error details for debugging
+        console.log('Email error details:', {
+          code: emailError.code,
+          message: emailError.message,
+          response: emailError.response,
+          stack: emailError.stack
+        });
+        // In development, provide the reset link in console
+//
+
+//
+    const { password, ...userInfo } = user;
+    return res.json({
+      success: true,
+      user: userInfo
+    });
+  } catch (error) {
+    console.error('Auth/me error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Reset password endpoint
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Token and new password are required' 
+      });
+    }
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
+      if (decoded.purpose !== 'reset') {
+        throw new Error('Invalid token purpose');
+      }
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token'
+      });
+    }
+    // Find user and update password (file-based)
+    const usersFile = path.join(__dirname, 'data/users.json');
+    const users = readJsonFile(usersFile);
+    const userIndex = users.findIndex(u => u._id === decoded.userId);
+    if (userIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    // Hash the new password before saving
+    const bcrypt = require('bcryptjs');
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    users[userIndex].password = hashedPassword;
+    writeJsonFile(usersFile, users);
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully. You can now log in with your new password.'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
+// Product Routes
+app.get('/api/products', async (req, res) => {
+  try {
+    const { page = 1, sort = 'featured', category, search, priceMin, priceMax } = req.query;
+    let products = readJsonFile(path.join(__dirname, 'data/products.json'));
+    
+    // Filter active products
+    let filteredProducts = products.filter(p => p.status === 'active');
+
+    // Apply category filter
+    if (category) {
+      const categories = category.toLowerCase().split(',');
+      filteredProducts = filteredProducts.filter(p => 
+        p.category && categories.includes(p.category.toLowerCase())
+      );
+    }
+
+    // Apply search filter
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredProducts = filteredProducts.filter(p => 
+        p.name.toLowerCase().includes(searchLower) || 
+        p.description.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply price filter
+    if (priceMin || priceMax) {
+      const min = priceMin ? parseFloat(priceMin) : 0;
+      const max = priceMax ? parseFloat(priceMax) : Number.MAX_VALUE;
+      filteredProducts = filteredProducts.filter(p => 
+        p.price >= min && p.price <= max
+      );
+    }
+
+    // Apply sorting
+    switch (sort) {
+      case 'price-asc':
+        filteredProducts.sort((a, b) => a.price - b.price);
+        break;
+      case 'price-desc':
+        filteredProducts.sort((a, b) => b.price - a.price);
+        break;
+      case 'newest':
+        filteredProducts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        break;
+      case 'featured':
+      default:
+        // Keep original order for featured
+        break;
+    }
+
+    // Apply pagination
+    const pageSize = 12;
+    const startIndex = (parseInt(page) - 1) * pageSize;
+    const paginatedProducts = filteredProducts.slice(startIndex, startIndex + pageSize);
+
+    res.json({
+      success: true,
+      products: paginatedProducts,
+      total: filteredProducts.length,
+      page: parseInt(page),
+      totalPages: Math.ceil(filteredProducts.length / pageSize)
+    });
+  } catch (error) {
+    console.error('Products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching products'
+    });
+  }
+});
+
+// Create product
+app.post('/api/products', authenticate, async (req, res) => {
+  try {
+    const productsFilePath = path.join(__dirname, 'data/products.json');
+    let products = readJsonFile(productsFilePath);
+    
+    const newProduct = {
+      ...req.body,
+      _id: Date.now().toString(), // Simple ID generation
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      supplierId: req.user._id
+    };
+
+    products.push(newProduct);
+    writeJsonFile(productsFilePath, products);
+
+    res.status(201).json({
+      success: true,
+      product: newProduct
+    });
+  } catch (error) {
+    console.error('Create product error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error creating product'
+    });
+  }
+});
+
+const { deleteImage, getPublicIdFromUrl } = require('./src/services/cloudinary');
+
+// Delete product
+app.delete('/api/products/:id', authenticate, async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const productsFilePath = path.join(__dirname, 'data/products.json');
+    let products = readJsonFile(productsFilePath);
+
+    // Find product index
+    const productIndex = products.findIndex(p => 
+      p.id === productId || 
+      p._id === productId ||
+      p.id === String(productId) || 
+      p._id === String(productId)
+    );
+    if (productIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    // Get product before deletion for Cloudinary cleanup
+    const product = products[productIndex];
+
+    // Clean up Cloudinary images if they exist
+    if (product.images && Array.isArray(product.images)) {
+      for (const imageUrl of product.images) {
+        if (imageUrl.includes('cloudinary.com')) {
+          try {
+            const publicId = getPublicIdFromUrl(imageUrl);
+            if (publicId) {
+              await deleteImage(publicId);
+              console.log('Deleted Cloudinary image:', publicId);
+            }
+          } catch (error) {
+            console.error('Failed to delete Cloudinary image:', error);
+            // Continue with other images even if one fails
+          }
+        }
+      }
+    }
+
+    // Remove from products array
+    products.splice(productIndex, 1);
+
+    // Save updated products list
+    writeJsonFile(productsFilePath, products);
+
+    res.json({
+      success: true,
+      message: 'Product deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete product error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting product'
+    });
+  }
+});
+
+// Import routes
+const dashboardRoutes = require('./src/routes/dashboard');
+const messageRoutes = require('./routes/messages');
+const userRoutes = require('./routes/users');
+
+// Use routes
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/users', userRoutes);
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error'
+  });
+});
+
+const startServer = async () => {
+  // Initialize storage
+  initStorage();
+  // Start Express server
+  console.log('Starting Express server...');
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('=========================================');
+    console.log('🚀 Backend Server Running');
+    console.log('-----------------------------------------');
+    console.log('• Port:', PORT);
+    console.log('• URL: http://localhost:' + PORT);
+    console.log('• Storage: File-based');
+    console.log('=========================================');
+  });
+};
+
+startServer();

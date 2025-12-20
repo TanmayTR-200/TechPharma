@@ -1,8 +1,10 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { AuthProvider } from '@/contexts/auth-new';
-import { ProductProvider } from '@/contexts/product-provider';
+import AuthProvider from '@/contexts/auth';
+import ProductProvider from '@/contexts/product-context';
+import { CartProvider } from '@/contexts/cart';
+import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 
 interface ProvidersWrapperProps {
@@ -11,11 +13,22 @@ interface ProvidersWrapperProps {
 
 export function ProvidersWrapper({ children }: ProvidersWrapperProps) {
   return (
-    <AuthProvider>
-      <ProductProvider>
-        {children}
-        <Toaster />
-      </ProductProvider>
-    </AuthProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem={false}
+      disableTransitionOnChange
+      forcedTheme="dark"
+      storageKey="techpharma-theme"
+    >
+      <AuthProvider>
+        <ProductProvider>
+          <CartProvider>
+            {children}
+            <Toaster />
+          </CartProvider>
+        </ProductProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

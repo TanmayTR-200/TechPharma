@@ -1,0 +1,684 @@
+const express = require('express');
+const cors = require('cors');
+const mongoose = require('mongoose');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
+
+const app = express();
+
+// Basic middleware setup
+app.use(express.json());
+app.use(cors({
+    origin: 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(cors());
+
+app.use(express.json());
+
+
+
+// Rate limiter - 1 request per 30 secondsconst app = express();const app = express();
+
+const limiter = rateLimit({
+
+    windowMs: 30 * 1000,
+
+    max: 1,
+
+    standardHeaders: true,// Rate limiter for dashboard// Auth middleware
+
+    legacyHeaders: false,
+
+    handler: (req, res) => {const dashboardLimiter = rateLimit({const authenticate = (req, res, next) => {
+
+        res.status(429).json({
+
+            success: false,    windowMs: 30 * 1000, // 30 seconds    const authHeader = req.headers.authorization;
+
+            error: 'Too many requests'
+
+        });    max: 1, // limit each IP to 1 request per windowMs    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+
+    }
+
+});    message: {        return res.status(401).json({ 
+
+
+
+// Mock data        success: false,            success: false, 
+
+const mockData = {
+
+    stats: {        error: 'Too many requests, please try again after 30 seconds'            message: 'No authentication token provided' 
+
+        totalProducts: 5,
+
+        productViews: 120,    },        });
+
+        recentOrders: 8,
+
+        revenue: 15000    standardHeaders: true,    }
+
+    },
+
+    orders: [{    legacyHeaders: false,
+
+        _id: "order1",
+
+        user: "John Doe",});    const token = authHeader.split(' ')[1];
+
+        items: [{
+
+            product: { name: "Premium Medical Kit", _id: "prod1" },    if (!token || !token.startsWith('test-token-')) {
+
+            quantity: 2,
+
+            price: 2000// Auth middleware        return res.status(401).json({ 
+
+        }],
+
+        totalAmount: 4000,const authenticate = (req, res, next) => {            success: false, 
+
+        status: "CONFIRMED",
+
+        createdAt: new Date().toISOString(),    const authHeader = req.headers.authorization;            message: 'Invalid authentication token' 
+
+        paymentDetails: { status: "PAID", method: "CARD" }
+
+    }]    if (!authHeader || !authHeader.startsWith('Bearer ')) {        });
+
+};
+
+        return res.status(401).json({     }
+
+// Dashboard endpoint with rate limiting and caching
+
+app.get('/api/dashboard', limiter, (req, res) => {            success: false, 
+
+    res.set({
+
+        'Cache-Control': 'private, max-age=30',            message: 'No authentication token provided'     // For demo, set a mock user ID
+
+        'Expires': new Date(Date.now() + 30000).toUTCString()
+
+    });        });    req.user = { _id: '1', email: 'tanmaytr05@gmail.com', name: 'Test User' };
+
+    
+
+    res.json({    }    next();
+
+        success: true,
+
+        data: mockData};
+
+    });
+
+});    const token = authHeader.split(' ')[1];
+
+
+
+const PORT = process.env.PORT || 5000;    if (!token || !token.startsWith('test-token-')) {const express = require('express');
+
+app.listen(PORT, () => {
+
+    console.log(`Server running on port ${PORT}`);        return res.status(401).json({ const cors = require('cors');
+
+});
+            success: false, const mongoose = require('mongoose');
+
+            message: 'Invalid authentication token' const { authenticate } = require('./middleware/auth');
+
+        });
+
+    }const app = express();
+
+
+
+    // For demo, set a mock user ID// CORS configuration
+
+    req.user = { _id: '1', email: 'tanmaytr05@gmail.com', name: 'Test User' };app.use(cors({
+
+    next();    origin: 'http://localhost:3000',
+
+};    credentials: true,
+
+    methods: ['GET', 'POST'],
+
+// CORS configuration    allowedHeaders: ['Content-Type', 'Authorization']
+
+app.use(cors({}));
+
+    origin: 'http://localhost:3000',
+
+    credentials: true,// Dashboard route handler
+
+    methods: ['GET', 'POST'],const handleDashboardRequest = async (req, res) => {
+
+    allowedHeaders: ['Content-Type', 'Authorization']    let dbConnected = mongoose.connection.readyState === 1;
+
+}));    
+
+    try {
+
+app.use(express.json());        if (!req.headers.accept?.includes('application/json')) {
+
+            return res.status(406).json({
+
+// Basic schemas                success: false,
+
+const UserSchema = new mongoose.Schema({                message: 'Only JSON responses are supported'
+
+    email: String,            });
+
+    name: String,        }
+
+    role: String
+
+});        // Set caching headers
+
+        res.set({
+
+const ProductSchema = new mongoose.Schema({            'Cache-Control': 'private, max-age=5',  // Cache for 5 seconds
+
+    name: String,            'Expires': new Date(Date.now() + 5000).toUTCString(),
+
+    price: Number,            'Vary': 'Authorization'  // Vary cache by auth token
+
+    description: String,        });
+
+    category: String
+
+});        // Get stats data (using mock data if DB is not connected)
+
+        const stats = {
+
+const OrderSchema = new mongoose.Schema({            totalProducts: dbConnected ? await Product.countDocuments() : 5,
+
+    userId: String,            productViews: 120,
+
+    products: Array,            recentOrders: dbConnected ? await Order.countDocuments() : 8,
+
+    status: String,            revenue: 15000
+
+    total: Number,        };
+
+    createdAt: Date
+
+});        // Get recent orders (using mock data if DB is not connected)
+
+        const orders = dbConnected 
+
+// Models            ? await Order.find().sort({ createdAt: -1 }).limit(10).lean()
+
+const User = mongoose.model('User', UserSchema);            : [{
+
+const Product = mongoose.model('Product', ProductSchema);                _id: "order1",
+
+const Order = mongoose.model('Order', OrderSchema);                user: "John Doe",
+
+                items: [{
+
+// Cache middleware                    product: {
+
+const cacheControl = (req, res, next) => {                        name: "Premium Medical Kit",
+
+    res.set({                        _id: "prod1"
+
+        'Cache-Control': 'private, max-age=30',                    },
+
+        'Expires': new Date(Date.now() + 30000).toUTCString(),                    quantity: 2,
+
+        'Vary': 'Authorization'                    price: 2000
+
+    });                }],
+
+    next();                totalAmount: 4000,
+
+};                status: "CONFIRMED",
+
+                createdAt: new Date().toISOString(),
+
+// Dashboard route handler with rate limiting and caching                paymentDetails: {
+
+app.get('/api/dashboard', authenticate, dashboardLimiter, cacheControl, async (req, res) => {                    status: "PAID",
+
+    let dbConnected = mongoose.connection.readyState === 1;                    method: "CARD"
+
+                    }
+
+    try {            }];
+
+        if (!req.headers.accept?.includes('application/json')) {
+
+            return res.status(406).json({        // Return data in the expected format
+
+                success: false,        return res.json({
+
+                message: 'Only JSON responses are supported'            success: true,
+
+            });            data: {
+
+        }                stats,
+
+                orders
+
+        // Get stats data (using mock data if DB is not connected)            }
+
+        const stats = {        });
+
+            totalProducts: dbConnected ? await Product.countDocuments() : 5,    } catch (error) {
+
+            productViews: 120,        console.error('Dashboard error:', error);
+
+            recentOrders: dbConnected ? await Order.countDocuments() : 8,        return res.status(500).json({
+
+            revenue: 15000            success: false,
+
+        };            error: 'Internal server error',
+
+            message: error.message
+
+        // Get recent orders (using mock data if DB is not connected)        });
+
+        const orders = dbConnected     }
+
+            ? await Order.find().sort({ createdAt: -1 }).limit(10).lean()};
+
+            : [{
+
+                _id: "order1",app.use(express.json());
+
+                user: "John Doe",
+
+                items: [{// Dashboard endpoints - only keep the main one
+
+                    product: {app.get('/api/dashboard', authenticate, handleDashboardRequest);
+
+                        name: "Premium Medical Kit",
+
+                        _id: "prod1"// Health check endpoint with MongoDB connection status
+
+                    },app.get('/health', async (req, res) => {
+
+                    quantity: 2,    try {
+
+                    price: 2000        // Check MongoDB connection
+
+                }],        const isMongoConnected = mongoose.connection.readyState === 1;
+
+                totalAmount: 4000,        
+
+                status: "CONFIRMED",        res.json({ 
+
+                createdAt: new Date().toISOString(),            status: 'ok',
+
+                paymentDetails: {            message: 'Server is running',
+
+                    status: "PAID",            timestamp: new Date().toISOString(),
+
+                    method: "CARD"            database: {
+
+                }                connected: isMongoConnected,
+
+            }];                name: 'MongoDB',
+
+                host: mongoose.connection.host
+
+        // Return data with etag for caching            },
+
+        return res.json({            server: {
+
+            success: true,                port: server.address()?.port || process.env.PORT || 4000,
+
+            data: {                environment: process.env.NODE_ENV || 'development'
+
+                stats,            }
+
+                orders        });
+
+            }    } catch (error) {
+
+        });        console.error('Health check failed:', error);
+
+    } catch (error) {        res.status(500).json({
+
+        console.error('Dashboard error:', error);            status: 'error',
+
+        return res.status(500).json({            message: 'Health check failed',
+
+            success: false,            timestamp: new Date().toISOString(),
+
+            error: 'Internal server error',            error: error.message
+
+            message: error.message        });
+
+        });    }
+
+    }});
+
+});
+
+// Request logging with more details
+
+// Request logging with more detailsapp.use((req, res, next) => {
+
+app.use((req, res, next) => {    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);    next();
+
+    next();});
+
+});
+
+// Auth middleware
+
+// For development, using local MongoDB (with fallback for no MongoDB)const authenticate = (req, res, next) => {
+
+const MONGODB_URI = 'mongodb://127.0.0.1:27017/techpharma';    const authHeader = req.headers.authorization;
+
+let dbConnected = false;    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+
+        return res.status(401).json({ 
+
+const connectToMongo = async () => {            success: false, 
+
+    try {            message: 'No authentication token provided' 
+
+        await mongoose.connect(MONGODB_URI, {        });
+
+            useNewUrlParser: true,    }
+
+            useUnifiedTopology: true,
+
+            serverSelectionTimeoutMS: 5000,    const token = authHeader.split(' ')[1];
+
+        });    if (!token || !token.startsWith('test-token-')) {
+
+        dbConnected = true;        return res.status(401).json({ 
+
+        console.log('Connected to MongoDB');            success: false, 
+
+    } catch (err) {            message: 'Invalid authentication token' 
+
+        console.warn('MongoDB connection error:', err.message);        });
+
+        console.log('Running in memory-only mode (no persistent storage)');    }
+
+        dbConnected = false;
+
+    }    // For demo, set a mock user ID
+
+}    req.user = { _id: '1', email: 'tanmaytr05@gmail.com', name: 'Test User' };
+
+    next();
+
+// Try to connect but don't block server start};
+
+connectToMongo();
+
+// For development, using local MongoDB (with fallback for no MongoDB)
+
+// Get port from environment variable or use 5000 as defaultconst MONGODB_URI = 'mongodb://127.0.0.1:27017/techpharma';
+
+const PORT = process.env.PORT || 5000;let dbConnected = false;
+
+
+
+// Start serverconst connectToMongo = async () => {
+
+app.listen(PORT, '0.0.0.0', () => {    try {
+
+    console.clear();        await mongoose.connect(MONGODB_URI, {
+
+    console.log('='.repeat(50));            useNewUrlParser: true,
+
+    console.log('Backend Server Running');            useUnifiedTopology: true,
+
+    console.log('-'.repeat(50));            serverSelectionTimeoutMS: 5000,
+
+    console.log(`• Port: ${PORT}`);        });
+
+    console.log(`• Database: MongoDB`);        dbConnected = true;
+
+    console.log(`• URL: http://localhost:${PORT}`);        console.log('Connected to MongoDB');
+
+    console.log(`• Test Login:`);    } catch (err) {
+
+    console.log(`  - Email: tanmaytr05@gmail.com`);        console.warn('MongoDB connection error:', err.message);
+
+    console.log(`  - Password: tanmaytr0`);        console.log('Running in memory-only mode (no persistent storage)');
+
+    console.log('='.repeat(50));        dbConnected = false;
+
+});    }
+}
+
+// Try to connect but don't block server start
+connectToMongo();
+
+// Basic schemas
+const UserSchema = new mongoose.Schema({
+    email: String,
+    name: String,
+    role: String
+});
+
+const ProductSchema = new mongoose.Schema({
+    name: String,
+    price: Number,
+    description: String,
+    category: String
+});
+
+const OrderSchema = new mongoose.Schema({
+    userId: String,
+    products: Array,
+    status: String,
+    total: Number,
+    createdAt: Date
+});
+
+
+
+// Models
+const User = mongoose.model('User', UserSchema);
+const Product = mongoose.model('Product', ProductSchema);
+const Order = mongoose.model('Order', OrderSchema);
+
+
+// Login endpoint
+app.post('/api/auth/login', (req, res) => {
+    const { email, password } = req.body;
+    
+    console.log('Login attempt:', { email });
+
+    // Test credentials
+    if (email === 'tanmaytr05@gmail.com' && password === 'tanmaytr0') {
+        const response = {
+            success: true,
+            user: {
+                _id: '1',
+                email: email,
+                name: 'Test User',
+                role: 'user'
+            },
+            token: 'test-token-' + Date.now()
+        };
+        
+        console.log('Login successful');
+        return res.json(response);
+    }
+
+    return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+    });
+});
+
+// Analytics endpoint
+app.get('/api/dashboard/analytics', authenticate, async (req, res) => {
+    let dbConnected = mongoose.connection.readyState === 1;
+    
+    try {
+        // Get stats data (using mock data if DB is not connected)
+        const stats = {
+            totalProducts: dbConnected ? await Product.countDocuments() : 5,
+            productViews: 120,
+            recentOrders: dbConnected ? await Order.countDocuments() : 8,
+            revenue: 15000
+        };
+
+        // Get recent orders (using mock data if DB is not connected)
+        const orders = dbConnected 
+            ? await Order.find().sort({ createdAt: -1 }).limit(10).lean()
+            : [
+                {
+                    _id: "order1",
+                    user: "John Doe",
+                    items: [
+                        {
+                            product: {
+                                name: "Premium Medical Kit",
+                                _id: "prod1"
+                            },
+                            quantity: 2,
+                            price: 2000
+                        }
+                    ],
+                    totalAmount: 4000,
+                    status: "CONFIRMED",
+                    createdAt: new Date().toISOString(),
+                    paymentDetails: {
+                        status: "PAID",
+                        method: "CARD"
+                    }
+                }
+            ];
+
+        res.json({
+            success: true,
+            data: {
+                stats,
+                orders
+            },
+            mode: dbConnected ? 'database' : 'mock'
+        });
+    } catch (error) {
+        console.error('Dashboard error:', error);
+        // Send mock data on error as fallback
+        res.json({
+            success: true,
+            data: {
+                stats: {
+                    totalProducts: 5,
+                    productViews: 120,
+                    recentOrders: 8,
+                    revenue: 15000
+                },
+                orders: [
+                    {
+                        _id: "order1",
+                        user: "John Doe",
+                        items: [
+                            {
+                                product: {
+                                    name: "Premium Medical Kit",
+                                    _id: "prod1"
+                                },
+                                quantity: 2,
+                                price: 2000
+                            }
+                        ],
+                        totalAmount: 4000,
+                        status: "CONFIRMED",
+                        createdAt: new Date().toISOString(),
+                        paymentDetails: {
+                            status: "PAID",
+                            method: "CARD"
+                        }
+                    }
+                ]
+            },
+            mode: 'mock',
+            error: error.message
+        });
+    }
+});
+
+
+
+// Products endpoint
+app.get('/api/products', async (req, res) => {
+    try {
+        // Mock products data
+        const products = [
+            {
+                id: '1',
+                name: 'Product A',
+                price: 99.99,
+                description: 'High quality product'
+            },
+            {
+                id: '2',
+                name: 'Product B',
+                price: 149.99,
+                description: 'Premium product'
+            }
+        ];
+
+        res.json(products);
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching products'
+        });
+    }
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+    console.error('Server error:', err);
+    res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+    });
+});
+
+// Get port from environment variable or use 5000 as default
+const PORT = process.env.PORT || 5000;
+
+// Start server directly on the specified port
+app.listen(PORT, '0.0.0.0', () => {
+    console.clear();
+    console.log('='.repeat(50));
+    console.log('Backend Server Running');
+    console.log('-'.repeat(50));
+    console.log(`• Port: ${PORT}`);
+    console.log(`• Database: MongoDB`);
+    console.log(`• URL: http://localhost:${PORT}`);
+    console.log(`• Test Login:`);
+    console.log(`  - Email: tanmaytr05@gmail.com`);
+    console.log(`  - Password: tanmaytr0`);
+    console.log('='.repeat(50));
+
+    // Update frontend config with the port
+    try {
+        const fs = require('fs');
+        const frontendConfigPath = '../frontend/lib/api-config.ts';
+        if (fs.existsSync(frontendConfigPath)) {
+            let config = fs.readFileSync(frontendConfigPath, 'utf8');
+            config = config.replace(
+                /const API_BASE_URL = ['"]http:\/\/localhost:\d+['"]/,
+                `const API_BASE_URL = 'http://localhost:${PORT}'`
+            );
+            fs.writeFileSync(frontendConfigPath, config);
+            console.log(`✓ Frontend API configuration updated to use port ${PORT}`);
+        }
+    } catch (error) {
+        console.warn('Could not update frontend config:', error.message);
+    }
+});

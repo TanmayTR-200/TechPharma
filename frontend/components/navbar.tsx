@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from 'react'
-import { Search, Menu } from "lucide-react"
-import { useAuth } from "@/contexts/auth-new"
+import { Search } from "lucide-react"
+import Menu from "lucide-react/dist/esm/icons/menu"
+import { useAuth } from "@/contexts/auth"
 import { useProduct } from "@/contexts/product-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,23 +57,13 @@ export function Navbar() {
             )}
             {user ? (
               <div className="flex items-center space-x-4">
-                {user.role === 'supplier' ? (
-                  <Button
-                    variant="ghost"
-                    className="text-foreground hover:text-accent"
-                    onClick={() => window.location.href = '/dashboard'}
-                  >
-                    Supplier Dashboard
-                  </Button>
-                ) : (
-                  <Button
-                    variant="ghost"
-                    className="text-foreground hover:text-accent"
-                    onClick={() => window.location.href = '/orders'}
-                  >
-                    My Orders
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  className="text-foreground hover:text-accent"
+                  onClick={() => window.location.href = '/dashboard'}
+                >
+                  Dashboard
+                </Button>
                 <Button
                   variant="outline"
                   className="border-accent text-accent hover:bg-accent hover:text-accent-foreground bg-transparent"
@@ -84,14 +75,13 @@ export function Navbar() {
             ) : (
               <>
                 <Button
-                  variant="outline"
-                  className="border-accent text-accent hover:bg-accent hover:text-accent-foreground bg-transparent"
+                  className="bg-white text-black border border-zinc-300 hover:bg-zinc-100"
                   onClick={() => window.location.href = '/auth?mode=login'}
                 >
-                  Login
+                  Sign In
                 </Button>
                 <Button 
-                  className="bg-accent hover:bg-accent/90 text-accent-foreground"
+                  className="bg-white text-black border border-zinc-300 hover:bg-zinc-100"
                   onClick={() => window.location.href = '/auth?mode=signup'}
                 >
                   Sign Up
@@ -111,15 +101,9 @@ export function Navbar() {
               <DropdownMenuContent align="end" className="w-48">
                 {user ? (
                   <>
-                    {user.role === 'supplier' ? (
-                      <DropdownMenuItem onClick={() => window.location.href = '/dashboard'}>
-                        Supplier Dashboard
-                      </DropdownMenuItem>
-                    ) : (
-                      <DropdownMenuItem onClick={() => window.location.href = '/orders'}>
-                        My Orders
-                      </DropdownMenuItem>
-                    )}
+                    <DropdownMenuItem onClick={() => window.location.href = '/dashboard'}>
+                      Dashboard
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={logout}>
                       Logout
                     </DropdownMenuItem>
@@ -147,10 +131,16 @@ export function Navbar() {
           <div className="relative">
             <Input
               type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
               placeholder="Search products..."
               className="w-full pl-4 pr-12 py-2 border-2 border-border focus:border-accent"
             />
-            <Button size="sm" className="absolute right-1 top-1 bottom-1 px-3 bg-accent hover:bg-accent/90">
+            <Button
+              size="sm"
+              className="absolute right-1 top-1 bottom-1 px-3 bg-accent hover:bg-accent/90"
+              onClick={() => searchProducts(searchQuery)}
+            >
               <Search className="h-4 w-4" />
             </Button>
           </div>

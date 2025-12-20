@@ -4,6 +4,7 @@ const { body } = require('express-validator');
 const authController = require('../controllers/authController');
 const validateRequest = require('../middleware/validateRequest');
 const auth = require('../middleware/auth');
+const otpController = require('../controllers/otpController');
 
 const router = express.Router();
 
@@ -82,5 +83,30 @@ router.post(
  * @desc    Get current user info
  */
 router.get('/me', auth, authController.getCurrentUser);
+
+/**
+ * @route   POST /auth/verify-otp
+ * @desc    Verify OTP code
+ */
+router.post(
+  '/verify-otp',
+  auth,
+  [
+    body('otp')
+      .isLength({ min: 6, max: 6 }).withMessage('Invalid OTP code'),
+    validateRequest
+  ],
+  otpController.verifyOTP
+);
+
+/**
+ * @route   POST /auth/resend-otp
+ * @desc    Resend OTP code
+ */
+router.post(
+  '/resend-otp',
+  auth,
+  otpController.resendOTP
+);
 
 module.exports = router;

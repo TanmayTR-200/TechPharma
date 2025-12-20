@@ -1,0 +1,551 @@
+// API Configuration// API Configuration
+
+export const API_CONFIG = {
+
+  port: 5001,export const API_CONFIG = {// API Configuration
+
+  timeout: 8000,
+
+  retries: 3,  port: 5001,export const API_CONFIG = {
+
+  retryDelay: 1000
+
+};  timeout: 8000,  port: 5001,
+
+
+
+// Backend base URL without /api prefix  retries: 3,  timeout: 8000,
+
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+
+  retryDelay: 1000  retries: 3,
+
+// Function to build API URL properly
+
+export const buildApiUrl = (path: string) => {};  retryDelay: 1000
+
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;};
+
+  return `${base}/api/${cleanPath}`;
+
+};// Backend base URL without /api prefix
+
+
+
+// Helper to check server healthexport const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';// Backend base URL without /api prefix
+
+export const checkServerStatus = async (): Promise<boolean> => {
+
+  try {export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+
+    const response = await fetch(buildApiUrl('health'));
+
+    return response.ok;// Function to build API URL properly
+
+  } catch (error) {
+
+    console.warn('Health check failed:', error);export const buildApiUrl = (path: string) => {// Function to build API URL properly
+
+    return false;
+
+  }  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;export const buildApiUrl = (path: string) => {
+
+};
+
+  const cleanPath = path.startsWith('/') ? path.slice(1) : path;  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+
+// Helper for retrying failed requests
+
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));  return `${base}/api/${cleanPath}`;  const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+
+
+
+// Cache for API responses};  return `${base}/api/${cleanPath}`;
+
+const apiCache = new Map<string, { data: any; timestamp: number; etag?: string }>();
+
+const CACHE_DURATION = 30000; // 30 seconds cache};
+
+
+
+// API Endpoints using the buildApiUrl function// Helper to check server health
+
+export const API_ENDPOINTS = {
+
+  auth: {export const checkServerStatus = async (): Promise<boolean> => {// Helper to check server health
+
+    login: buildApiUrl('auth/login'),
+
+    register: buildApiUrl('auth/register'),  try {const checkServerHealth = async (): Promise<boolean> => {
+
+    me: buildApiUrl('auth/me'),
+
+    health: buildApiUrl('health'),    const response = await fetch(buildApiUrl('health'), {  try {
+
+    forgotPassword: buildApiUrl('auth/forgot-password'),
+
+    resetPassword: buildApiUrl('auth/reset-password')      headers: { 'Accept': 'application/json' }    const response = await fetch(buildApiUrl('health'));
+
+  },
+
+  products: {    });    return response.ok;
+
+    base: buildApiUrl('products'),
+
+    list: (page: number = 1, sort: string = '', filters?: Record<string, string>) => {    return response.ok;  } catch (error) {
+
+      const params = new URLSearchParams();
+
+      params.append('page', page.toString());  } catch (error) {    console.warn('Health check failed:', error);
+
+      if (sort) params.append('sort', sort);
+
+      if (filters) {    console.warn('Health check failed:', error);    return false;
+
+        Object.entries(filters).forEach(([key, value]) => {
+
+          if (value) params.append(key, value);    return false;  }
+
+        });
+
+      }  }};
+
+      return `${buildApiUrl('products')}?${params.toString()}`;
+
+    },};
+
+    delete: (id: string) => buildApiUrl(`products/${id}`),
+
+    update: (id: string) => buildApiUrl(`products/${id}`),// Helper for retrying failed requests
+
+    create: buildApiUrl('products')
+
+  },// Helper for retrying failed requestsconst wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  categories: {
+
+    base: buildApiUrl('categories')const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  },
+
+  orders: {export const API_ENDPOINTS = {
+
+    base: buildApiUrl('orders'),
+
+    stats: buildApiUrl('orders/stats')// Cache for API responses  auth: {
+
+  },
+
+  dashboard: {const apiCache = new Map<string, { data: any; timestamp: number; etag?: string }>();    login: buildApiUrl('auth/login'),
+
+    base: buildApiUrl('dashboard'),
+
+    analytics: buildApiUrl('dashboard/analytics'),const CACHE_DURATION = 30000; // 30 seconds cache    register: buildApiUrl('auth/register'),
+
+    stats: buildApiUrl('dashboard/stats')
+
+  },    me: buildApiUrl('auth/me'),
+
+  cart: {
+
+    base: buildApiUrl('cart'),// API Endpoints using the buildApiUrl function    health: buildApiUrl('health'),
+
+    add: buildApiUrl('cart/add')
+
+  },export const API_ENDPOINTS = {    forgotPassword: buildApiUrl('auth/forgot-password'),
+
+  messages: {
+
+    list: buildApiUrl('messages'),  auth: {    resetPassword: buildApiUrl('auth/reset-password'),
+
+    conversations: buildApiUrl('messages/conversations'),
+
+    thread: (userId: string) => buildApiUrl(`messages/${userId}`),    login: buildApiUrl('auth/login'),  },
+
+    send: buildApiUrl('messages/send')
+
+  }    register: buildApiUrl('auth/register'),  products: {
+
+};
+
+    me: buildApiUrl('auth/me'),    base: buildApiUrl('products'),
+
+export const fetcher = async (url: string, options: RequestInit = {}): Promise<any> => {
+
+  const token = localStorage.getItem('token');    health: buildApiUrl('health'),    list: (page: number = 1, sort: string = '') => 
+
+  const headers: Record<string, string> = {
+
+    'Content-Type': 'application/json',    forgotPassword: buildApiUrl('auth/forgot-password'),      buildApiUrl(`products?page=${page}${sort ? `&sort=${sort}` : ''}`),
+
+    'Accept': 'application/json'
+
+  };    resetPassword: buildApiUrl('auth/reset-password'),    delete: (id: string) => buildApiUrl(`products/${id}`),
+
+  if (token) {
+
+    headers['Authorization'] = `Bearer ${token}`;  },    update: (id: string) => buildApiUrl(`products/${id}`),
+
+  }
+
+  products: {    create: buildApiUrl('products'),
+
+  // Handle caching for GET requests
+
+  const cacheKey = `${url}-${token}`; // Cache key includes auth token    base: buildApiUrl('products'),  },
+
+  const cached = apiCache.get(cacheKey);
+
+      list: (page: number = 1, sort: string = '', filters?: Record<string, string>) => {  categories: {
+
+  if (options.method === undefined || options.method === 'GET') {
+
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {      const params = new URLSearchParams();    base: buildApiUrl('categories'),
+
+      return cached.data;
+
+    }      params.append('page', page.toString());  },
+
+    if (cached?.etag) {
+
+      headers['If-None-Match'] = cached.etag;      if (sort) params.append('sort', sort);  orders: {
+
+    }
+
+  }      if (filters) {    base: buildApiUrl('orders'),
+
+
+
+  try {        Object.entries(filters).forEach(([key, value]) => {    stats: buildApiUrl('orders/stats'),
+
+    const controller = new AbortController();
+
+    const timeout = setTimeout(() => controller.abort(), API_CONFIG.timeout);          if (value) params.append(key, value);  },
+
+
+
+    try {        });  dashboard: {
+
+      let response = await fetch(url, {
+
+        ...options,      }    base: buildApiUrl('dashboard'),
+
+        headers: {
+
+          ...headers,      return `${buildApiUrl('products')}?${params.toString()}`;    analytics: buildApiUrl('dashboard/analytics'),
+
+          ...options.headers
+
+        },    },    stats: buildApiUrl('dashboard/stats'),
+
+        signal: controller.signal
+
+      });    delete: (id: string) => buildApiUrl(`products/${id}`),  },
+
+
+
+      // Handle 401 with token refresh    update: (id: string) => buildApiUrl(`products/${id}`),  cart: {
+
+      if (response.status === 401 && !url.includes('/auth/login')) {
+
+        const newToken = await import('./token-refresh').then(m => m.refreshToken());    create: buildApiUrl('products'),    base: buildApiUrl('cart'),
+
+        
+
+        if (newToken) {  },    add: buildApiUrl('cart/add'),
+
+          // Retry the request with new token
+
+          response = await fetch(url, {  categories: {  },
+
+            ...options,
+
+            headers: {    base: buildApiUrl('categories'),  messages: {
+
+              ...headers,
+
+              'Authorization': `Bearer ${newToken}`,  },    list: buildApiUrl('messages'),
+
+              ...options.headers
+
+            },  orders: {    conversations: buildApiUrl('messages/conversations'),
+
+            signal: controller.signal
+
+          });    base: buildApiUrl('orders'),    thread: (userId: string) => buildApiUrl(`messages/${userId}`),
+
+        } else {
+
+          throw new Error('Session expired. Please login again.');    stats: buildApiUrl('orders/stats'),    send: buildApiUrl('messages/send'),
+
+        }
+
+      }  },  }
+
+
+
+      const contentType = response.headers.get('content-type');  dashboard: {};
+
+      const data = contentType?.includes('application/json') 
+
+        ? await response.json()    base: buildApiUrl('dashboard'),
+
+        : await response.text();
+
+    analytics: buildApiUrl('dashboard/analytics'),
+
+      if (!response.ok) {
+
+        throw new Error(    stats: buildApiUrl('dashboard/stats'),export const checkServerStatus = async (): Promise<boolean> => {
+
+          typeof data === 'object' && data.message
+
+            ? data.message  },  try {
+
+            : `Request failed with status ${response.status}`
+
+        );  cart: {    // Check the API health endpoint
+
+      }
+
+    base: buildApiUrl('cart'),    const response = await fetch(`${API_BASE_URL}/api/health`);
+
+      // Cache successful GET responses
+
+      if (options.method === undefined || options.method === 'GET') {    add: buildApiUrl('cart/add'),    return response.ok;
+
+        // Store response in cache with ETag
+
+        apiCache.set(cacheKey, {  },  } catch (error) {
+
+          data,
+
+          timestamp: Date.now(),  messages: {    // Don't throw, just return false for network errors
+
+          etag: response.headers.get('ETag') || undefined
+
+        });    list: buildApiUrl('messages'),    console.warn('Error checking server status:', error);
+
+      }
+
+      return data;    conversations: buildApiUrl('messages/conversations'),    return false;
+
+    } finally {
+
+      clearTimeout(timeout);    thread: (userId: string) => buildApiUrl(`messages/${userId}`),  }
+
+    }
+
+  } catch (error: any) {    send: buildApiUrl('messages/send'),};
+
+    if (error.name === 'AbortError') {
+
+      throw new Error('Request timed out. Please try again.');  }
+
+    }
+
+    throw error;};// Cache for API responses
+
+  }
+
+};const apiCache = new Map<string, { data: any; timestamp: number; etag?: string }>();
+
+export const fetcher = async (url: string, options: RequestInit = {}): Promise<any> => {const CACHE_DURATION = 30000; // 30 seconds cache
+
+  const token = localStorage.getItem('token');
+
+  const headers: Record<string, string> = {export const fetcher = async (url: string, options: RequestInit = {}): Promise<any> => {
+
+    'Content-Type': 'application/json',  const token = localStorage.getItem('token');
+
+    'Accept': 'application/json',  const headers: Record<string, string> = {
+
+  };    'Content-Type': 'application/json',
+
+  if (token) {    'Accept': 'application/json',
+
+    headers['Authorization'] = `Bearer ${token}`;  };
+
+  }  if (token) {
+
+    headers['Authorization'] = `Bearer ${token}`;
+
+  // Override cache settings if specified in options  }
+
+  if (options.cache === 'no-store') {
+
+    return fetch(url, {  // Override cache settings if specified in options
+
+      ...options,  if (options.cache === 'no-store') {
+
+      headers: { ...headers, ...options.headers }    return fetch(url, {
+
+    }).then(r => r.json());      ...options,
+
+  }      headers: { ...headers, ...options.headers }
+
+    }).then(r => r.json());
+
+  // Handle caching for GET requests  }
+
+  const cacheKey = `${url}-${token}`; // Cache key includes auth token
+
+  const cached = apiCache.get(cacheKey);  // Handle caching for GET requests
+
+    const cacheKey = `${url}-${token}`; // Cache key includes auth token
+
+  if (options.method === undefined || options.method === 'GET') {  const cached = apiCache.get(cacheKey);
+
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {  
+
+      return cached.data;  if (options.method === undefined || options.method === 'GET') {
+
+    }    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+
+    if (cached?.etag) {      return cached.data;
+
+      headers['If-None-Match'] = cached.etag;    }
+
+    }    if (cached?.etag) {
+
+  }      headers['If-None-Match'] = cached.etag;
+
+    }
+
+  try {  }
+
+    const controller = new AbortController();
+
+    const timeout = setTimeout(() => controller.abort(), API_CONFIG.timeout);  try {
+
+    const controller = new AbortController();
+
+    try {    const timeout = setTimeout(() => controller.abort(), 8000);
+
+      let response = await fetch(url, {
+
+        ...options,    try {
+
+        headers: {      let response = await fetch(url, {
+
+          ...headers,        ...options,
+
+          ...options.headers,        headers: {
+
+        },          ...headers,
+
+        signal: controller.signal          ...options.headers,
+
+      });        },
+
+        signal: controller.signal
+
+      // Handle 401 with token refresh      });
+
+      if (response.status === 401 && !url.includes('/auth/login')) {
+
+        const newToken = await import('./token-refresh').then(m => m.refreshToken());      // Handle 401 with token refresh
+
+              if (response.status === 401 && url !== API_ENDPOINTS.auth.login) {
+
+        if (newToken) {        const newToken = await import('./token-refresh').then(m => m.refreshToken());
+
+          // Retry the request with new token        
+
+          response = await fetch(url, {        if (newToken) {
+
+            ...options,          // Retry the request with new token
+
+            headers: {          response = await fetch(url, {
+
+              ...headers,            ...options,
+
+              'Authorization': `Bearer ${newToken}`,            headers: {
+
+              ...options.headers,              ...headers,
+
+            },              'Authorization': `Bearer ${newToken}`,
+
+            signal: controller.signal              ...options.headers,
+
+          });            },
+
+        } else {            signal: controller.signal
+
+          throw new Error('Session expired. Please login again.');          });
+
+        }        } else {
+
+      }          throw new Error('Session expired. Please login again.');
+
+        }
+
+      const contentType = response.headers.get('content-type');      }
+
+      const data = contentType?.includes('application/json') 
+
+        ? await response.json()      const contentType = response.headers.get('content-type');
+
+        : await response.text();      const data = contentType?.includes('application/json') 
+
+        ? await response.json()
+
+      if (!response.ok) {        : await response.text();
+
+        throw new Error(
+
+          typeof data === 'object' && data.message      if (!response.ok) {
+
+            ? data.message        throw new Error(
+
+            : `Request failed with status ${response.status}`          typeof data === 'object' && data.message
+
+        );            ? data.message
+
+      }            : `Request failed with status ${response.status}`
+
+        );
+
+      // Cache successful GET responses      }
+
+      if (options.method === undefined || options.method === 'GET') {
+
+        // Store response in cache with ETag      // Cache successful GET responses
+
+        apiCache.set(cacheKey, {      if (options.method === undefined || options.method === 'GET') {
+
+          data,        // Store response in cache with ETag
+
+          timestamp: Date.now(),        apiCache.set(cacheKey, {
+
+          etag: response.headers.get('ETag') || undefined          data,
+
+        });          timestamp: Date.now(),
+
+      }          etag: response.headers.get('ETag') || undefined
+
+      return data;        });
+
+    } finally {      }
+
+      clearTimeout(timeout);      return data;
+
+    }    } finally {
+
+  } catch (error: any) {      clearTimeout(timeout);
+
+    if (error.name === 'AbortError') {    }
+
+      throw new Error('Request timed out. Please try again.');  } catch (error: any) {
+
+    }    if (error.name === 'AbortError') {
+
+    throw error;      throw new Error('Request timed out. Please try again.');
+
+  }    }
+
+};    throw error;
+  }
+};

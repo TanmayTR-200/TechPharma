@@ -1,206 +1,251 @@
-const getBaseUrl = () => {
-  // For production deployment
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
+﻿type ApiEndpointFunction = (id: string) => string;
 
-  // Always use localhost:5000 for development
-  return 'http://localhost:5000';
+interface ApiEndpoints {
+  auth: {
+    login: string;
+    register: string;
+    me: string;
+    health: string;
+    forgotPassword: string;
+    resetPassword: string;
+  };
+  products: {
+    base: string;
+    list: (page?: number, sort?: string, filters?: Record<string, string>) => string;
+    delete: (id: string) => string;
+    update: (id: string) => string;
+    create: string;
+    sold: {
+      list: string;
+      archiveSale: (id: string) => string;
+    };
+  };
+  categories: {
+    base: string;
+  };
+  orders: {
+    base: string;
+    stats: string;
+    list: string;
+    archive: (orderId: string) => string;
+  };
+  dashboard: {
+    base: string;
+    analytics: string;
+    stats: string;
+  };
+  cart: {
+    base: string;
+    add: string;
+    update: (productId: string) => string;
+    remove: (productId: string) => string;
+    checkout: string;
+  };
+  messages: {
+    list: (userId: string) => string;
+    thread: (userId: string) => string;
+    conversations: string;
+    send: string;
+  };
+  users: {
+    get: (id: string) => string;
+    list: string;
+  };
+  notifications: {
+    list: string;
+    create: string;
+    markAsRead: (id: string) => string;
+    markAllAsRead: string;
+    archive: (id: string) => string;
+    listArchived: string;
+  };
+}
+
+export const API_CONFIG = {
+  port: 5000,
+  timeout: 8000,
+  retries: 3,
+  retryDelay: 1000
 };
 
-export const API_BASE_URL = getBaseUrl();
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-// Make sure the URL doesn't end with a slash
-const normalizedBaseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+export const buildApiUrl = (path: string): string => {
+  const base = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  // Remove any leading 'api/' from the path to prevent duplication
+  const cleanPath = path.replace(/^api\//, '').replace(/^\//, '');
+  // Remove any instances of double /api/api/
+  return `${base}/api/${cleanPath}`.replace(/\/api\/api\//g, '/api/');
+};
 
-export const API_ENDPOINTS = {
+export const API_ENDPOINTS: ApiEndpoints = {
   auth: {
-    login: `${API_BASE_URL}/api/auth/login`,
-    register: `${API_BASE_URL}/api/auth/register`,
-    me: `${API_BASE_URL}/api/auth/me`,
-    health: `${API_BASE_URL}/health`,
+    login: buildApiUrl('auth/login'),
+    register: buildApiUrl('auth/register'),
+    me: buildApiUrl('auth/me'),
+    health: buildApiUrl('health'),
+    forgotPassword: buildApiUrl('auth/forgot-password'),
+    resetPassword: buildApiUrl('auth/reset-password')
   },
   products: {
-    base: `${API_BASE_URL}/api/products`,
+    base: buildApiUrl('products'),
+    list: (page: number = 1, sort: string = '', filters?: Record<string, string>): string => {
+      // Create a new URLSearchParams object to avoid duplicates
+      const params = new URLSearchParams();
+      // Only add the base parameters if they're not in filters
+      if (!filters?.page) params.append('page', page.toString());
+      if (!filters?.sort && sort) params.append('sort', sort);
+      // Add any additional filters
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value && !params.has(key)) params.append(key, value);
+        });
+      }
+      return `${buildApiUrl('products')}?${params.toString()}`;
+    },
+    delete: (id: string): string => buildApiUrl(`products/${id}`),
+    update: (id: string): string => buildApiUrl(`products/${id}`),
+    create: buildApiUrl('products'),
+    sold: {
+      list: buildApiUrl('products/sold'),
+      archiveSale: (id: string): string => buildApiUrl(`products/sold/${id}/archive`)
+    }
   },
   categories: {
-    base: `${API_BASE_URL}/api/categories`,
+    base: buildApiUrl('categories')
   },
   orders: {
-    base: `${API_BASE_URL}/api/orders`,
+    base: buildApiUrl('orders'),
+    stats: buildApiUrl('orders/stats'),
+    list: buildApiUrl('orders'),
+    archive: (orderId: string) => buildApiUrl(`orders/${orderId}/archive`)
+  },
+  dashboard: {
+    base: buildApiUrl('dashboard'),
+    analytics: buildApiUrl('dashboard/analytics'),
+    stats: buildApiUrl('dashboard/stats')
+  },
+  cart: {
+    base: buildApiUrl('cart'),
+    add: buildApiUrl('cart/add'),
+    update: (productId: string) => buildApiUrl(`cart/update/${productId}`),
+    remove: (productId: string) => buildApiUrl(`cart/remove/${productId}`),
+    checkout: buildApiUrl('cart/checkout')
   },
   messages: {
-    base: `${API_BASE_URL}/api/messages`,
-    conversations: `${API_BASE_URL}/api/messages/conversations`,
+    list: (userId: string): string => buildApiUrl(`messages/${userId}`),
+    thread: (userId: string): string => buildApiUrl(`messages/${userId}`),
+    conversations: buildApiUrl('messages/conversations'),
+    send: buildApiUrl('messages/send')
   },
+  users: {
+    get: (id: string): string => buildApiUrl(`users/${id}`),
+    list: buildApiUrl('users')
+  },
+  notifications: {
+    list: buildApiUrl('notifications'),
+    create: buildApiUrl('notifications/create'),
+    markAsRead: (id: string) => buildApiUrl(`notifications/${id}/read`),
+    markAllAsRead: buildApiUrl('notifications/mark-all-read'),
+    archive: (id: string) => buildApiUrl(`notifications/${id}/archive`),
+    listArchived: buildApiUrl('notifications/archived')
+  }
 };
 
-async function checkServerHealth(): Promise<boolean> {
+export const checkServerStatus = async (): Promise<boolean> => {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased timeout to 5s for better reliability
-
-    const response = await fetch(`${API_BASE_URL}/health`, {
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json'
-      },
-      cache: 'no-cache', // Ensure fresh response
-      mode: 'cors'  // Explicitly set CORS mode
+    const response = await fetch(API_ENDPOINTS.auth.health, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
     });
-
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      console.warn('Health check failed:', response.status, response.statusText);
-      return false;
-    }
-
-    const data = await response.json();
-    return data.status === 'ok' || data.message === 'Server is running';
+    return response.ok;
   } catch (error) {
-    console.warn('Health check error:', error instanceof Error ? error.message : 'Unknown error');
     return false;
   }
-}
-
-async function makeRequest(url: string, options: RequestInit): Promise<any> {
-  const MAX_RETRIES = 3;
-  const RETRY_DELAY = 1000; // 1 second
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
-
-    try {
-      // Check if the URL exists and is properly formatted
-      if (!url) {
-        throw new Error('No URL provided for the request');
-      }
-
-      // Ensure URL is properly formatted for local development
-      const finalUrl = url.startsWith('http') ? url : `http://localhost:5000${url}`;
-
-      if (attempt > 0) {
-        console.log(`Retry attempt ${attempt} of ${MAX_RETRIES} for ${finalUrl}`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
-      }
-
-      // Debug log the request
-      console.log('Making request:', {
-        url: finalUrl,
-        method: options.method || 'GET',
-        headers: options.headers,
-        body: options.body ? JSON.parse(options.body as string) : undefined,
-        attempt: attempt + 1
-      });
-
-      const response = await fetch(finalUrl, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          ...options.headers,
-        },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        let errorMessage = '';
-        try {
-          const error = await response.json();
-          errorMessage = error.message || `Request failed with status: ${response.status}`;
-        } catch {
-          errorMessage = response.statusText || `Request failed with status: ${response.status}`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      // If successful, return the response and break the retry loop
-      return response.json();
-    } catch (error: any) {
-      lastError = error;
-      clearTimeout(timeoutId);
-
-      // If this was our last attempt, throw the error
-      if (attempt === MAX_RETRIES) {
-        throw lastError;
-      }
-
-      // For network errors or timeouts, continue to retry
-      if (error.name === 'AbortError' || error.message.includes('Failed to fetch')) {
-        console.log(`Request failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}):`, error.message);
-        continue;
-      }
-
-      // For other errors (like 4xx or 5xx), throw immediately
-      throw error;
-    }
-  }
-
-  // If we get here, all retries failed
-  throw lastError || new Error('Request failed after all retry attempts');
-}
+};
 
 export const fetcher = async (url: string, options: RequestInit = {}): Promise<any> => {
+  const token = localStorage.getItem('token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  };
+
+  // Check if this is a public endpoint
+  const isPublicEndpoint = url.includes('/health') || url.includes('/auth/login') || url.includes('/auth/register');
+
+  // Only add token for non-public endpoints
+  if (token && !isPublicEndpoint) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_CONFIG.timeout);
+
   try {
-    // Only perform health check for non-health-check endpoints and non-GET requests
-    if (!url.includes('/health') && options.method !== 'GET') {
+    let retries = API_CONFIG.retries;
+    while (retries > 0) {
       try {
-        console.log('Checking server health before request...');
-        const isHealthy = await checkServerHealth();
-        if (!isHealthy) {
-          throw new Error('Server connection check failed. Please try again in a moment.');
+        let response = await fetch(url, {
+          ...options,
+          headers: {
+            ...headers,
+            ...options.headers
+          },
+          signal: controller.signal
+        });
+
+        if (response.status === 401 && !url.includes('/auth/login')) {
+          const newToken = await import('./token-refresh').then(m => m.refreshToken());
+          
+          if (newToken) {
+            response = await fetch(url, {
+              ...options,
+              headers: {
+                ...headers,
+                'Authorization': `Bearer ${newToken}`,
+                ...options.headers
+              },
+              signal: controller.signal
+            });
+          } else {
+            throw new Error('Session expired. Please login again.');
+          }
         }
+
+        const contentType = response.headers.get('content-type');
+        const data = contentType?.includes('application/json') 
+          ? await response.json()
+          : await response.text();
+
+        if (!response.ok) {
+          if (retries > 1 && response.status >= 500) {
+            retries--;
+            await new Promise(resolve => setTimeout(resolve, API_CONFIG.retryDelay));
+            continue;
+          }
+          throw new Error(
+            typeof data === 'object' && data.message
+              ? data.message
+              : `Request failed with status ${response.status}`
+          );
+        }
+
+        return data;
       } catch (error: any) {
-        console.error('Health check failed:', error);
-        throw new Error('Unable to connect to the server. Please check your network connection and try again.');
+        if (error.name === 'AbortError') {
+          throw new Error('Request timed out. Please try again.');
+        }
+        if (retries > 1 && error.message.includes('failed to fetch')) {
+          retries--;
+          await new Promise(resolve => setTimeout(resolve, API_CONFIG.retryDelay));
+          continue;
+        }
+        throw error;
       }
     }
-
-    // Make the request with built-in retries
-    return await makeRequest(url, options);
-  } catch (error: any) {
-    // Safely construct error details object
-    const errorDetails: Record<string, any> = {
-      url,
-      method: options.method || 'GET',
-      error: error instanceof Error ? error.message : 'Unknown error',
-      type: error instanceof Error ? error.constructor.name : typeof error,
-    };
-
-    // Only add stack trace if it exists
-    if (error instanceof Error && error.stack) {
-      errorDetails.stack = error.stack;
-    }
-
-    console.error('API request failed:', errorDetails);
-
-    // Transform error messages for user-friendly display
-    if (error instanceof Error) {
-      const errorMessage = error.message.toLowerCase();
-      if (errorMessage.includes('failed to fetch')) {
-        throw new Error('Cannot connect to server. Please check your internet connection and ensure the server is running.');
-      } else if (errorMessage.includes('timed out') || errorMessage.includes('timeout')) {
-        throw new Error('Request timed out. The server might be busy, please try again.');
-      } else if (errorMessage.includes('network error') || errorMessage.includes('network request failed')) {
-        throw new Error('Network error. Please check your internet connection.');
-      } else if (errorMessage.includes('aborted')) {
-        throw new Error('Request was cancelled. Please try again.');
-      }
-    }
-
-    // If it's an Error object, throw it directly
-    if (error instanceof Error) {
-      throw error;
-    }
-
-    // For non-Error objects, create a new Error with a safe message
-    throw new Error(
-      typeof error === 'string' ? error : 'An unexpected error occurred. Please try again.'
-    );
+    throw new Error('Maximum retries reached');
+  } finally {
+    clearTimeout(timeout);
   }
 };

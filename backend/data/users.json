@@ -1,0 +1,32 @@
+[
+  {
+    "_id": "1760257427529",
+    "email": "tanmaytr05@gmail.com",
+    "password": "$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki",
+    "name": "Tanmay",
+    "role": "admin",
+    "createdAt": "2025-09-15T08:23:47.529Z",
+    "company": {
+      "name": "ABC"
+    }
+  },
+  {
+    "_id": "1760360335467",
+    "email": "tanmaytalanki.cs23@bmsce.ac.in",
+    "password": "$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De",
+    "name": "Tanmay T",
+    "company": {
+      "name": "BCD"
+    },
+    "role": "buyer",
+    "createdAt": "2025-10-13T12:58:55.467Z",
+    "resetOtp": {
+      "code": "295517",
+      "expiresAt": "2025-10-13T18:19:02.209Z"
+    },
+    "resetToken": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiIxNzYwMzYwMzM1NDY3IiwicHVycG9zZSI6InJlc2V0IiwiaWF0IjoxNzYwNjc4ODAyLCJleHAiOjE3NjA2ODI0MDJ9.QAyRC6gXdX-kHIXvxi_5sly_IHd9KXlCDj58yxpuc7M",
+      "expiresAt": "2025-10-17T06:26:42.964Z"
+    }
+  }
+]

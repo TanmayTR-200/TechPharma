@@ -25,30 +25,11 @@ export function SignupForm() {
   });
   const { handleSignup, verifyOtp, resendOtp, isVerifying, otpSent } = useAuthForm();
 
-  // Server health check
-  const checkServerHealth = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/health');
-      return response.ok;
-    } catch (error) {
-      return false;
-    }
-  };
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const isServerHealthy = await checkServerHealth();
-      if (!isServerHealthy) {
-        toast({
-          title: "Server Error",
-          description: "The server appears to be offline. Please ensure the backend server is running on port 5000 and try again. If the issue persists, contact support.",
-          variant: "destructive",
-          duration: 5000
-        });
-        return;
-      }
       if (formData.password !== formData.confirmPassword) {
         toast({
           title: "Error",

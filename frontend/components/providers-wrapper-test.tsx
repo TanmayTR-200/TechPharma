@@ -1,8 +1,8 @@
 'use client';
 
 import { type ReactNode } from 'react';
-import { AuthProvider } from '@/contexts/auth-test';
-import { ProductProvider } from '@/contexts/product-provider';
+import { AuthProvider } from '@/contexts/auth';
+import ProductProvider from '@/contexts/product-context';
 import { Toaster } from '@/components/ui/toaster';
 
 interface ProvidersWrapperProps {

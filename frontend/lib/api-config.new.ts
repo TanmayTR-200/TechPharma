@@ -1,3 +1,10 @@
+
+declare global {
+  interface Window {
+    __serverHealthChecked?: boolean;
+  }
+}
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const API_ENDPOINTS = {
@@ -70,9 +77,10 @@ async function makeRequest(url: string, options: RequestInit): Promise<any> {
 
 export const fetcher = async (url: string, options: RequestInit = {}, retries = 2): Promise<any> => {
   try {
-    // Skip health check for health endpoint to avoid loops
-    if (!url.includes('/health')) {
+    // Only check health for non-health endpoints, and only once per app load
+    if (!url.includes('/health') && !window.__serverHealthChecked) {
       const isHealthy = await checkServerHealth();
+      window.__serverHealthChecked = true;
       if (!isHealthy && retries > 0) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         return fetcher(url, options, retries - 1);

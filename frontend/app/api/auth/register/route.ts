@@ -13,12 +13,21 @@ export async function POST(request: Request) {
   try {
     const userData = await request.json();
     
+    // Validate required fields
+    if (!userData.name || !userData.email || !userData.password) {
+      return NextResponse.json({
+        success: false,
+        message: 'Name, email, and password are required'
+      } as RegistrationResponse, { status: 400 });
+    }
+
     const formattedUserData = {
-      ...userData,
       name: userData.name.trim(),
-      company: userData.companyName ? {
-        name: userData.companyName.trim()
-      } : undefined
+      email: userData.email.trim(),
+      password: userData.password,
+      company: {
+        name: userData.companyName?.trim()
+      }
     };
     
     console.log('Attempting to register user:', formattedUserData);
@@ -37,12 +46,12 @@ export async function POST(request: Request) {
     if (!response.ok) {
       console.error('Backend registration error:', responseData);
       
-      if (response.status === 409 || responseData.message === 'User already exists') {
+      if (response.status === 400 && responseData.message === 'User already exists') {
         return NextResponse.json({
           success: false,
           message: 'This email is already registered. Please login instead.',
           redirectTo: '/auth?mode=login&message=existing_user'
-        } as RegistrationResponse);
+        } as RegistrationResponse, { status: 400 });
       }
       
       throw new Error(responseData.message || 'Registration failed');
@@ -50,15 +59,12 @@ export async function POST(request: Request) {
 
     const { user, token } = responseData;
 
-    // Set the token in localStorage
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('token', token);
-    }
-
+    // We'll let the client handle storing the token
     return NextResponse.json({
       success: true,
       user,
-      token
+      token,
+      message: 'Registration successful!'
     } as RegistrationResponse);
   } catch (error: any) {
     console.error('Registration error:', error);
@@ -70,7 +76,7 @@ export async function POST(request: Request) {
           message: 'This email is already registered. Please login instead.',
           redirectTo: '/auth?mode=login&message=existing_user'
         } as RegistrationResponse,
-        { status: 409 }
+        { status: 400 }
       );
     }
     return NextResponse.json(

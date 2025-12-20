@@ -72,31 +72,97 @@ export async function POST(request: Request) {
       );
     }
 
-    const productData = await request.json();
-    
-    const response = await fetch('http://localhost:5000/api/products', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token
-      },
-      body: JSON.stringify(productData)
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || data.error || 'Failed to create product');
+    let productData;
+    try {
+      productData = await request.json();
+    } catch (e) {
+      return NextResponse.json(
+        { error: 'Invalid request body' },
+        { status: 400 }
+      );
     }
 
-    // Ensure we return a consistent product object structure
-    const product = data.product || data;
-    return NextResponse.json({
-      product: {
-        _id: product._id || product.id,
-        ...product
+    // Validate required fields
+    if (!productData.name || !productData.description || !productData.price || !productData.category) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name, description, price, and category are required' },
+        { status: 400 }
+      );
+    }
+
+    // Ensure price is a number and positive
+    if (typeof productData.price !== 'number' || productData.price <= 0) {
+      return NextResponse.json(
+        { error: 'Price must be a positive number' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      console.log('Sending product data:', productData);
+      
+      const response = await fetch(`${apiUrl}/api/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(productData)
+      });
+
+      let data;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.error('Non-JSON response from server');
+          console.error('Response status:', response.status);
+          console.error('Content-Type:', contentType);
+          const text = await response.text();
+          console.error('Response body:', text);
+          throw new Error('Server returned non-JSON response');
+        }
+        
+        data = await response.json();
+        console.log('Server response:', data);
+        
+      } catch (e) {
+        console.error('Error parsing response:', e);
+        throw new Error('Invalid server response');
       }
-    });
+
+      if (!response.ok) {
+        console.error('Error response from server:', data);
+        return NextResponse.json(
+          { 
+            error: data.message || data.error || 'Failed to create product',
+            details: data.details || {},
+            status: response.status
+          },
+          { status: response.status }
+        );
+      }
+
+      // Ensure we return a consistent product object structure
+      const product = data.product || data;
+      if (!product || !product._id) {
+        throw new Error('Invalid response from server');
+      }
+
+      return NextResponse.json({
+        product: {
+          _id: product._id || product.id,
+          ...product
+        }
+      });
+    } catch (error) {
+      console.error('Error communicating with backend:', error);
+      return NextResponse.json(
+        { error: 'Internal server error while creating product' },
+        { status: 500 }
+      );
+    }
 
   } catch (error: any) {
     console.error('Error creating product:', error);

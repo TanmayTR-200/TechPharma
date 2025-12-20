@@ -1,28 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '@/contexts/auth-new';
+import { useAuth } from '@/contexts/auth';
+import { useProduct } from '@/contexts/product-context';
+import { useCart } from '@/contexts/cart';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { initializePayment } from '@/lib/payment';
 
 interface ProductActionsProps {
   product: {
-    id: string;
+    _id: string;
     name: string;
     supplierId: string;
-    priceRange: {
-      min: number;
-      max: number;
-      currency: string;
-    };
+    price: number;
+    description: string;
+    images: string[];
+    category: string;
+    stock: number;
+    status: 'active' | 'inactive';
   };
+  mode?: 'marketplace' | 'management';
 }
 
-export function ProductActions({ product }: ProductActionsProps) {
+export function ProductActions({ product, mode = 'marketplace' }: ProductActionsProps) {
   const { user } = useAuth();
+  const { updateProduct, deleteProduct, canEditProduct } = useProduct();
+  const { addToCart } = useCart();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   const handlePurchase = async () => {
     if (!user) {
@@ -37,11 +45,11 @@ export function ProductActions({ product }: ProductActionsProps) {
     try {
       setIsProcessing(true);
       await initializePayment({
-        amount: product.priceRange.min * 100, // Convert to smallest currency unit
-        currency: product.priceRange.currency,
+        amount: product.price * 100, // Convert to smallest currency unit
+        currency: 'INR',
         items: [
           {
-            productId: product.id,
+            productId: product._id,
             quantity: 1,
           },
         ],
@@ -80,30 +88,15 @@ export function ProductActions({ product }: ProductActionsProps) {
         throw new Error('Authentication token not found');
       }
 
-      // Create a new conversation with the initial message
-      const response = await fetch('http://localhost:5000/api/messages', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          receiverId: product.supplierId, // Make sure your product object includes supplierId
-          content: `Hi, I'm interested in your product. Can you provide more information?\nProduct: ${product.name}\nLink: /products/${product.id}`,
-          productId: product.id
-        })
+      // TODO: Implement quote functionality
+      toast({
+        title: 'Coming Soon',
+        description: 'Quote functionality will be available soon',
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to send message');
-      }
-
-      // Redirect to messages page
-      window.location.href = '/messages';
       
       toast({
         title: 'Message Sent',
-        description: 'You can continue the conversation in the messages page',
+        description: 'Quote request functionality coming soon',
       });
     } catch (error: any) {
       toast({
@@ -114,23 +107,145 @@ export function ProductActions({ product }: ProductActionsProps) {
     }
   };
 
+  const handleToggleStatus = async () => {
+    try {
+      if (!canEditProduct(product._id)) {
+        throw new Error('You do not have permission to edit this product');
+      }
+
+      // If product has no stock, force it to be inactive
+      if (product.stock === 0 && product.status === 'active') {
+        toast({
+          title: 'Cannot Activate',
+          description: 'Cannot set product as active when stock is 0',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const newStatus = product.status === 'active' ? 'inactive' : 'active';
+      await updateProduct(product._id, { status: newStatus });
+
+      toast({
+        title: 'Status Updated',
+        description: `Product is now ${newStatus}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update product status',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      if (!canEditProduct(product._id)) {
+        throw new Error('You do not have permission to delete this product');
+      }
+
+      setIsDeleting(true);
+      await deleteProduct(product._id);
+
+      toast({
+        title: 'Product Deleted',
+        description: 'The product has been successfully deleted',
+      });
+
+      // Force refresh the page after successful deletion
+      window.location.reload();
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete product',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Show management actions for the product owner
+  if (mode === 'management' && canEditProduct(product._id)) {
+    return (
+      <div className="space-y-4">
+        <Button
+          onClick={handleToggleStatus}
+          variant="outline"
+          className="w-full"
+        >
+          {product.status === 'active' ? 'Deactivate Product' : 'Activate Product'}
+        </Button>
+        
+        <Button
+          onClick={handleDelete}
+          variant="destructive"
+          className="w-full bg-red-600 hover:bg-red-700"
+          disabled={isDeleting}
+        >
+          {isDeleting ? 'Deleting...' : 'Delete Product'}
+        </Button>
+      </div>
+    );
+  }
+
+  const handleAddToCart = async () => {
+    if (!user) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please sign in to add items to cart',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsAddingToCart(true);
+      await addToCart(product._id, 1);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add item to cart',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsAddingToCart(false);
+    }
+  };
+
+  // Show marketplace actions for buyers
   return (
     <div className="space-y-4">
       <Button
         onClick={handlePurchase}
-        disabled={isProcessing}
+        disabled={isProcessing || product.status !== 'active'}
         className="w-full bg-primary hover:bg-primary/90"
       >
-        {isProcessing ? 'Processing...' : 'Buy Now'}
+        {isProcessing ? 'Processing...' : product.status === 'active' ? 'Buy Now' : 'Product Unavailable'}
       </Button>
       
-      <Button
-        onClick={handleGetQuote}
-        variant="outline"
-        className="w-full"
-      >
-        Get Quote
-      </Button>
+      {product.status === 'active' && (
+        <>
+          <Button
+            onClick={handleAddToCart}
+            variant="secondary"
+            className="w-full"
+            disabled={isAddingToCart}
+          >
+            {isAddingToCart ? 'Adding to Cart...' : 'Add to Cart'}
+          </Button>
+          
+          <Button
+            onClick={handleGetQuote}
+            variant="outline"
+            className="w-full"
+          >
+            Get Quote
+          </Button>
+        </>
+      )}
     </div>
   );
 }

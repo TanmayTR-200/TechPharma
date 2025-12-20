@@ -56,65 +56,110 @@ export async function uploadToCloudinary(file: File) {
   }
 }
 
+let activeWidget: CloudinaryWidget | null = null;
+let widgetIsOpen = false;
+
 export function createUploadWidget(
   onSuccess: (url: string) => void,
   onError: (error: string) => void
 ): CloudinaryWidget | null {
-  if (typeof window === 'undefined') {
-    console.error('Window is not defined');
+  if (typeof window === 'undefined' || !window.cloudinary) {
+    console.error('Cloudinary is not available');
     return null;
   }
 
-  if (!window.cloudinary) {
-    console.error('Cloudinary is not loaded');
-    return null;
+  // Prevent multiple widgets: if already open, do nothing
+  if (widgetIsOpen) {
+    console.log('Widget is already open, not opening again.');
+    return activeWidget;
   }
 
-  console.log('Creating upload widget with cloudinary...');
-  
-  return window.cloudinary.createUploadWidget(
-    {
-      cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dj92mesew',
-      uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'techpharma',
+  try {
+    console.log('Creating upload widget with cloudinary...');
+  activeWidget = window.cloudinary.createUploadWidget(
+      {
+        // Basic Configuration
+        cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dj92mesew',
+        uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'techpharma',
+        folder: 'techpharma_products',
+
+      // Upload Settings
       sources: ['local'],
-      multiple: false,
-      maxFiles: 1,
+      multiple: true,
+      maxFiles: 5,
       maxFileSize: 5000000, // 5MB
       resourceType: 'image',
       clientAllowedFormats: ['png', 'jpg', 'jpeg', 'gif', 'webp'],
+      useSecureTransport: true,
+
+      // Widget Behavior
       showAdvancedOptions: false,
-      cropping: true,
-      croppingAspectRatio: 1,
-      showSkipCropButton: true,
+      showUploadMoreButton: false,
       showPoweredBy: false,
       showInsecurePreview: true,
-      folder: 'techpharma_products',
+      autoClose: false,
+      singleUploadAutoClose: false,
+      returnJustUrl: true,
+      closeOnBackdropClick: true,
+      queueComplete: false,
+
+      // UI Configuration
       theme: 'minimal',
-      styles: {
-        palette: {
-          window: '#FFFFFF',
-          sourceBg: '#FFFFFF',
-          windowBorder: '#90A0B3',
-          tabIcon: '#0078FF',
-          inactiveTabIcon: '#0E2F5A',
-          menuIcons: '#5A616A',
-          link: '#0078FF',
-          action: '#0078FF',
-          inProgress: '#0078FF',
-          complete: '#20B832',
-          error: '#F44235',
-          textDark: '#000000',
-          textLight: '#FFFFFF'
-        }
+      insertInline: false,
+      frameStyles: {
+        zIndex: 2147483647,
+        pointerEvents: 'auto'
       },
+
+      // Text and Language
+      language: "en",
       text: {
         en: {
           local: {
             browse: 'Browse files',
             dd: {
-              dragAndDrop: 'Drag and drop your image here'
+              dragAndDrop: 'Drag and drop your image here',
+              browse: 'Browse'
             }
+          },
+          menu: {
+            files: 'My Files'
           }
+        }
+      },
+
+      // Styling
+      styles: {
+        palette: {
+          window: '#ffffff',
+          windowBorder: '#90A0B3',
+          tabIcon: '#0078FF',
+          menuIcons: '#5A616A',
+          textDark: '#000000',
+          textLight: '#ffffff',
+          link: '#0078FF',
+          action: '#0078FF',
+          inactiveTabIcon: '#0E2F5A',
+          error: '#F44235',
+          inProgress: '#0078FF',
+          complete: '#20B832',
+          sourceBg: '#ffffff'
+        },
+        fonts: {
+          default: null,
+          "'Poppins', sans-serif": {
+            url: 'https://fonts.googleapis.com/css?family=Poppins',
+            active: true
+          }
+        }
+      },
+      // Make sure the entire upload area is clickable
+      buttonStyles: {
+        browse: {
+          cursor: 'pointer',
+          width: '100%',
+          height: '100%',
+          padding: '10px 20px'
         }
       }
     },
@@ -125,15 +170,23 @@ export function createUploadWidget(
         return;
       }
 
-      console.log('Upload widget event:', result?.event, result);
-
       if (!result) return;
 
+      console.log('Upload widget event:', result.event, result);
+
       switch (result.event) {
+        case 'display-changed': {
+          const data = (result as any).data;
+          if (data && data.status === 'shown') {
+            widgetIsOpen = true;
+          }
+          break;
+        }
         case 'success':
           if (result.info?.secure_url) {
             console.log('Upload successful:', result.info.secure_url);
             onSuccess(result.info.secure_url);
+            // Let's NOT auto-close the widget - let user click "Done" manually
           } else {
             console.error('No secure URL in success response:', result);
             onError('Upload completed but no secure URL received');
@@ -146,15 +199,23 @@ export function createUploadWidget(
           break;
 
         case 'queues-end':
-          // All uploads are completed
-          console.log('All uploads completed');
+          // All uploads in the current batch are completed
+          console.log('All uploads in current batch completed');
           break;
 
         case 'close':
           // Widget is closed
-          console.log('Upload widget closed');
+          console.log('Upload widget closed by user');
+          widgetIsOpen = false;
           break;
       }
     }
-  );
+    );
+
+    return activeWidget;
+  } catch (error) {
+    console.error('Error creating upload widget:', error);
+    onError('Failed to initialize upload widget');
+    return null;
+  }
 }

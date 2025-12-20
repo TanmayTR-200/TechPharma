@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Mail, Lock, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useAuth } from "@/contexts/auth-new";
+import { useAuth } from "@/contexts/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
@@ -44,7 +44,14 @@ export function LoginForm() {
       }
 
       // Try to login
-      await login(formData.email, formData.password);
+      try {
+        await login(formData.email, formData.password);
+      } catch (loginError: any) {
+        if (loginError.message.includes('Invalid credentials')) {
+          throw new Error('Invalid email or password');
+        }
+        throw loginError;
+      }
       
       // Show success message
       toast({
@@ -53,7 +60,20 @@ export function LoginForm() {
       });
       
     } catch (error: any) {
-      console.error('Login error:', error);
+      // Log structured error information
+      const errorLog = {
+        timestamp: new Date().toISOString(),
+        source: 'login-form',
+        error: {
+          message: error.message,
+          type: error.constructor.name,
+          ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+        },
+        context: {
+          email: formData.email // never log passwords
+        }
+      };
+      console.error('Login error:', JSON.stringify(errorLog, null, 2));
       
       // Show appropriate error message based on error type
       if (error.message.includes('Cannot connect to the server')) {
@@ -144,7 +164,7 @@ export function LoginForm() {
             Remember me
           </Label>
         </div>
-        <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+        <Link href="/auth/forgot-password" className="text-sm text-primary hover:underline">
           Forgot password?
         </Link>
       </div>

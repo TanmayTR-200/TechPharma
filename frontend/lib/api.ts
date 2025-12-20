@@ -4,15 +4,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 import { User } from '@/types/user';
 
-interface AuthResponse {
-  token: string;
-  user: User;
-}
-
-interface OtpResponse {
-  success: boolean;
-  message: string;
-}
+import { AuthResponse, OtpResponse } from '@/types/auth';
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -39,30 +31,39 @@ export const authApi = {
     return response.data;
   },
 
-  register: async (userData: Omit<User, '_id' | 'id' | 'role' | 'createdAt' | 'updatedAt'>): Promise<AuthResponse> => {
+  register: async (userData: {
+    name: string;
+    email: string;
+    password: string;
+    companyName?: string;
+  }): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>('/auth/register', userData);
     return response.data;
   },
 
-  verifyOtp: async (email: string, otp: string) => {
-    const response = await api.post('/auth/otp', {
-      email,
-      otp,
-      action: 'verify'
-    });
+  verifyOtp: async (otp: string, token: string): Promise<OtpResponse> => {
+    const response = await api.post('/auth/verify-otp', 
+      { otp },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     return response.data;
   },
 
-  resendOtp: async (email: string) => {
-    const response = await api.post('/auth/otp', {
-      email,
-      action: 'send'
-    });
+  resendOtp: async (token: string): Promise<OtpResponse> => {
+    const response = await api.post('/auth/resend-otp', 
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     return response.data;
   },
 
   forgotPassword: async (email: string) => {
     const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    const response = await api.post('/auth/reset-password', { token, password });
     return response.data;
   },
 };

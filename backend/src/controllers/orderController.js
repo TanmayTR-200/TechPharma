@@ -3,16 +3,17 @@ require('dotenv').config({
   path: require('path').resolve(__dirname, '../.env')
 });
 
-const Razorpay = require('razorpay');
+// const Razorpay = require('razorpay'); // TODO: Add razorpay later
 const crypto = require('crypto');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 
 // Helper: create Razorpay instance
 function getRazorpayInstance() {
-  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-    throw new Error("Missing Razorpay credentials in .env (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)");
-  }
+  throw new Error("Razorpay not configured yet");
+  // if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+  //   throw new Error("Missing Razorpay credentials in .env (RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET)");
+  // }
 
   return new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,

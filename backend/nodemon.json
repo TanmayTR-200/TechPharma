@@ -1,0 +1,15 @@
+{
+  "ignore": [
+    "data/*.json",
+    "*.log",
+    "test-backend/*"
+  ],
+  "ext": "js,json",
+  "watch": [
+    "*.js",
+    "src/**/*.js",
+    "routes/**/*.js",
+    "middleware/**/*.js",
+    "models/**/*.js"
+  ]
+}

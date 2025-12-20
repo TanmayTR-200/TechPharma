@@ -1,21 +1,40 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useDashboard } from "@/hooks/use-dashboard"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+
 import { AddProductDialog } from "@/components/add-product-dialog"
 import { EditProfileDialog } from "@/components/edit-profile-dialog"
 import { AnalyticsDialog } from "@/components/analytics-dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { useAuth } from "@/contexts/auth-new"
+import { useAuth } from "@/contexts/auth"
+import { useProduct } from "@/contexts/product-context"
 import { splitName } from "@/types/user"
 import DashboardLayout from '@/components/dashboard-layout'
-import { Package, Eye, Mail, DollarSign, MessageSquare } from "lucide-react"
+import { formatDateShort } from '@/lib/formatDate'
+import { Package, Eye, Mail, DollarSign } from "lucide-react"
 
-// Types
+// Response Types
+interface DashboardResponse {
+  success: boolean;
+  data: {
+    stats: DashboardStats;
+    orders: Order[];
+  };
+  error?: string;
+}
+
+interface DashboardErrorResponse {
+  error: string;
+  message?: string;
+  details?: string;
+}
+
+// Data Types
 interface Order {
   _id: string
   user: string
@@ -36,91 +55,34 @@ interface Order {
   }
 }
 
-interface Message {
-  id: number
-  sender: string
-  company: string
-  message: string
-  time: string
-  unread: boolean
-}
-
 interface DashboardStats {
   totalProducts: number
   productViews: number
-  inquiries: number
+  recentOrders: number
   revenue: number
 }
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { userProducts } = useProduct()
   const router = useRouter()
-  const [orders, setOrders] = useState<Order[]>([])
-  const [messages, setMessages] = useState<Message[]>([])
-  const [stats, setStats] = useState<DashboardStats>({
+  const { data, error, isLoading } = useDashboard()
+
+  const stats = data?.stats || {
     totalProducts: 0,
     productViews: 0,
-    inquiries: 0,
+    recentOrders: 0,
     revenue: 0
-  })
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState('')
+  }
+  
+  // Get only the 5 most recent orders
+  const orders = (data?.orders || []).slice(0, 5)
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setIsLoading(true)
-        setError('')
-
-        if (!user) {
-          router.push('/auth?mode=login&message=auth_required')
-          return
-        }
-
-        const token = localStorage.getItem('token')
-        if (!token) {
-          router.push('/auth?mode=login&message=auth_required')
-          return
-        }
-
-        const response = await fetch('http://localhost:5000/api/dashboard', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-
-        const data = await response.json()
-
-        if (!response.ok) {
-          if (response.status === 401) {
-            localStorage.removeItem('token')
-            window.location.href = '/auth?mode=login&message=session_expired'
-            return
-          }
-          throw new Error(data.error || 'Failed to fetch dashboard data')
-        }
-
-        setOrders(data.data?.orders || [])
-        setMessages(data.data?.messages || [])
-        setStats({
-          totalProducts: data.data?.totalProducts || 0,
-          productViews: data.data?.productViews || 0,
-          inquiries: data.data?.inquiries || 0,
-          revenue: data.data?.revenue || 0
-        })
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error)
-        setError(error instanceof Error ? error.message : 'Failed to load dashboard data')
-      } finally {
-        setIsLoading(false)
-      }
+    if (!user) {
+      router.push('/auth?mode=login');
     }
-
-    if (user) {
-      fetchDashboardData()
-    }
-  }, [user, router])
+  }, [user, router]);
 
   if (error) {
     return (
@@ -130,7 +92,7 @@ export default function DashboardPage() {
             <span className="text-red-600 text-2xl">!</span>
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-1">Error Loading Dashboard</h3>
-          <p className="text-sm text-gray-500">{error}</p>
+          <p className="text-sm text-gray-500">{error instanceof Error ? error.message : String(error)}</p>
           <Button 
             variant="outline" 
             className="mt-4"
@@ -159,66 +121,62 @@ export default function DashboardPage() {
       <div className="space-y-8 p-6 md:p-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Products</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalProducts}</div>
-              <p className="text-xs text-muted-foreground">
-                Add your first product to get started
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Product Views</CardTitle>
-              <Eye className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.productViews}</div>
-              <p className="text-xs text-muted-foreground">
-                Views will appear as users browse your products
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Inquiries</CardTitle>
-              <Mail className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.inquiries}</div>
-              <p className="text-xs text-muted-foreground">
-                Inquiries from interested buyers will appear here
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">₹{stats.revenue}</div>
-              <p className="text-xs text-muted-foreground">
-                Your earnings will be tracked here
-              </p>
-            </CardContent>
-          </Card>
+          {[
+            {
+              id: 'products',
+              title: 'Your Active Products',
+              icon: <Package className="h-4 w-4 text-gray-400" />,
+              value: stats.totalProducts,
+              description: stats.totalProducts === 0 
+                ? "No products listed yet"
+                : `${stats.totalProducts} active product${stats.totalProducts === 1 ? '' : 's'}`
+            },
+            {
+              id: 'views',
+              title: "This Month's Views",
+              icon: <Eye className="h-4 w-4 text-gray-400" />,
+              value: stats.productViews,
+              description: stats.productViews === 0 
+                ? "No product views yet"
+                : `${stats.productViews} view${stats.productViews === 1 ? '' : 's'} this month`
+            },
+            {
+              id: 'orders',
+              title: 'Recent Orders',
+              icon: <Package className="h-4 w-4 text-gray-400" />,
+              value: orders.length,
+              description: orders.length === 0 
+                ? "No orders received yet"
+                : `${orders.length} recent order${orders.length === 1 ? '' : 's'}`
+            },
+            {
+              id: 'revenue',
+              title: 'Total Revenue',
+              icon: <span className="h-4 w-4 text-gray-400 font-bold text-xl">₹</span>,
+              value: stats.revenue > 0 ? `₹${stats.revenue.toLocaleString('en-IN')}` : '₹0',
+              description: stats.revenue === 0 ? "No revenue generated yet" : "From completed orders"
+            }
+          ].map(card => (
+            <Card key={card.id} className="hover:shadow-md transition-shadow bg-black text-white">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b border-zinc-800">
+                <CardTitle className="text-sm font-medium text-white">{card.title}</CardTitle>
+                {card.icon}
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="text-2xl font-bold text-white">{card.value}</div>
+                <p className="text-xs text-gray-400">{card.description}</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Quick Actions */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common actions to manage your store</CardDescription>
+        <Card className="mb-8 bg-black text-white">
+          <CardHeader className="border-b border-zinc-800">
+            <CardTitle className="text-white">Quick Actions</CardTitle>
+            <CardDescription className="text-gray-400">Common actions to manage your store</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-4">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
                 <AddProductDialog />
@@ -233,128 +191,76 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Recent Orders */}
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Recent Orders</CardTitle>
-                  <CardDescription>Latest orders from your buyers</CardDescription>
-                </div>
-                <Button variant="outline" size="sm">
-                  View All
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="space-y-4">
-                  {orders.length > 0 ? (
-                  orders.map((order) => (
-                    <div
-                      key={order._id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">{order._id}</span>
-                          <Badge
-                            variant={
-                              order.status === "CONFIRMED"
-                                ? "default"
-                                : order.status === "PENDING"
-                                  ? "secondary"
-                                  : "outline"
-                            }
-                            className="text-xs"
-                          >
-                            {order.status}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-gray-600">{order.user}</p>
-                        <div className="text-xs text-gray-500">
-                          {order.items.map(item => (
-                            <p key={item.product._id}>
-                              {item.product.name} × {item.quantity}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-sm">₹{order.totalAmount}</p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(order.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 text-center">
-                    <Package className="h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">No orders yet</h3>
-                    <p className="text-sm text-gray-500">
-                      Orders will appear here once customers start purchasing your products.
-                    </p>
+        {/* Show orders if available */}
+        {orders.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Recent Orders */}
+            <Card className="hover:shadow-md transition-shadow bg-black text-white">
+              <CardHeader className="border-b border-zinc-800">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-white">Recent Orders</CardTitle>
+                    <CardDescription className="text-gray-400">Your 5 most recent orders - check Orders tab for full history</CardDescription>
                   </div>
-                )}
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => router.push('/orders')}
+                    className="text-white hover:text-white border-zinc-700 hover:bg-zinc-800"
+                  >
+                    View All Orders
+                  </Button>
                 </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-
-          {/* Messages */}
-          <Card className="hover:shadow-md transition-shadow">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Messages</CardTitle>
-                  <CardDescription>Recent messages from buyers</CardDescription>
-                </div>
-                <Button variant="outline" size="sm">
-                  View All
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="space-y-4">
-                  {messages.length > 0 ? (
-                  messages.map((message) => (
-                    <div key={message.id} className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg">
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback>
-                          {message.sender
-                            .split(" ")
-                            .map((n: string) => n[0])
-                            .join("")}  
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">{message.sender}</span>
-                          {message.unread && <div className="w-2 h-2 bg-primary rounded-full"></div>}
+              </CardHeader>
+              <CardContent>
+                <ScrollArea className="h-[400px] pr-4">
+                  <div className="space-y-4">
+                    {orders.map((order: Order) => (
+                      <div
+                        key={order._id}
+                        className="flex items-center justify-between p-4 border border-zinc-800 rounded-lg bg-zinc-900"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-medium text-sm text-white">{order._id}</span>
+                            <Badge
+                              variant={
+                                order.status === "CONFIRMED"
+                                  ? "default"
+                                  : order.status === "PENDING"
+                                    ? "secondary"
+                                    : "outline"
+                              }
+                              className="text-xs"
+                            >
+                              {order.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-400">{order.user}</p>
+                          <div className="text-xs text-gray-500 space-y-1">
+                            {order.items.map((item: {
+                              product: { name: string; _id: string };
+                              quantity: number;
+                              price: number;
+                            }, index: number) => (
+                              <p key={`${order._id}-item-${item.product._id}-${index}`} className="text-gray-400">
+                                {item.product.name} × {item.quantity}
+                              </p>
+                            ))}
+                          </div>
                         </div>
-                        <p className="text-xs text-gray-500 mb-1">{message.company}</p>
-                        <p className="text-sm text-gray-600 truncate">{message.message}</p>
-                        <p className="text-xs text-gray-500 mt-1">{message.time}</p>
+                        <div className="text-right">
+                          <p className="font-semibold text-sm text-white">₹{order.totalAmount}</p>
+                          <p className="text-xs text-gray-400">{formatDateShort(order.createdAt)}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center p-8 text-center">
-                    <MessageSquare className="h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">No messages yet</h3>
-                    <p className="text-sm text-gray-500">
-                      Messages from interested buyers will appear here.
-                    </p>
+                    ))}
                   </div>
-                )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   )

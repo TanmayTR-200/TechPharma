@@ -1,14 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { Search } from "lucide-react"
+import { Search, Package } from "lucide-react"
 import { useProductNavigation } from "@/hooks/use-product-navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth"
 
 export function HeroSection() {
   const [searchQuery, setSearchQuery] = useState("");
   const { navigateToProducts } = useProductNavigation();
+  const router = useRouter();
+  const { user } = useAuth();
   
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -49,32 +53,45 @@ export function HeroSection() {
           </div>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
-          <span>Popular searches:</span>
-          <button
-            onClick={() => navigateToProducts({ category: "electronics" })}
-            className="text-accent hover:underline"
-          >
-            Electronics
-          </button>
-          <button
-            onClick={() => navigateToProducts({ category: "machinery" })}
-            className="text-accent hover:underline"
-          >
-            Machinery
-          </button>
-          <button
-            onClick={() => navigateToProducts({ category: "textiles" })}
-            className="text-accent hover:underline"
-          >
-            Textiles
-          </button>
-          <button
-            onClick={() => navigateToProducts({ category: "chemicals" })}
-            className="text-accent hover:underline"
-          >
-            Chemicals
-          </button>
+        <div className="space-y-6">
+          <div className="flex flex-wrap justify-center gap-4 text-sm text-muted-foreground">
+            <span>Popular searches:</span>
+            <button
+              onClick={() => navigateToProducts({ category: "electronics" })}
+              className="text-accent hover:underline"
+            >
+              Electronics
+            </button>
+            <button
+              onClick={() => navigateToProducts({ category: "machinery" })}
+              className="text-accent hover:underline"
+            >
+              Machinery
+            </button>
+            <button
+              onClick={() => navigateToProducts({ category: "textiles" })}
+              className="text-accent hover:underline"
+            >
+              Textiles
+            </button>
+            <button
+              onClick={() => navigateToProducts({ category: "chemicals" })}
+              className="text-accent hover:underline"
+            >
+              Chemicals
+            </button>
+          </div>
+          
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              className="group bg-transparent hover:bg-accent hover:text-white transition-all duration-300"
+              onClick={() => router.push('/dashboard')}
+            >
+              <Package className="mr-2 h-5 w-5 group-hover:animate-bounce" />
+              {user ? "Go to Dashboard" : "Supplier Dashboard"}
+            </Button>
+          </div>
         </div>
       </div>
     </section>

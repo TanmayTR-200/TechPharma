@@ -32,6 +32,16 @@ const userSchema = new mongoose.Schema({
   company: {
     type: companySchema,
     default: {}
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  otp: {
+    code: { type: String, select: false },
+    expiresAt: { type: Date, select: false },
+    attempts: { type: Number, default: 0 },
+    lastSent: { type: Date }
   }
 }, { timestamps: true });
 
@@ -49,4 +59,4 @@ userSchema.methods.comparePassword = function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

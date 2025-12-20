@@ -1,0 +1,50 @@
+[
+  {
+    "_id": "1761302843920",
+    "senderId": "1760360335467",
+    "receiverId": "1760257427529",
+    "content": "I am interested in getting more details about the product: Drilling Machine",
+    "timestamp": "2025-10-24T10:47:23.920Z",
+    "read": true
+  },
+  {
+    "_id": "1761303004104",
+    "senderId": "1760360335467",
+    "receiverId": "1760257427529",
+    "content": "I am interested in getting more details about the product: Drilling Machine",
+    "timestamp": "2025-10-24T10:50:04.104Z",
+    "read": true
+  },
+  {
+    "_id": "1761400163093",
+    "senderId": "1760360335467",
+    "receiverId": "1760257427529",
+    "content": "I am interested in getting more details about the product: Drilling Machine",
+    "timestamp": "2025-10-25T13:49:23.093Z",
+    "read": true
+  },
+  {
+    "_id": "1761402340445",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Firefighter Suit",
+    "timestamp": "2025-10-25T14:25:40.445Z",
+    "read": false
+  },
+  {
+    "_id": "1761662521438",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Firefighter Suit",
+    "timestamp": "2025-10-28T14:42:01.438Z",
+    "read": false
+  },
+  {
+    "_id": "1763303311383",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Firefighter Suit",
+    "timestamp": "2025-11-16T14:28:31.383Z",
+    "read": false
+  }
+]

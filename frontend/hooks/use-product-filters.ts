@@ -28,12 +28,13 @@ export function useProductFilters() {
           throw new Error('Failed to fetch products');
         }
         const data = await response.json();
-        setProducts(data);
-        
+        // Extract products from response
+        const products = Array.isArray(data.products) ? data.products : Array.isArray(data) ? data : [];
+        setProducts(products);
         // Update category counts
         const counts = PRODUCT_CATEGORIES.map(category => {
-          const count = data.filter((product: Product) => 
-            product.category.toLowerCase() === category.name.toLowerCase()
+          const count = products.filter((product: Product) => 
+            product.category && product.category.toLowerCase() === category.name.toLowerCase()
           ).length;
           return { ...category, count };
         });
@@ -44,7 +45,6 @@ export function useProductFilters() {
         setLoading(false);
       }
     };
-
     fetchProducts();
   }, []);
 

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Phone, Mail, MessageCircle, MapPin, Calendar, Users, Shield } from "lucide-react"
+import { Phone, Mail, MapPin, Calendar, Users, Shield } from "lucide-react"
 
 export function SupplierHeader() {
   return (
@@ -79,10 +79,7 @@ export function SupplierHeader() {
                     <Mail className="h-4 w-4 mr-2" />
                     Get Quote
                   </Button>
-                  <Button variant="outline">
-                    <MessageCircle className="h-4 w-4 mr-2" />
-                    Send Message
-                  </Button>
+
                 </div>
               </div>
             </div>

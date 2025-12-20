@@ -9,18 +9,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useAuth } from "@/contexts/auth-new";
+import { useAuth } from "@/contexts/auth";
 import { splitName } from "@/types/user";
 import { LogOut, User, Settings } from "lucide-react";
 import Link from "next/link";
 
 export function UserMenu() {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <Avatar className="h-8 w-8">
+        <AvatarFallback>
+          <span className="animate-pulse bg-muted-foreground/10 h-full w-full" />
+        </AvatarFallback>
+      </Avatar>
+    );
+  }
 
   if (!user) return null;
 
-  const { firstName, lastName } = splitName(user.name);
-  const initials = `${firstName[0]}${lastName[0] || ''}`;
+  const { firstName, lastName } = splitName(user.name || '');
+  const initials = `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
 
   return (
     <DropdownMenu>
