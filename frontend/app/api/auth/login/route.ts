@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { User } from '@/types/user';
 
+export const dynamic = 'force-dynamic';
+
 interface LoginResponse {
   success: boolean;
   user?: User;

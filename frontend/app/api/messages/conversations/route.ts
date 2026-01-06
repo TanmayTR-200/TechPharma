@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { fetchFromApi } from '@/lib/api-helper';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const conversations = await fetchFromApi('/messages/conversations');
