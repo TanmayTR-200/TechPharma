@@ -15,6 +15,7 @@ interface Notification {
   title: string;
   message: string;
   read: boolean;
+  archived?: boolean;
   createdAt: string;
   metadata?: {
     orderId?: string;
@@ -48,13 +49,16 @@ export function NotificationBell() {
 
     const fetchNotifications = async () => {
       try {
-        const [activeData, archivedData] = await Promise.all([
-          fetcher(API_ENDPOINTS.notifications.list),
-          fetcher(API_ENDPOINTS.notifications.listArchived)
-        ]);
-        setNotifications(activeData.notifications || []);
-        setArchivedNotifications(archivedData.notifications || []);
-        setUnreadCount(activeData.notifications?.filter((n: Notification) => !n.read).length || 0);
+        const activeData = await fetcher(API_ENDPOINTS.notifications.list);
+        const allNotifications = activeData.notifications || [];
+        
+        // Separate active and archived notifications
+        const active = allNotifications.filter((n: Notification) => !n.archived);
+        const archived = allNotifications.filter((n: Notification) => n.archived);
+        
+        setNotifications(active);
+        setArchivedNotifications(archived);
+        setUnreadCount(active.filter((n: Notification) => !n.read).length || 0);
       } catch (error) {
         console.error('Error fetching notifications:', error);
       }
@@ -68,8 +72,20 @@ export function NotificationBell() {
 
   const markAsRead = async (notificationId: string) => {
     try {
+      if (!notificationId) {
+        console.error('Invalid notification ID');
+        return;
+      }
+      
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
       await fetcher(API_ENDPOINTS.notifications.markAsRead(notificationId), {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
       setNotifications(notifications.map(n => 
         n._id === notificationId ? { ...n, read: true } : n
@@ -80,15 +96,48 @@ export function NotificationBell() {
     }
   };
 
+  const markAsUnread = async (notificationId: string) => {
+    try {
+      if (!notificationId) {
+        console.error('Invalid notification ID');
+        return;
+      }
+      
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      // Since there's no specific unread endpoint, we'll update locally
+      // You may want to add a backend endpoint for this
+      setNotifications(notifications.map(n => 
+        n._id === notificationId ? { ...n, read: false } : n
+      ));
+      setUnreadCount(unreadCount + 1);
+    } catch (error) {
+      console.error('Error marking notification as unread:', error);
+    }
+  };
+
   const archiveNotification = async (notificationId: string) => {
     try {
+      if (!notificationId) {
+        console.error('Invalid notification ID');
+        return;
+      }
+      
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
       await fetcher(API_ENDPOINTS.notifications.archive(notificationId), {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
       const archivedNotification = notifications.find(n => n._id === notificationId);
       if (archivedNotification) {
         setNotifications(notifications.filter(n => n._id !== notificationId));
-        setArchivedNotifications([archivedNotification, ...archivedNotifications]);
+        setArchivedNotifications([{...archivedNotification, archived: true}, ...archivedNotifications]);
         if (!archivedNotification.read) {
           setUnreadCount(Math.max(0, unreadCount - 1));
         }
@@ -98,10 +147,47 @@ export function NotificationBell() {
     }
   };
 
+  const unarchiveNotification = async (notificationId: string) => {
+    try {
+      if (!notificationId) {
+        console.error('Invalid notification ID');
+        return;
+      }
+      
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      await fetcher(API_ENDPOINTS.notifications.unarchive(notificationId), {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const unarchivedNotification = archivedNotifications.find(n => n._id === notificationId);
+      if (unarchivedNotification) {
+        setArchivedNotifications(archivedNotifications.filter(n => n._id !== notificationId));
+        setNotifications([{...unarchivedNotification, archived: false}, ...notifications]);
+        if (!unarchivedNotification.read) {
+          setUnreadCount(unreadCount + 1);
+        }
+      }
+    } catch (error) {
+      console.error('Error unarchiving notification:', error);
+    }
+  };
+
   const markAllAsRead = async () => {
     try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
       await fetcher(API_ENDPOINTS.notifications.markAllAsRead, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
       });
       setNotifications(notifications.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
@@ -130,57 +216,59 @@ export function NotificationBell() {
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <DialogTitle>{showArchived ? 'Archived Notifications' : 'Notifications'}</DialogTitle>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader className="space-y-4 pr-8">
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle>{showArchived ? 'Archived Notifications' : 'Notifications'}</DialogTitle>
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   onClick={() => setShowArchived(!showArchived)}
-                  className="text-xs"
+                  className="text-xs border-2 hover:bg-gray-100 whitespace-nowrap"
                 >
                   {showArchived ? 'Show Active' : 'Show Archived'}
                 </Button>
+                {!showArchived && unreadCount > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={markAllAsRead}
+                    className="text-xs border-2 hover:bg-gray-100 whitespace-nowrap"
+                  >
+                    Mark all as read
+                  </Button>
+                )}
               </div>
-              {!showArchived && unreadCount > 0 && (
+            </div>
+            {!showArchived && (
+              <div className="flex items-center justify-center gap-2 border-t pt-4">
                 <Button
-                  variant="ghost"
                   size="sm"
-                  onClick={markAllAsRead}
-                  className="text-xs"
+                  variant={filterStatus === 'all' ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus('all')}
+                  className={`flex-1 ${filterStatus === 'all' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-zinc-100'}`}
                 >
-                  Mark all as read
+                  All
                 </Button>
-              )}
-            </div>
-            <div className="flex items-center justify-center gap-2 border-t pt-4">
-              <Button
-                size="sm"
-                variant={filterStatus === 'all' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('all')}
-                className={`flex-1 ${filterStatus === 'all' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-zinc-100'}`}
-              >
-                All
-              </Button>
-              <Button
-                size="sm"
-                variant={filterStatus === 'unread' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('unread')}
-                className={`flex-1 ${filterStatus === 'unread' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-zinc-100'}`}
-              >
-                Unread
-              </Button>
-              <Button
-                size="sm"
-                variant={filterStatus === 'read' ? 'default' : 'outline'}
-                onClick={() => setFilterStatus('read')}
-                className={`flex-1 ${filterStatus === 'read' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-zinc-100'}`}
-              >
-                Read
-              </Button>
-            </div>
+                <Button
+                  size="sm"
+                  variant={filterStatus === 'unread' ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus('unread')}
+                  className={`flex-1 ${filterStatus === 'unread' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-zinc-100'}`}
+                >
+                  Unread
+                </Button>
+                <Button
+                  size="sm"
+                  variant={filterStatus === 'read' ? 'default' : 'outline'}
+                  onClick={() => setFilterStatus('read')}
+                  className={`flex-1 ${filterStatus === 'read' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'hover:bg-zinc-100'}`}
+                >
+                  Read
+                </Button>
+              </div>
+            )}
           </DialogHeader>
 
           <ScrollArea className="h-[60vh] pr-4">
@@ -198,66 +286,83 @@ export function NotificationBell() {
               <div className="space-y-4">
                 {getFilteredNotifications().map((notification, idx) => (
                   <div
-                    key={notification._id || idx}
+                    key={notification._id || `notification-${idx}`}
                     className={`p-4 rounded-lg border ${
                       notification.read ? 'bg-background' : 'bg-accent/10'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-sm font-medium">{notification.title}</h4>
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-start gap-2">
+                          <h4 className="text-sm font-medium">{notification.title}</h4>
+                          {!notification.read && !showArchived && (
+                            <Badge variant="secondary" className="shrink-0">
+                              New
+                            </Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-muted-foreground mt-1">
                           {notification.message}
                         </p>
                         <p className="text-xs text-muted-foreground mt-2">{formatDateTime(notification.createdAt)}</p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {!notification.read && !showArchived && (
-                          <>
-                            <Badge variant="secondary" className="shrink-0">
-                              New
-                            </Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                markAsRead(notification._id);
-                              }}
-                              className="h-8 px-2 text-xs"
-                            >
-                              Mark as read
-                            </Button>
-                          </>
-                        )}
-                        {!showArchived && (
+                    </div>
+                    {!showArchived && notification._id && (
+                      <div className="flex items-center justify-end gap-2">
+                        {!notification.read && (
                           <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
-                              archiveNotification(notification._id);
+                              markAsRead(notification._id);
                             }}
-                            className="h-8 w-8 p-0"
+                            className="h-8 px-3 text-xs border-2"
                           >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="h-4 w-4"
-                            >
-                              <path d="M21 8v13H3V8"></path>
-                              <path d="M1 3h22v5H1z"></path>
-                              <path d="M10 12h4"></path>
-                            </svg>
+                            Mark as read
                           </Button>
                         )}
+                        {notification.read && filterStatus === 'read' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markAsUnread(notification._id);
+                            }}
+                            className="h-8 px-3 text-xs border-2"
+                          >
+                            Mark as unread
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            archiveNotification(notification._id);
+                          }}
+                          className="h-8 px-3 text-xs border-2"
+                        >
+                          Archive
+                        </Button>
                       </div>
-                    </div>
+                    )}
+                    {showArchived && notification._id && (
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            unarchiveNotification(notification._id);
+                          }}
+                          className="h-8 px-3 text-xs border-2"
+                        >
+                          Unarchive
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

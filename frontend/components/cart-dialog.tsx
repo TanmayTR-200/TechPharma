@@ -134,8 +134,8 @@ export function CartDialog() {
           )}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>Your Cart</DialogTitle>
           <DialogDescription>
             Review your items and proceed to checkout
@@ -152,8 +152,8 @@ export function CartDialog() {
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1 px-1">
-              <div className="space-y-4">
+            <ScrollArea className="flex-1 px-6 overflow-y-auto">
+              <div className="space-y-4 pb-4">
                 {cart.items.map((item) => (
                   <Card key={item.productId} className="p-4">
                     <div className="flex gap-4">
@@ -162,6 +162,7 @@ export function CartDialog() {
                           src={item.product.images[0]}
                           alt={item.product.name}
                           fill
+                          sizes="80px"
                           className="object-cover"
                         />
                       </div>
@@ -207,14 +208,12 @@ export function CartDialog() {
                   </Card>
                 ))}
               </div>
-            </ScrollArea>
 
-            <div className="pt-4 space-y-4">
-              <div className="space-y-2">
+              <div className="space-y-4 pb-4">
                 <h3 className="font-semibold">Shipping Address</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="street">Street Address</Label>
+                    <Label htmlFor="street" className="mb-2 block">Street Address</Label>
                     <Input
                       id="street"
                       value={shippingAddress.street}
@@ -223,7 +222,7 @@ export function CartDialog() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="city">City</Label>
+                    <Label htmlFor="city" className="mb-2 block">City</Label>
                     <Input
                       id="city"
                       value={shippingAddress.city}
@@ -232,7 +231,7 @@ export function CartDialog() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="state">State</Label>
+                    <Label htmlFor="state" className="mb-2 block">State</Label>
                     <Input
                       id="state"
                       value={shippingAddress.state}
@@ -241,7 +240,7 @@ export function CartDialog() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="pincode">PIN Code</Label>
+                    <Label htmlFor="pincode" className="mb-2 block">PIN Code</Label>
                     <Input
                       id="pincode"
                       value={shippingAddress.pincode}
@@ -251,14 +250,15 @@ export function CartDialog() {
                   </div>
                 </div>
               </div>
+            </ScrollArea>
 
-              <div className="border-t pt-4">
-                <div className="flex justify-between font-semibold mb-4">
-                  <span>Total:</span>
-                  <span>₹{cart.total.toLocaleString('en-IN')}</span>
-                </div>
-                <Button 
-                  className="w-full" 
+            <div className="border-t px-6 py-4 bg-background">
+              <div className="flex justify-between font-semibold mb-4">
+                <span>Total:</span>
+                <span>₹{cart.total.toLocaleString('en-IN')}</span>
+              </div>
+              <Button 
+                className="w-full border-2" 
                   onClick={handleCheckout}
                   disabled={isCheckingOut}
                 >
@@ -272,7 +272,6 @@ export function CartDialog() {
                   )}
                 </Button>
               </div>
-            </div>
           </>
         )}
       </DialogContent>

@@ -14,7 +14,7 @@ import { NotificationBell } from './notification-bell';
 export function AppHeader() {
   const { user, logout } = useAuth();
   const [query, setQuery] = useState('');
-  const [scope, setScope] = useState<'product' | 'category' | 'supplier' | undefined>(undefined);
+  const [scope, setScope] = useState<'product' | 'category' | undefined>(undefined);
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -28,7 +28,7 @@ export function AppHeader() {
       if (pathname && pathname.startsWith('/products')) {
         const s = searchParams?.get('search') || '';
         // If there's no scope param we treat it as "All" implicitly. Keep scope undefined in the header.
-        const sc = (searchParams?.get('scope') as 'product' | 'category' | 'supplier') || undefined;
+        const sc = (searchParams?.get('scope') as 'product' | 'category') || undefined;
         setQuery(s);
         setScope(sc);
       }
@@ -95,7 +95,7 @@ export function AppHeader() {
                   // and we don't want that to trigger an unintended navigation when the search is empty.
                   isEditing.current = false;
                 }}
-                placeholder="Search for products, suppliers, or categories..."
+                placeholder="Search for products or categories..."
                 // increase right padding so the scope buttons + search button don't overlap the text
                 className="w-full h-10 pl-10 pr-56 bg-zinc-800 border-zinc-700 text-white placeholder:text-gray-400 focus:ring-blue-600 focus:border-blue-600"
               />
@@ -129,13 +129,6 @@ export function AppHeader() {
                     className={`px-3 py-1 rounded-md text-sm ${scope === 'category' ? 'bg-blue-600 text-white' : 'bg-transparent text-white/80 hover:bg-zinc-800'}`}
                   >
                     Category
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScope(prev => prev === 'supplier' ? undefined : 'supplier')}
-                    className={`px-3 py-1 rounded-md text-sm ${scope === 'supplier' ? 'bg-blue-600 text-white' : 'bg-transparent text-white/80 hover:bg-zinc-800'}`}
-                  >
-                    Supplier
                   </button>
                 </div>
                 {/* let the button participate in flex layout so it doesn't overlap the scope buttons */}

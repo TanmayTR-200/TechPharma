@@ -415,6 +415,106 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // Product Routes
+// Get category counts
+app.get('/api/products/category-counts', async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, 'data/products.json'));
+    const activeProducts = products.filter(p => p.status === 'active');
+    
+    const categoryCounts = {};
+    activeProducts.forEach(product => {
+      if (product.category) {
+        const cat = product.category.toLowerCase();
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      }
+    });
+    
+    // Round to nearest 10
+    const roundedCounts = {};
+    Object.keys(categoryCounts).forEach(cat => {
+      const count = categoryCounts[cat];
+      if (count === 0) {
+        roundedCounts[cat] = 0;
+      } else if (count < 10) {
+        roundedCounts[cat] = 10;
+      } else {
+        // Round to nearest 10
+        roundedCounts[cat] = Math.ceil(count / 10) * 10;
+      }
+    });
+    
+    res.json({
+      success: true,
+      counts: roundedCounts
+    });
+  } catch (error) {
+    console.error('Category counts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get category counts'
+    });
+  }
+});
+
+// Get featured products (top 4 products based on sales/views)
+app.get('/api/products/featured', async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, 'data/products.json'));
+    const orders = readJsonFile(path.join(__dirname, 'data/orders.json'));
+    const users = readJsonFile(path.join(__dirname, 'data/users.json'));
+    
+    // Get active products only
+    let activeProducts = products.filter(p => p.status === 'active');
+    
+    // Calculate sales count for each product
+    const productSales = {};
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          const productId = item.productId || item._id;
+          productSales[productId] = (productSales[productId] || 0) + (item.quantity || 1);
+        });
+      }
+    });
+    
+    // Add sales count and supplier info to products
+    activeProducts = activeProducts.map(product => {
+      const salesCount = productSales[product._id] || 0;
+      const supplier = users.find(u => u._id === product.userId || u._id === product.supplierId);
+      
+      return {
+        ...product,
+        salesCount,
+        supplierName: supplier ? (supplier.company?.name || supplier.name || 'Unknown Supplier') : 'Unknown Supplier',
+        supplierLocation: supplier ? (supplier.company?.city || supplier.city || 'India') : 'India'
+      };
+    });
+    
+    // Sort by sales count (descending), then by createdAt (newest first)
+    activeProducts.sort((a, b) => {
+      if (b.salesCount !== a.salesCount) {
+        return b.salesCount - a.salesCount;
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    
+    // Get top 4 products
+    const featuredProducts = activeProducts.slice(0, 4);
+    
+    res.json({
+      success: true,
+      products: featuredProducts
+    });
+  } catch (error) {
+    console.error('Featured products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get featured products',
+      products: []
+    });
+  }
+});
+
 app.get('/api/products', async (req, res) => {
   try {
     const { page = 1, sort = 'featured', category, search, priceMin, priceMax } = req.query;

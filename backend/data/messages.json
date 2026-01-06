@@ -29,7 +29,7 @@
     "receiverId": "1760360335467",
     "content": "I am interested in getting more details about the product: Firefighter Suit",
     "timestamp": "2025-10-25T14:25:40.445Z",
-    "read": false
+    "read": true
   },
   {
     "_id": "1761662521438",
@@ -37,7 +37,7 @@
     "receiverId": "1760360335467",
     "content": "I am interested in getting more details about the product: Firefighter Suit",
     "timestamp": "2025-10-28T14:42:01.438Z",
-    "read": false
+    "read": true
   },
   {
     "_id": "1763303311383",
@@ -45,6 +45,62 @@
     "receiverId": "1760360335467",
     "content": "I am interested in getting more details about the product: Firefighter Suit",
     "timestamp": "2025-11-16T14:28:31.383Z",
-    "read": false
+    "read": true
+  },
+  {
+    "_id": "1767617704185",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Firefighter Suit",
+    "timestamp": "2026-01-05T12:55:04.185Z",
+    "read": true
+  },
+  {
+    "_id": "1767627389811",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Arduino set",
+    "timestamp": "2026-01-05T15:36:29.811Z",
+    "read": true
+  },
+  {
+    "_id": "1767627468402",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Arduino set",
+    "timestamp": "2026-01-05T15:37:48.402Z",
+    "read": true
+  },
+  {
+    "_id": "1767627479295",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Arduino set",
+    "timestamp": "2026-01-05T15:37:59.295Z",
+    "read": true
+  },
+  {
+    "_id": "1767627654996",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Firefighter Suit",
+    "timestamp": "2026-01-05T15:40:54.996Z",
+    "read": true
+  },
+  {
+    "_id": "1767627893056",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "HI",
+    "timestamp": "2026-01-05T15:44:53.056Z",
+    "read": true
+  },
+  {
+    "_id": "1767638631893",
+    "senderId": "1760257427529",
+    "receiverId": "1760360335467",
+    "content": "I am interested in getting more details about the product: Arduino set",
+    "timestamp": "2026-01-05T18:43:51.893Z",
+    "read": true
   }
 ]

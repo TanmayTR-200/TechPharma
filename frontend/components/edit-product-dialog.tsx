@@ -228,6 +228,7 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
                 <SelectItem value="tools">Tools</SelectItem>
                 <SelectItem value="safety">Safety Equipment</SelectItem>
                 <SelectItem value="lighting">Lighting</SelectItem>
+                <SelectItem value="lighting">Lighting</SelectItem>
               </SelectContent>
             </Select>
           </div>

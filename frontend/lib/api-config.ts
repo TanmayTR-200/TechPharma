@@ -12,6 +12,7 @@ interface ApiEndpoints {
   products: {
     base: string;
     list: (page?: number, sort?: string, filters?: Record<string, string>) => string;
+    get: (id: string) => string;
     delete: (id: string) => string;
     update: (id: string) => string;
     create: string;
@@ -57,6 +58,7 @@ interface ApiEndpoints {
     markAsRead: (id: string) => string;
     markAllAsRead: string;
     archive: (id: string) => string;
+    unarchive: (id: string) => string;
     listArchived: string;
   };
 }
@@ -103,6 +105,7 @@ export const API_ENDPOINTS: ApiEndpoints = {
       }
       return `${buildApiUrl('products')}?${params.toString()}`;
     },
+    get: (id: string): string => buildApiUrl(`products/${id}`),
     delete: (id: string): string => buildApiUrl(`products/${id}`),
     update: (id: string): string => buildApiUrl(`products/${id}`),
     create: buildApiUrl('products'),
@@ -148,6 +151,7 @@ export const API_ENDPOINTS: ApiEndpoints = {
     markAsRead: (id: string) => buildApiUrl(`notifications/${id}/read`),
     markAllAsRead: buildApiUrl('notifications/mark-all-read'),
     archive: (id: string) => buildApiUrl(`notifications/${id}/archive`),
+    unarchive: (id: string) => buildApiUrl(`notifications/${id}/unarchive`),
     listArchived: buildApiUrl('notifications/archived')
   }
 };

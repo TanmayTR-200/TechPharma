@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,11 +25,43 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
   const { toast } = useToast();
   const router = useRouter();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [supplierName, setSupplierName] = useState<string | null>(null);
   
   // Check if the current user owns this product
   const isOwner = user && isSupplierInfo(product.supplier) && user._id === product.supplier._id;
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Fetch supplier name if supplierId exists but supplier info is not populated
+  useEffect(() => {
+    const fetchSupplier = async () => {
+      // Check if we have supplier info already
+      if (isSupplierInfo(product.supplier) && product.supplier.name) {
+        setSupplierName(product.supplier.name);
+        return;
+      }
+      
+      // If we have a supplierId in the product, fetch the user
+      const supplierId = (product as any).supplierId || (product as any).userId;
+      if (supplierId && !isOwner) {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await fetch(`http://localhost:5000/api/users/${supplierId}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.user) {
+              setSupplierName(data.user.name);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching supplier:', error);
+        }
+      }
+    };
+    fetchSupplier();
+  }, [product, isOwner]);
   
   // Get all valid images or use placeholder
   const validImages = Array.isArray(product.images) ? product.images.filter(img => 
@@ -123,12 +155,20 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
               <Badge variant="outline" className="text-xs font-semibold border-2 border-gray-400 text-gray-200 px-3 py-1">
                 {product.category.charAt(0).toUpperCase() + product.category.slice(1)}
               </Badge>
-              {isSupplierInfo(product.supplier) && (
-                <Badge variant="secondary" className="text-xs font-semibold bg-gray-800 text-gray-200 px-3 py-1">
-                  {product.supplier.name}
-                </Badge>
+            </div>
+            
+            {/* Supplier name - show "Solo" for own products, seller name for others */}
+            <div className="mb-3 pb-3 border-b border-gray-700">
+              <p className="text-xs text-gray-400 mb-1">Sold by</p>
+              {isOwner ? (
+                <p className="text-sm font-semibold text-gray-300">Solo</p>
+              ) : supplierName ? (
+                <p className="text-sm font-semibold text-blue-400">{supplierName}</p>
+              ) : (
+                <p className="text-sm font-semibold text-gray-300">Loading...</p>
               )}
             </div>
+            
             <h3 className="text-lg font-bold text-white mb-2 line-clamp-2 group-hover:text-gray-100">
               {product.name}
             </h3>

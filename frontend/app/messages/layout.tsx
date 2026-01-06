@@ -31,17 +31,70 @@ export default function MessagesLayout({
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null)
   const pathname = usePathname()
   const router = useRouter()
   
   // Filter conversations based on search term (defensive: names may be missing)
   const searchLower = searchTerm.trim().toLowerCase()
-  const filteredConversations = conversations.filter(conv => {
-    if (!searchLower) return true
-    const s = (conv.senderName || '').toLowerCase()
-    const r = (conv.receiverName || '').toLowerCase()
-    return s.includes(searchLower) || r.includes(searchLower)
-  })
+  const filteredConversations = conversations
+    .filter(conv => conv._id !== user?._id) // Filter out self conversations
+    .filter(conv => {
+      if (!searchLower) return true
+      const s = (conv.senderName || '').toLowerCase()
+      const r = (conv.receiverName || '').toLowerCase()
+      return s.includes(searchLower) || r.includes(searchLower)
+    })
+
+  const deleteConversation = (convId: string) => {
+    setConversations(prev => prev.filter(c => c._id !== convId))
+    // Update localStorage
+    try {
+      const localRaw = localStorage.getItem('recentConversations')
+      if (localRaw) {
+        const localList = JSON.parse(localRaw)
+        const updated = localList.filter((c: Conversation) => c._id !== convId)
+        localStorage.setItem('recentConversations', JSON.stringify(updated))
+      }
+    } catch (err) {
+      console.warn('Error updating localStorage:', err)
+    }
+    // Navigate away if currently viewing this conversation
+    if (pathname.includes(convId)) {
+      router.push('/messages')
+    }
+  }
+
+  const blockUser = async (userId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      
+      // Store blocked user in localStorage
+      const blockedUsers = JSON.parse(localStorage.getItem('blockedUsers') || '[]')
+      if (!blockedUsers.includes(userId)) {
+        blockedUsers.push(userId)
+        localStorage.setItem('blockedUsers', JSON.stringify(blockedUsers))
+      }
+      
+      // Remove from conversations
+      deleteConversation(userId)
+      
+      alert('User blocked successfully')
+    } catch (error) {
+      console.error('Error blocking user:', error)
+      alert('Failed to block user')
+    }
+  }
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenDropdown(null)
+    if (openDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [openDropdown])
 
   useEffect(() => {
     const fetchConversations = async () => {
@@ -119,7 +172,7 @@ export default function MessagesLayout({
         }
 
         // If we're in a new conversation that's not in the list, fetch the user info and add it
-  if (currentConvId && !updatedConversations.find((c: Conversation) => c._id === currentConvId)) {
+        if (currentConvId && !updatedConversations.find((c: Conversation) => c._id === currentConvId)) {
           try {
             const userResponse = await fetcher(API_ENDPOINTS.users.get(currentConvId), {
               headers: {
@@ -127,7 +180,7 @@ export default function MessagesLayout({
               },
             })
             
-            if (userResponse.user) {
+            if (userResponse.success && userResponse.user) {
               updatedConversations = [{
                 _id: currentConvId,
                 sender: user._id,
@@ -140,7 +193,8 @@ export default function MessagesLayout({
               }, ...updatedConversations]
             }
           } catch (error) {
-            console.error('Error fetching user for new conversation:', error)
+            // Silently fail - user might not exist or network error
+            console.warn('Could not fetch user for new conversation:', currentConvId)
           }
         }
 
@@ -240,32 +294,76 @@ export default function MessagesLayout({
                 ) : (
                   filteredConversations.map((conv) => {
                     const isSelected = pathname.includes(conv._id)
-                    const otherPartyName = conv.senderName === user?.name ? conv.receiverName : conv.senderName
+                    // The conversation _id represents the OTHER person's ID
+                    // So we should always use receiverName as the other party
+                    const otherPartyName = conv.receiverName || conv.senderName || 'Unknown'
 
                     return (
-                      <Link key={conv._id} href={`/messages/${conv._id}`}>
-                        <div className={cn(
-                          "p-4 border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer",
-                          isSelected && "bg-gray-800"
-                        )}>
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h3 className="font-medium text-white">{otherPartyName}</h3>
-                              <p className="text-sm text-gray-400 mt-1 line-clamp-1">
-                                {conv.lastMessage}
-                              </p>
-                            </div>
-                            <div className="flex flex-col items-end">
-                              <span className="text-xs text-gray-500">{formatDateShort(conv.lastMessageTime)}</span>
-                              {conv.unreadCount ? (
-                                <span className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded-full">
-                                  {conv.unreadCount}
-                                </span>
-                              ) : null}
+                      <div key={conv._id} className="relative">
+                        <Link href={`/messages/${conv._id}`}>
+                          <div className={cn(
+                            "p-4 border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer",
+                            isSelected && "bg-gray-800"
+                          )}>
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h3 className="font-medium text-white">{otherPartyName}</h3>
+                                <p className="text-sm text-gray-400 mt-1 line-clamp-1">
+                                  {conv.lastMessage}
+                                </p>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <div className="flex flex-col items-end">
+                                  <span className="text-xs text-gray-500">{formatDateShort(conv.lastMessageTime)}</span>
+                                  {conv.unreadCount ? (
+                                    <span className="mt-1 px-2 py-1 bg-blue-600 text-white text-xs rounded-full">
+                                      {conv.unreadCount}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setOpenDropdown(openDropdown === conv._id ? null : conv._id)
+                                  }}
+                                  className="p-1 hover:bg-gray-700 rounded transition-colors"
+                                >
+                                  <svg className="h-4 w-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                                  </svg>
+                                </button>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </Link>
+                        </Link>
+                        {openDropdown === conv._id && (
+                          <div className="absolute right-4 top-12 z-50 bg-gray-900 border border-gray-700 rounded-md shadow-lg py-1 min-w-[160px]">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                deleteConversation(conv._id)
+                                setOpenDropdown(null)
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-white hover:bg-gray-800 transition-colors"
+                            >
+                              Delete conversation
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (confirm('Are you sure you want to block this user?')) {
+                                  blockUser(conv._id)
+                                }
+                                setOpenDropdown(null)
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-800 transition-colors"
+                            >
+                              Block user
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )
                   })
                 )}

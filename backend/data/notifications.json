@@ -1,0 +1,19 @@
+[
+  {
+    "_id": "1",
+    "title": "Welcome to TechPharma!",
+    "message": "Thank you for joining our platform.",
+    "read": true,
+    "archived": false,
+    "createdAt": "2026-01-05T18:14:51.661Z"
+  },
+  {
+    "_id": "1760360335467-welcome-1767640542655",
+    "userId": "1760360335467",
+    "title": "Welcome to TechPharma!",
+    "message": "Thank you for joining our platform.",
+    "read": true,
+    "archived": false,
+    "createdAt": "2026-01-05T19:15:42.655Z"
+  }
+]

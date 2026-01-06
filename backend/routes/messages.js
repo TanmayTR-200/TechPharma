@@ -14,6 +14,15 @@ const getMessagesData = () => {
   return JSON.parse(fs.readFileSync(messagesPath, 'utf8'));
 };
 
+// Helper to read users
+const getUsersData = () => {
+  const usersPath = path.join(__dirname, '../data/users.json');
+  if (!fs.existsSync(usersPath)) {
+    return [];
+  }
+  return JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+};
+
 // Helper to write messages
 const saveMessagesData = (messages) => {
   const messagesPath = path.join(__dirname, '../data/messages.json');
@@ -25,26 +34,49 @@ router.get('/conversations', authenticate, (req, res) => {
   try {
     const messages = getMessagesData();
     const userId = req.user._id;
+    const users = getUsersData();
 
-    // Get unique conversations
-    const conversations = messages
+    // Get unique conversations with user details
+    const conversationMap = new Map();
+    
+    messages
       .filter(msg => msg.senderId === userId || msg.receiverId === userId)
-      .reduce((acc, msg) => {
+      .forEach(msg => {
         const otherId = msg.senderId === userId ? msg.receiverId : msg.senderId;
-        if (!acc.find(conv => conv.userId === otherId)) {
-          acc.push({
-            userId: otherId,
+        
+        if (!conversationMap.has(otherId)) {
+          const otherUser = users.find(u => u._id === otherId);
+          conversationMap.set(otherId, {
+            _id: otherId,
+            sender: userId,
+            receiver: otherId,
+            senderName: req.user.name,
+            receiverName: otherUser ? otherUser.name : 'Unknown',
             lastMessage: msg.content,
-            timestamp: msg.timestamp,
-            unread: msg.receiverId === userId && !msg.read ? 1 : 0
+            lastMessageTime: msg.timestamp,
+            unreadCount: 0
           });
+        } else {
+          // Update to latest message
+          const existing = conversationMap.get(otherId);
+          if (new Date(msg.timestamp) > new Date(existing.lastMessageTime)) {
+            existing.lastMessage = msg.content;
+            existing.lastMessageTime = msg.timestamp;
+          }
         }
-        return acc;
-      }, []);
+        
+        // Count unread messages
+        if (msg.receiverId === userId && !msg.read) {
+          conversationMap.get(otherId).unreadCount++;
+        }
+      });
+
+    const conversations = Array.from(conversationMap.values())
+      .sort((a, b) => new Date(b.lastMessageTime) - new Date(a.lastMessageTime));
 
     res.json({
       success: true,
-      conversations: conversations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      conversations
     });
   } catch (error) {
     console.error('Error fetching conversations:', error);

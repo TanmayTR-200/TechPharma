@@ -124,11 +124,11 @@ export default function DashboardPage() {
           {[
             {
               id: 'products',
-              title: 'Your Active Products',
+              title: 'Total Active Products',
               icon: <Package className="h-4 w-4 text-gray-400" />,
               value: stats.totalProducts,
               description: stats.totalProducts === 0 
-                ? "No products listed yet"
+                ? "No products available"
                 : `${stats.totalProducts} active product${stats.totalProducts === 1 ? '' : 's'}`
             },
             {

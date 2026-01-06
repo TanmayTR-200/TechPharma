@@ -12,7 +12,6 @@ export function AnalyticsDialog() {
     totalOrders: number;
     averageOrderValue: number;
     topProducts: Array<{ name: string; sales: number }>;
-    monthlySales: Array<{ month: string; value: number }>;
   }
 
   const [analytics, setAnalytics] = React.useState<AnalyticsData>({
@@ -20,7 +19,6 @@ export function AnalyticsDialog() {
     totalOrders: 0,
     averageOrderValue: 0,
     topProducts: [],
-    monthlySales: [],
   });
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
@@ -67,20 +65,33 @@ export function AnalyticsDialog() {
         };
       }
         
-      // Process and validate the data
+      // Process and validate the data from backend
       const apiData = data as ApiResponse;
+      
+      // Calculate real total sales from revenue
+      const revenue = Number(apiData.data?.stats?.revenue || 0);
+      const totalOrders = Number(apiData.data?.stats?.recentOrders || 0);
+      
+      // Aggregate top products from orders
+      const productSales = new Map<string, number>();
+      apiData.data?.orders?.forEach(order => {
+        order.items?.forEach(item => {
+          const productName = item.product?.name || 'Unknown Product';
+          const quantity = Number(item.quantity || 0);
+          productSales.set(productName, (productSales.get(productName) || 0) + quantity);
+        });
+      });
+      
+      const topProducts = Array.from(productSales.entries())
+        .map(([name, sales]) => ({ name, sales }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 5);
+      
       const processedData: AnalyticsData = {
-        totalSales: Number(apiData.data?.stats?.totalProducts || 0) * 1000,
-        totalOrders: Number(apiData.data?.stats?.recentOrders || 0),
-        averageOrderValue: Number(apiData.data?.stats?.revenue || 0) / Math.max(1, Number(apiData.data?.stats?.recentOrders || 1)),
-        topProducts: apiData.data?.orders?.slice(0, 5).map(order => ({
-          name: order.items[0]?.product?.name || 'Unknown Product',
-          sales: order.items[0]?.quantity || 0
-        })) || [],
-        monthlySales: Array(3).fill(0).map((_, i) => ({
-          month: new Date(2025, 6 + i).toISOString().slice(0, 7),
-          value: Math.floor(Math.random() * 50000) + 10000
-        }))
+        totalSales: revenue,
+        totalOrders: totalOrders,
+        averageOrderValue: totalOrders > 0 ? revenue / totalOrders : 0,
+        topProducts: topProducts
       };
 
       setAnalytics(processedData);
@@ -95,8 +106,7 @@ export function AnalyticsDialog() {
         totalSales: 0,
         totalOrders: 0,
         averageOrderValue: 0,
-        topProducts: [],
-        monthlySales: []
+        topProducts: []
       });
     } finally {
       setLoading(false);
@@ -164,10 +174,10 @@ export function AnalyticsDialog() {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-sm">Total Orders</CardTitle>
+                  <CardTitle className="text-sm">Average Order Value</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-2xl font-bold">{analytics.totalOrders}</p>
+                  <p className="text-2xl font-bold">₹{Math.round(analytics.averageOrderValue).toLocaleString('en-IN')}</p>
                 </CardContent>
               </Card>
             </div>
@@ -176,29 +186,39 @@ export function AnalyticsDialog() {
                 <CardTitle className="text-sm">Top Products</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2">
-                  {analytics.topProducts.map((product: any, index: number) => (
-                    <li key={index} className="flex justify-between text-sm">
-                      <span>{product.name}</span>
-                      <span className="font-medium">{product.sales} units</span>
-                    </li>
-                  ))}
-                </ul>
+                {analytics.topProducts.length > 0 ? (
+                  <ul className="space-y-2">
+                    {analytics.topProducts.map((product: any, index: number) => (
+                      <li key={index} className="flex justify-between text-sm">
+                        <span>{product.name}</span>
+                        <span className="font-medium">{product.sales} units</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No product data available</p>
+                )}
               </CardContent>
             </Card>
             <Card className="mt-4">
               <CardHeader>
-                <CardTitle className="text-sm">Monthly Sales</CardTitle>
+                <CardTitle className="text-sm">Order Summary</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-2">
-                  {analytics.monthlySales.map((month: any, index: number) => (
-                    <li key={index} className="flex justify-between text-sm">
-                      <span>{month.month}</span>
-                      <span className="font-medium">₹{month.value.toLocaleString('en-IN')}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>Total Orders:</span>
+                    <span className="font-medium">{analytics.totalOrders}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Revenue:</span>
+                    <span className="font-medium">₹{analytics.totalSales.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Avg Order Value:</span>
+                    <span className="font-medium">₹{Math.round(analytics.averageOrderValue).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </>

@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import DateSeparator from '@/components/date-separator';
 import { useSearchParams } from 'next/navigation';
 import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { ProductPreviewDialog } from '@/components/product-preview-dialog';
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config';
 
 interface Seller {
@@ -51,6 +51,30 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const productParam = searchParams.get('product');
+  const hasSetInitialMessage = useRef(false);
+  const [previewProductId, setPreviewProductId] = useState<string | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [productsCache, setProductsCache] = useState<any[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+
+  // Fetch products to match names to IDs
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetcher(API_ENDPOINTS.products.list(), {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+        });
+        if (response.success && response.products) {
+          console.log('Products cache loaded:', response.products.length, 'products');
+          setProductsCache(response.products);
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      }
+    };
+    fetchProducts();
+  }, []);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -127,17 +151,25 @@ export default function ChatPage() {
     if (productParam) {
       try {
         const parsedProduct: ProductInfo = JSON.parse(decodeURIComponent(productParam));
-        const defaultMessage = `I am interested in getting more details about the product: ${parsedProduct.name}`;
-        setMessage(defaultMessage);
-        // If this is a new conversation, store the product info for the initial message
-        if (messages.length === 0) {
-          localStorage.setItem(`product_${Date.now()}`, JSON.stringify(parsedProduct));
+        const storageKey = `msg_set_${params.id}_${parsedProduct.id}`;
+        const alreadySet = localStorage.getItem(storageKey);
+        
+        // Only set the message if we haven't set it before for this conversation + product
+        if (!alreadySet && !hasSetInitialMessage.current) {
+          const defaultMessage = `I am interested in getting more details about the product: ${parsedProduct.name}`;
+          setMessage(defaultMessage);
+          hasSetInitialMessage.current = true;
+          localStorage.setItem(storageKey, 'true');
+          // If this is a new conversation, store the product info for the initial message
+          if (messages.length === 0) {
+            localStorage.setItem(`product_${Date.now()}`, JSON.stringify(parsedProduct));
+          }
         }
       } catch (error) {
         console.error('Error parsing product info:', error);
       }
     }
-  }, [productParam, messages.length]);
+  }, [productParam, params.id, messages.length]);
 
   const handleSend = async () => {
     if (!message.trim()) return;
@@ -215,91 +247,121 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 overflow-hidden">
-      {/* Chat header */}
-      <div className="p-4 border-b border-gray-800">
-        <h2 className="text-lg font-medium text-white">{seller?.name || 'Unknown Seller'}</h2>
-      </div>
-  {/* Messages area */}
-  <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-gray-400">Loading messages...</p>
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
-            <p className="text-sm">No messages yet</p>
-            <p className="text-xs mt-1">Start the conversation by sending a message</p>
-          </div>
-        ) : (
-          <div className="flex flex-col">
-            {messages.map((msg, idx) => {
-              const prev = messages[idx - 1]
-              const msgDay = new Date(msg.timestamp).toDateString()
-              const prevDay = prev ? new Date(prev.timestamp).toDateString() : null
-              return (
-                <React.Fragment key={msg._id}>
-                  {/* Insert date separator when day changes or for the first message */}
-                  {idx === 0 || msgDay !== prevDay ? (
-                        <div className="py-2">
-                          <DateSeparator date={msg.timestamp} />
-                        </div>
-                      ) : null}
+    <>
+      <ProductPreviewDialog
+        product={selectedProduct}
+        isOpen={isPreviewOpen}
+        onClose={() => {
+          setIsPreviewOpen(false);
+          setSelectedProduct(null);
+        }}
+      />
+      <div className="h-full flex flex-col bg-gray-900 overflow-hidden">
+        {/* Chat header */}
+        <div className="p-4 border-b border-gray-800">
+          <h2 className="text-lg font-medium text-white">{seller?.name || 'Unknown Seller'}</h2>
+        </div>
+        {/* Messages area */}
+        <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-gray-400">Loading messages...</p>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+              <p className="text-sm">No messages yet</p>
+              <p className="text-xs mt-1">Start the conversation by sending a message</p>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {messages.map((msg, idx) => {
+                const prev = messages[idx - 1]
+                const msgDay = new Date(msg.timestamp).toDateString()
+                const prevDay = prev ? new Date(prev.timestamp).toDateString() : null
+                return (
+                  <React.Fragment key={msg._id}>
+                    {/* Insert date separator when day changes or for the first message */}
+                    {idx === 0 || msgDay !== prevDay ? (
+                      <div className="py-2">
+                        <DateSeparator date={msg.timestamp} />
+                      </div>
+                    ) : null}
 
-                  <div className={`flex ${msg.senderId === params.id ? 'justify-start' : 'justify-end'} py-1`}> 
-                    <div
-                      className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                        msg.senderId === params.id
-                          ? 'bg-gray-700 text-white'
-                          : 'bg-blue-600 text-white'
-                      }`}
-                    >
-                      <p className="text-sm">
-                        {msg.content.includes("getting more details about the product:") ? (
-                          <>
-                            {msg.content.split("getting more details about the product: ")[0]}
-                            getting more details about the product:{" "}
-                            <Link
-                              href={msg.productInfo?.id ? `/products/${msg.productInfo.id}` : `/products`}
-                              className="text-blue-300 hover:text-blue-200 underline"
-                            >
-                              {msg.productInfo?.name || msg.content.split("getting more details about the product: ")[1]}
-                            </Link>
-                          </>
-                        ) : (
-                          msg.content
-                        )}
-                      </p>
-                      <p className="text-xs mt-1 opacity-75">
-                        {new Date(msg.timestamp).toLocaleTimeString()}
-                      </p>
+                    <div className={`flex ${msg.senderId === params.id ? 'justify-start' : 'justify-end'} py-1`}> 
+                      <div
+                        className={`max-w-[75%] rounded-lg px-4 py-2 ${
+                          msg.senderId === params.id
+                            ? 'bg-gray-700 text-white'
+                            : 'bg-blue-600 text-white'
+                        }`}
+                      >
+                        <p className="text-sm">
+                          {msg.content.includes("getting more details about the product:") ? (
+                            <>
+                              {msg.content.split("getting more details about the product: ")[0]}
+                              getting more details about the product:{" "}
+                              <button
+                                onClick={() => {
+                                  const productName = msg.productInfo?.name || msg.content.split("getting more details about the product: ")[1];
+                                  
+                                  // Find product from cache
+                                  const matchedProduct = productsCache.find(
+                                    p => p.name.toLowerCase().trim() === productName.toLowerCase().trim()
+                                  );
+                                  
+                                  if (matchedProduct) {
+                                    setSelectedProduct(matchedProduct);
+                                    setIsPreviewOpen(true);
+                                  } else {
+                                    alert(`Product "${productName}" not found. It may have been removed.`);
+                                  }
+                                }}
+                                className="text-blue-300 hover:text-blue-200 underline cursor-pointer bg-transparent border-0"
+                              >
+                                {msg.productInfo?.name || msg.content.split("getting more details about the product: ")[1]}
+                              </button>
+                            </>
+                          ) : (
+                            msg.content
+                          )}
+                        </p>
+                        <p className="text-xs mt-1 opacity-75">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                </React.Fragment>
-              )
-            })}
+                  </React.Fragment>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        {/* Message input */}
+        <div className="p-4 border-t border-gray-800">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Type your message..."
+              className="flex-1 bg-gray-800 border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              maxLength={256}
+            />
+            <button
+              onClick={handleSend}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors h-fit"
+            >
+              Send
+            </button>
           </div>
-        )}
-      </div>
-      {/* Message input */}
-      <div className="p-4 border-t border-gray-800">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={message}
-            onChange={e => setMessage(e.target.value)}
-            placeholder="Type your message..."
-            className="flex-1 bg-gray-800 border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            maxLength={256}
-          />
-          <button
-            onClick={handleSend}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors h-fit"
-          >
-            Send
-          </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }

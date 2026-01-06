@@ -89,15 +89,15 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1 -mt-2">
       <div className={`space-y-1 ${isOpen ? "block" : "hidden lg:block"}`}>
         {/* Price Range */}
         <Card className="bg-gray-900 border-gray-700 shadow-lg">
           <CardHeader className="px-3 py-0.5 border-b border-gray-700">
             <CardTitle className="text-sm font-semibold text-white">Price Range</CardTitle>
           </CardHeader>
-          <CardContent className="px-2 py-0 bg-gray-900">
-            <div className="space-y-2 -mt-0.5">
+          <CardContent className="px-2 py-0 bg-gray-900 pb-1">
+            <div className="space-y-1 -mt-0.5">
               <Slider 
                 value={priceRange} 
                 onValueChange={setPriceRange} 
@@ -106,7 +106,7 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
                 step={100} 
                 className="w-full" 
               />
-              <div className="flex items-center justify-between text-sm text-gray-200 font-medium">
+              <div className="flex items-center justify-between text-sm text-gray-200 font-medium pb-0.5">
                 <span>₹{priceRange[0]}</span>
                 <span>₹{priceRange[1]}</span>
               </div>
@@ -115,7 +115,7 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
         </Card>
 
         {/* Categories */}
-        <Card className="bg-gray-900 border-gray-700 shadow-lg">
+        <Card className="bg-gray-900 border-gray-700 shadow-lg -mt-3">
           <CardHeader className="px-3 py-0.5 border-b border-gray-700">
             <CardTitle className="text-sm font-semibold text-white">Categories</CardTitle>
           </CardHeader>

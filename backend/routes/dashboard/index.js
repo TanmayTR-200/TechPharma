@@ -27,21 +27,10 @@ router.get('/', async (req, res) => {
 
     // Calculate stats
     const recentOrders = userOrders.length;
-    const userProducts = products.filter(p => {
-      // For admin, show all active products
-      if (req.user.role === 'admin') {
-        return p.status === 'active';
-      }
-      
-      // Normalize IDs for comparison (some might be strings, others numbers)
-      const userId = String(req.user._id);
-      const productUserId = String(p.userId);
-      const productSupplierId = String(p.supplierId);
-
-      // For buyers/suppliers, show products where they are either the owner or supplier
-      return (productUserId === userId || productSupplierId === userId) && p.status === 'active';
-    });
-    const totalProducts = userProducts.length;
+    
+    // Count total active products globally (all users)
+    const totalProducts = products.filter(p => p.status === 'active').length;
+    
     let revenue = 0;
     let productViews = 0;
 
