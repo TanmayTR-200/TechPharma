@@ -4,7 +4,8 @@ export async function GET(request: NextRequest, { params }: { params: { path: st
   const path = params.path.join('/');
   const { searchParams } = new URL(request.url);
   const queryString = searchParams.toString();
-  const url = `http://localhost:5000/api/auth/${path}${queryString ? `?${queryString}` : ''}`;
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const url = `${backendUrl}/api/auth/${path}${queryString ? `?${queryString}` : ''}`;
 
   const headers = new Headers(request.headers);
   headers.delete('host'); // Remove host header to avoid conflicts
@@ -33,7 +34,8 @@ export async function GET(request: NextRequest, { params }: { params: { path: st
 
 export async function POST(request: NextRequest, { params }: { params: { path: string[] } }) {
   const path = params.path.join('/');
-  const url = `http://localhost:5000/api/auth/${path}`;
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const url = `${backendUrl}/api/auth/${path}`;
 
   const headers = new Headers(request.headers);
   headers.delete('host');

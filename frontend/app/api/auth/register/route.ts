@@ -33,7 +33,8 @@ export async function POST(request: Request) {
     console.log('Attempting to register user:', formattedUserData);
 
     // Call backend API to register user using the typed authApi
-    const response = await fetch('http://localhost:5000/api/auth/register', {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const response = await fetch(`${backendUrl}/api/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

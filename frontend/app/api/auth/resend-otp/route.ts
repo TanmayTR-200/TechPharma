@@ -11,7 +11,8 @@ export async function POST(request: Request) {
     }
 
     // Call backend API to resend OTP
-    const response = await fetch('http://localhost:5000/api/auth/resend-otp', {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const response = await fetch(`${backendUrl}/api/auth/resend-otp`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`

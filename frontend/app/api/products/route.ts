@@ -24,7 +24,8 @@ export async function GET(request: Request) {
     if (priceMin) queryParams.set('priceMin', priceMin);
     if (priceMax) queryParams.set('priceMax', priceMax);
 
-    const response = await fetch(`http://localhost:5000/api/products?${queryParams}`, {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const response = await fetch(`${backendUrl}/api/products?${queryParams}`, {
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-cache',

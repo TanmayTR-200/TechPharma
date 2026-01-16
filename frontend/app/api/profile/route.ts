@@ -11,7 +11,8 @@ export async function PUT(request: Request) {
 
     const profileData = await request.json();
 
-    const response = await fetch('http://localhost:5000/api/profile', {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const response = await fetch(`${backendUrl}/api/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -43,7 +44,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const response = await fetch('http://localhost:5000/api/profile', {
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    const response = await fetch(`${backendUrl}/api/profile`, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
