@@ -161,6 +161,85 @@ app.options('*', cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
+// Register endpoint
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password, company } = req.body;
+    console.log('Registration attempt for email:', email);
+    
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, and password are required'
+      });
+    }
+
+    const usersFile = path.join(__dirname, 'data/users.json');
+    const users = readJsonFile(usersFile);
+    
+    // Check if user already exists
+    const existingUser = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User already exists'
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new user
+    const newUser = {
+      _id: Date.now().toString(),
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      company: company || {},
+      role: 'supplier',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    users.push(newUser);
+    writeJsonFile(usersFile, users);
+
+    // Generate token
+    const token = jwt.sign(
+      { 
+        _id: newUser._id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role
+      },
+      process.env.JWT_SECRET || 'dev_jwt_secret',
+      { expiresIn: '24h' }
+    );
+
+    console.log('User registered successfully:', newUser.email);
+
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        _id: newUser._id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role,
+        company: newUser.company,
+        createdAt: newUser.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 // Login endpoint
 app.post('/api/auth/login', async (req, res) => {
   try {
