@@ -1,104 +1,85 @@
 "use client"
 
 import { Suspense, useEffect } from "react"
-import { Building2 } from "lucide-react"
+import { Shield, Users, Package } from "lucide-react"
 import Link from "next/link"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoginForm } from "@/components/auth/login-form"
 import { SignupForm } from "@/components/auth/signup-form"
 
+const points = [
+  { icon: Package, text: "List products with photos and pricing" },
+  { icon: Users, text: "Connect with verified buyers and sellers" },
+  { icon: Shield, text: "Payments are handled securely" },
+]
+
 function AuthContent() {
-  const searchParams = useSearchParams();
-  const { toast } = useToast();
-  
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
+
   useEffect(() => {
-    // Handle the message parameter if it exists
-    const message = searchParams.get('message');
-    const mode = searchParams.get('mode') || 'login';
-    
-    if (message === 'existing_user') {
-      toast({
-        title: 'Account Exists',
-        description: 'An account with this email already exists. Please sign in.',
-        variant: 'default'
-      });
+    if (searchParams.get('message') === 'existing_user') {
+      toast({ title: 'Account exists', description: 'Sign in with your email.' })
     }
-  }, [searchParams, toast]);
+  }, [searchParams, toast])
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Illustration */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-primary/5 to-background items-center justify-center p-12">
-        <div className="max-w-md text-center">
-          <div className="mb-8">
-            <div className="w-32 h-32 mx-auto mb-6 bg-primary/10 rounded-full flex items-center justify-center">
-              <Building2 className="w-16 h-16 text-primary" />
-            </div>
-            <h2 className="text-3xl font-bold text-foreground mb-4">Connect with Global Suppliers</h2>
-            <p className="text-muted-foreground text-lg leading-relaxed">
-              Join thousands of businesses finding trusted suppliers and growing their operations through our B2B
-              marketplace platform.
-            </p>
+    <div className="min-h-screen flex items-stretch relative z-10">
+      {/* Left — brand showcase */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-16 bg-secondary">
+        <Link href="/" className="inline-flex items-center gap-2.5 mb-12">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+            <span className="text-primary-foreground font-bold text-sm">T</span>
           </div>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-primary">50K+</div>
-              <div className="text-sm text-muted-foreground">Suppliers</div>
+          <span className="text-lg font-bold text-foreground">TechPharma</span>
+        </Link>
+
+        <h2 className="text-3xl font-bold text-foreground mb-3 leading-tight">
+          List products. Get orders.
+        </h2>
+        <p className="text-sm text-muted-foreground mb-10 max-w-sm leading-relaxed">
+          A marketplace for B2B suppliers and buyers.
+        </p>
+
+        <div className="space-y-3 max-w-sm">
+          {points.map((p) => (
+            <div key={p.text} className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 flex-shrink-0">
+                <p.icon className="h-4 w-4 text-primary" />
+              </div>
+              <span className="text-sm text-foreground">{p.text}</span>
             </div>
-            <div>
-              <div className="text-2xl font-bold text-primary">1M+</div>
-              <div className="text-sm text-muted-foreground">Products</div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-primary">100+</div>
-              <div className="text-sm text-muted-foreground">Countries</div>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* Right side - Auth Forms */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12">
-        <div className="w-full max-w-md">
-          <div className="mb-8 text-center lg:text-left">
-            <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold text-primary mb-2">
-              <Building2 className="w-8 h-8" />
-              TechPharma
+      {/* Right — auth form */}
+      <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 py-12">
+        <div className="w-full max-w-sm mx-auto">
+          {/* Mobile logo */}
+          <div className="lg:hidden mb-8 text-center">
+            <Link href="/" className="inline-flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+                <span className="text-primary-foreground font-bold text-sm">T</span>
+              </div>
+              <span className="text-lg font-bold text-foreground">TechPharma</span>
             </Link>
-            <p className="text-muted-foreground">Welcome to the future of B2B commerce</p>
           </div>
 
           <Tabs defaultValue={searchParams.get('mode') || 'login'} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="login">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 mb-6 bg-muted rounded-md">
+              <TabsTrigger value="login">Sign in</TabsTrigger>
+              <TabsTrigger value="signup">Sign up</TabsTrigger>
             </TabsList>
 
             <TabsContent value="login">
-              <Card>
-                <CardHeader className="space-y-1">
-                  <CardTitle className="text-2xl">Sign in to your account</CardTitle>
-                  <CardDescription>Enter your credentials to access your dashboard</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <LoginForm />
-                </CardContent>
-              </Card>
+              <LoginForm />
             </TabsContent>
 
             <TabsContent value="signup">
-              <Card>
-                <CardHeader className="space-y-1">
-                  <CardTitle className="text-2xl">Create your account</CardTitle>
-                  <CardDescription>Join our marketplace and start connecting with suppliers</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <SignupForm />
-                </CardContent>
-              </Card>
+              <SignupForm />
             </TabsContent>
           </Tabs>
         </div>
@@ -109,9 +90,7 @@ function AuthContent() {
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-    </div>}>
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>}>
       <AuthContent />
     </Suspense>
   )

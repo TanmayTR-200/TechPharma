@@ -85,9 +85,9 @@ router.get("/:id", (req, res) => {
   );
 
   if (!product) {
-    return res.status(404).json({ error: "Product not found" });
+    return res.status(404).json({ success: false, message: "Product not found" });
   }
-  res.json(product);
+  res.json({ success: true, product });
 });
 
 // ✅ ADD new product

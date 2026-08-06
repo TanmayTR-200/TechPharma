@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import DateSeparator from '@/components/date-separator';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { ProductPreviewDialog } from '@/components/product-preview-dialog';
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config';
+import DashboardLayout from '@/components/dashboard-layout';
+import { ArrowLeft } from 'lucide-react';
 
 interface Seller {
   name: string;
@@ -38,20 +40,20 @@ const parseMessageContent = (content: string, productInfo?: ProductInfo) => {
   }
   return content.replace(
     productInfo.name,
-    `<a href="/products/${productInfo.id}" class="text-blue-300 hover:text-blue-200 underline">${productInfo.name}</a>`
+    `<a href="/products/${productInfo.id}" class="text-primary hover:text-primary underline">${productInfo.name}</a>`
   );
 };
 
 export default function ChatPage() {
   const searchParams = useSearchParams();
   const params = useParams();
+  const router = useRouter();
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [seller, setSeller] = useState<Seller | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const productParam = searchParams.get('product');
-  const hasSetInitialMessage = useRef(false);
   const [previewProductId, setPreviewProductId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [productsCache, setProductsCache] = useState<any[]>([]);
@@ -151,25 +153,12 @@ export default function ChatPage() {
     if (productParam) {
       try {
         const parsedProduct: ProductInfo = JSON.parse(decodeURIComponent(productParam));
-        const storageKey = `msg_set_${params.id}_${parsedProduct.id}`;
-        const alreadySet = localStorage.getItem(storageKey);
-        
-        // Only set the message if we haven't set it before for this conversation + product
-        if (!alreadySet && !hasSetInitialMessage.current) {
-          const defaultMessage = `I am interested in getting more details about the product: ${parsedProduct.name}`;
-          setMessage(defaultMessage);
-          hasSetInitialMessage.current = true;
-          localStorage.setItem(storageKey, 'true');
-          // If this is a new conversation, store the product info for the initial message
-          if (messages.length === 0) {
-            localStorage.setItem(`product_${Date.now()}`, JSON.stringify(parsedProduct));
-          }
-        }
+        setMessage(`I am interested in getting more details about the product: ${parsedProduct.name}`);
       } catch (error) {
         console.error('Error parsing product info:', error);
       }
     }
-  }, [productParam, params.id, messages.length]);
+  }, [productParam, params.id]);
 
   const handleSend = async () => {
     if (!message.trim()) return;
@@ -247,7 +236,7 @@ export default function ChatPage() {
   };
 
   return (
-    <>
+    <DashboardLayout>
       <ProductPreviewDialog
         product={selectedProduct}
         isOpen={isPreviewOpen}
@@ -256,19 +245,24 @@ export default function ChatPage() {
           setSelectedProduct(null);
         }}
       />
-      <div className="h-full flex flex-col bg-gray-900 overflow-hidden">
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={() => router.push('/messages')} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" /> Back to messages
+        </button>
+      </div>
+      <div className="flex flex-col bg-card overflow-hidden rounded-lg border border-border" style={{ height: 'calc(100vh - 220px)' }}>
         {/* Chat header */}
-        <div className="p-4 border-b border-gray-800">
-          <h2 className="text-lg font-medium text-white">{seller?.name || 'Unknown Seller'}</h2>
+        <div className="p-4 border-b border-border">
+          <h2 className="text-lg font-medium text-foreground">{seller?.name || 'Unknown Seller'}</h2>
         </div>
         {/* Messages area */}
         <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
-              <p className="text-gray-400">Loading messages...</p>
+              <p className="text-muted-foreground">Loading messages...</p>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <p className="text-sm">No messages yet</p>
               <p className="text-xs mt-1">Start the conversation by sending a message</p>
             </div>
@@ -278,7 +272,8 @@ export default function ChatPage() {
                 const prev = messages[idx - 1]
                 const msgDay = new Date(msg.timestamp).toDateString()
                 const prevDay = prev ? new Date(prev.timestamp).toDateString() : null
-                return (
+                const isSentByMe = msg.senderId !== params.id
+                    return (
                   <React.Fragment key={msg._id}>
                     {/* Insert date separator when day changes or for the first message */}
                     {idx === 0 || msgDay !== prevDay ? (
@@ -287,12 +282,12 @@ export default function ChatPage() {
                       </div>
                     ) : null}
 
-                    <div className={`flex ${msg.senderId === params.id ? 'justify-start' : 'justify-end'} py-1`}> 
+                    <div className={`flex ${isSentByMe ? 'justify-end' : 'justify-start'} py-1`}> 
                       <div
                         className={`max-w-[75%] rounded-lg px-4 py-2 ${
-                          msg.senderId === params.id
-                            ? 'bg-gray-700 text-white'
-                            : 'bg-blue-600 text-white'
+                          isSentByMe
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-foreground'
                         }`}
                       >
                         <p className="text-sm">
@@ -316,7 +311,7 @@ export default function ChatPage() {
                                     alert(`Product "${productName}" not found. It may have been removed.`);
                                   }
                                 }}
-                                className="text-blue-300 hover:text-blue-200 underline cursor-pointer bg-transparent border-0"
+                                className="text-primary-foreground underline cursor-pointer bg-transparent border-0"
                               >
                                 {msg.productInfo?.name || msg.content.split("getting more details about the product: ")[1]}
                               </button>
@@ -337,7 +332,7 @@ export default function ChatPage() {
           )}
         </div>
         {/* Message input */}
-        <div className="p-4 border-t border-gray-800">
+        <div className="p-4 border-t border-border">
           <div className="flex gap-2">
             <input
               type="text"
@@ -350,18 +345,18 @@ export default function ChatPage() {
                 }
               }}
               placeholder="Type your message..."
-              className="flex-1 bg-gray-800 border-gray-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 bg-muted border-border text-foreground rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
               maxLength={256}
             />
             <button
               onClick={handleSend}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors h-fit"
+              className="bg-primary text-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors h-fit"
             >
               Send
             </button>
           </div>
         </div>
       </div>
-    </>
+    </DashboardLayout>
   );
 }

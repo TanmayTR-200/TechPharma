@@ -14,9 +14,7 @@ function readJsonFile(filePath) {
 
 router.get('/', authenticate, async (req, res) => {
   try {
-    const userId = req.user.userId || req.user._id;
-    const userName = req.user.name;
-    const userRole = req.user.role || 'buyer';
+    const userId = req.user._id || req.user.userId;
     
     if (!userId) {
       return res.status(401).json({
@@ -29,23 +27,11 @@ router.get('/', authenticate, async (req, res) => {
     const productsFile = path.join(__dirname, '../../data/products.json');
     const products = readJsonFile(productsFile);
 
-    // Get user's active products based on role
+    // Get user's own products (always filter by owner, regardless of role)
     const userProducts = products
       .filter(p => {
-        if (userRole === 'admin') {
-          return (!p.status || p.status === 'active');
-        }
-        // Normalize IDs for comparison
-        const normalizedSupplierId = String(p.supplierId || '').trim();
-        const normalizedUserId = String(p.userId || '').trim();
-        const normalizedRequesterId = String(userId || '').trim();
-        
-        const isOwner = normalizedSupplierId === normalizedRequesterId || 
-                       normalizedUserId === normalizedRequesterId ||
-                       normalizedSupplierId === '1' && normalizedRequesterId === '1760257427529' ||
-                       normalizedUserId === '1' && normalizedRequesterId === '1760257427529';
-        
-        return isOwner && (!p.status || p.status === 'active');
+        const ownerId = String(p.userId || p.supplierId || '').trim();
+        return ownerId === String(userId).trim() && (!p.status || p.status === 'active');
       })
       .sort((a, b) => new Date(b.createdAt || Date.now()).getTime() - new Date(a.createdAt || Date.now()).getTime());
 
@@ -55,7 +41,7 @@ router.get('/', authenticate, async (req, res) => {
     
     // Filter orders based on user role
     const userOrders = allOrders
-      .filter(o => userRole === 'admin' || o.userId === userId || o.supplierId === userId)
+      .filter(o => String(o.userId || '') === String(userId) || String(o.supplierId || '') === String(userId))
       .sort((a, b) => new Date(b.createdAt || Date.now()).getTime() - new Date(a.createdAt || Date.now()).getTime());
 
     const dashboardData = {

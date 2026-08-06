@@ -1,305 +1,126 @@
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Product, SupplierInfo } from '@/types/product';
-import { useAuth } from "@/contexts/auth";
-import { EditProductDialog } from './edit-product-dialog';
-import { ProductSellerActions } from './product-seller-actions';
-import { Button } from './ui/button';
-import { useToast } from '@/hooks/use-toast';
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Image from 'next/image'
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Product, SupplierInfo } from '@/types/product'
+import { useAuth } from "@/contexts/auth"
+import { EditProductDialog } from './edit-product-dialog'
+import { ProductSellerActions } from './product-seller-actions'
+import { Button } from './ui/button'
+import { useToast } from '@/hooks/use-toast'
+import { useCart } from '@/contexts/cart'
+import { motion } from 'framer-motion'
 
 interface ProductDisplayProps {
-  product: Product;
-  onAddToCart?: (productId: string | number) => Promise<void>;
-  onDeleted?: () => void;
+  product: Product
+  onAddToCart?: (productId: string | number) => Promise<void>
+  onDeleted?: () => void
 }
 
 function isSupplierInfo(supplier: Product['supplier']): supplier is SupplierInfo {
-  return supplier !== null && typeof supplier === 'object' && '_id' in supplier;
+  return supplier !== null && typeof supplier === 'object' && '_id' in supplier
 }
 
 export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDisplayProps) {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const router = useRouter();
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [supplierName, setSupplierName] = useState<string | null>(null);
-  
-  // Check if the current user owns this product
-  const isOwner = user && isSupplierInfo(product.supplier) && user._id === product.supplier._id;
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const { addToCart } = useCart()
+  const router = useRouter()
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [addingToCart, setAddingToCart] = useState(false)
 
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  
-  // Fetch supplier name if supplierId exists but supplier info is not populated
-  useEffect(() => {
-    const fetchSupplier = async () => {
-      // Check if we have supplier info already
-      if (isSupplierInfo(product.supplier) && product.supplier.name) {
-        setSupplierName(product.supplier.name);
-        return;
-      }
-      
-      // If we have a supplierId in the product, fetch the user
-      const supplierId = (product as any).supplierId || (product as any).userId;
-      if (supplierId && !isOwner) {
-        try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/users/${supplierId}`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.user) {
-              setSupplierName(data.user.name);
-            }
-          }
-        } catch (error) {
-          console.error('Error fetching supplier:', error);
-        }
-      }
-    };
-    fetchSupplier();
-  }, [product, isOwner]);
-  
-  // Get all valid images or use placeholder
-  const validImages = Array.isArray(product.images) ? product.images.filter(img => 
-    typeof img === "string" && img.startsWith("http")
-  ) : [];
-  
-  const imageSrc = validImages.length > 0 ? validImages[currentImageIndex] : "/placeholder.svg";
+  // Supplier name now comes directly from the product (public API returns supplierName)
+  const supplierName = isSupplierInfo(product.supplier) && product.supplier.name
+    ? product.supplier.name
+    : (product as any).supplierName || null
+
+  const isOwner = user && isSupplierInfo(product.supplier) && user._id === product.supplier._id
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+
+  const validImages = Array.isArray(product.images) ? product.images.filter(img => typeof img === 'string' && img.startsWith('http')) : []
+  const imageSrc = validImages.length > 0 ? validImages[currentImageIndex] : '/placeholder.svg'
 
   return (
     <>
-      <Card className="hover:shadow-2xl border border-gray-700 bg-gray-900 text-white transition-all duration-200 group hover:border-blue-500">
+      <Card className="glass-card group border border-border overflow-hidden h-full rounded-xl">
         <CardContent className="p-0">
           <div className="relative group">
-            <div className="relative w-full h-48 bg-gray-100">
-              <Image
-                src={imageSrc}
-                alt={`${product.name} - Image ${currentImageIndex + 1} of ${validImages.length}`}
-                fill
-                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                priority={currentImageIndex === 0}
-                className="object-cover rounded-t-lg bg-white"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null;
-                  target.src = "/placeholder.svg";
-                }}
-              />
-              
-              {/* Image Navigation */}
+            <div className="relative w-full h-44 bg-secondary overflow-hidden">
+              <img src={imageSrc} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { const target = e.target as HTMLImageElement; target.onerror = null; target.src = '/placeholder.svg' }} />
+              <div onClick={() => router.push('/products/' + product._id)} className="absolute inset-0 cursor-pointer" />
               {validImages.length > 1 && (
-                <>
-                  {/* Left Arrow */}
-                  <button
-                    onClick={() => setCurrentImageIndex((prev) => 
-                      (prev - 1 + validImages.length) % validImages.length
-                    )}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    aria-label="Previous image"
-                  >
-                    ←
-                  </button>
-                  
-                  {/* Right Arrow */}
-                  <button
-                    onClick={() => setCurrentImageIndex((prev) => 
-                      (prev + 1) % validImages.length
-                    )}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                    aria-label="Next image"
-                  >
-                    →
-                  </button>
-                  
-                  {/* Image Dots */}
-                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                    {validImages.map((_, index) => (
-                      <button
-                        key={index}
-                        onClick={() => setCurrentImageIndex(index)}
-                        className={`w-2 h-2 rounded-full transition-all ${
-                          index === currentImageIndex 
-                            ? 'bg-white scale-110' 
-                            : 'bg-white/50 hover:bg-white/75'
-                        }`}
-                        aria-label={`Go to image ${index + 1}`}
-                      />
-                    ))}
-                  </div>
-                </>
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                  {validImages.map((_, index) => (
+                    <button key={index} onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(index) }} className={'h-1.5 rounded-full transition-all ' + (index === currentImageIndex ? 'w-4 bg-primary' : 'w-1.5 bg-foreground/30')} />
+                  ))}
+                </div>
               )}
             </div>
-            
             <div className="absolute top-2 left-2 flex flex-col gap-1">
-              <Badge className="bg-black text-white text-xs font-semibold px-3 py-1">
-                {product.category.charAt(0).toUpperCase() + product.category.slice(1)}
-              </Badge>
-                {product.stock === 0 ? (
-                <Badge variant="destructive" className="bg-red-600 text-white text-xs font-semibold px-3 py-1">
-                  Out of Stock
-                </Badge>
+              <Badge className="glass-card border border-border text-foreground text-xs font-medium px-2.5 py-1 capitalize">{product.category}</Badge>
+              {product.stock === 0 ? (
+                <Badge className="bg-rose-500/80 text-white text-xs font-medium px-2.5 py-1">Out of Stock</Badge>
               ) : product.stock < 10 && (
-                <Badge variant="destructive" className="bg-orange-600 text-white text-xs font-semibold px-3 py-1">
-                  Low Stock
-                </Badge>
+                <Badge className="bg-amber-500/80 text-white text-xs font-medium px-2.5 py-1">Low Stock</Badge>
               )}
             </div>
           </div>
 
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-3">
-              <Badge variant="outline" className="text-xs font-semibold border-2 border-gray-400 text-gray-200 px-3 py-1">
-                {product.category.charAt(0).toUpperCase() + product.category.slice(1)}
-              </Badge>
-            </div>
-            
-            {/* Supplier name - show "Solo" for own products, seller name for others */}
-            <div className="mb-3 pb-3 border-b border-gray-700">
-              <p className="text-xs text-gray-400 mb-1">Sold by</p>
+          <div className="p-4 cursor-pointer" onClick={() => router.push('/products/' + product._id)}>
+            <div className="mb-3 pb-3 border-b border-border">
+              <p className="text-xs text-muted-foreground mb-0.5">Sold by</p>
               {isOwner ? (
-                <p className="text-sm font-semibold text-gray-300">Solo</p>
+                <p className="text-sm font-semibold text-muted-foreground">You</p>
               ) : supplierName ? (
-                <p className="text-sm font-semibold text-blue-400">{supplierName}</p>
+                <p className="text-sm font-semibold text-primary">{supplierName}</p>
               ) : (
-                <p className="text-sm font-semibold text-gray-300">Loading...</p>
+                <p className="text-sm font-semibold text-muted-foreground">Supplier</p>
               )}
             </div>
-            
-            <h3 className="text-lg font-bold text-white mb-2 line-clamp-2 group-hover:text-gray-100">
-              {product.name}
-            </h3>
-            <p className="text-base text-gray-300 mb-3 line-clamp-2">
-              {product.description}
-            </p>
-            <div className="space-y-3 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-bold text-white">
-                  ₹{Number(product.price).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-gray-800 text-white text-sm font-semibold px-3 py-1">
-                  Stock: {Number(product.stock).toLocaleString('en-IN')}
-                </Badge>
-                {product.status && (
-                  <Badge 
-                    variant={product.status.toLowerCase() === 'active' && product.stock > 0 ? 'default' : 'secondary'} 
-                    className={`text-sm font-semibold px-3 py-1 ${
-                      product.status.toLowerCase() === 'active' && product.stock > 0
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-red-600 text-white'
-                    }`}
-                  >
-                    {product.stock === 0 ? 'Out of Stock' : product.status}
-                  </Badge>
-                )}
-              </div>
+
+            <h3 className="text-sm font-bold text-foreground mb-1 line-clamp-2">{product.name}</h3>
+            <p className="text-xs text-muted-foreground mb-4 line-clamp-2">{product.description}</p>
+
+            <div className="flex items-center justify-between">
+              <span className="text-lg font-bold gradient-text">{'\u20B9' + Number(product.price).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+              <Badge variant="secondary" className="bg-secondary text-foreground text-xs">{product.stock} in stock</Badge>
             </div>
+          </div>
 
-            {/* Product actions */}
-            <div className="mt-4 pt-4 border-t border-gray-700">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm text-gray-400 mb-2">
-                  <span>Available Stock: {product.stock} units</span>
-                </div>
-
-                {/* Show edit options if user owns the product */}
-                {isOwner && (
-                  <ProductSellerActions
-                    productId={product.id}
-                    onEdit={() => setIsEditDialogOpen(true)}
-                  />
-                )}
-
-                {/* Show add to cart if callback provided and product in stock */}
-                {onAddToCart && product.stock > 0 && !isOwner && (
-                  <Button 
-                    variant="outline"
-                    className="w-full bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => onAddToCart(product.id)}
-                  >
-                    Add to Cart
-                  </Button>
-                )}
-
-                {/* Show contact seller button for non-owners */}
-                {!isOwner && (
-                  <Button 
-                    variant="default"
-                    className="w-full bg-blue-600 hover:bg-blue-700"
-                    onClick={() => {
-                      if (!user) {
-                        toast({
-                          title: "Login Required",
-                          description: "Please login to contact the seller",
-                          variant: "destructive"
-                        });
-                        router.push('/auth');
-                        return;
-                      }
-                      if (isSupplierInfo(product.supplier)) {
-                        const productInfo = encodeURIComponent(JSON.stringify({
-                          id: product.id,
-                          name: product.name,
-                          price: product.price
-                        }));
-
-                        // Persist a lightweight recent conversation so the /messages
-                        // sidebar shows this chat even if the server hasn't yet
-                        // created a conversation entry. This avoids the mismatch
-                        // where /messages/{id} shows the chat but /messages is empty.
-                        try {
-                          const raw = localStorage.getItem('recentConversations')
-                          const list = raw ? JSON.parse(raw) : []
-                          const entry = {
-                            _id: product.supplier._id,
-                            sender: user?._id || '',
-                            receiver: product.supplier._id,
-                            lastMessage: `Interested in ${product.name}`,
-                            lastMessageTime: new Date().toISOString(),
-                            senderName: user?.name || '',
-                            receiverName: product.supplier.name || ''
-                          }
-                          const exists = list.find((c: any) => c._id === entry._id)
-                          if (exists) {
-                            // update
-                            const updated = list.map((c: any) => c._id === entry._id ? { ...c, ...entry } : c)
-                            localStorage.setItem('recentConversations', JSON.stringify([entry, ...updated.filter((c:any)=>c._id !== entry._id)].slice(0,50)))
-                          } else {
-                            list.unshift(entry)
-                            localStorage.setItem('recentConversations', JSON.stringify(list.slice(0,50)))
-                          }
-                        } catch (err) {
-                          console.warn('Could not persist recentConversations from product contact', err)
-                        }
-
-                        router.push(`/messages/${product.supplier._id}?product=${productInfo}`);
-                      }
-                    }}
-                  >
-                    Contact Seller
-                  </Button>
-                )}
+          <div className="px-4 pb-4">
+            {isOwner ? (
+              <ProductSellerActions productId={product.id} onEdit={() => setIsEditDialogOpen(true)} />
+            ) : (
+              <div className="space-y-2">
+                <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-xs" onClick={() => router.push('/products/' + product._id)}>
+                  View details
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full border-border text-foreground hover:bg-secondary rounded-md text-xs"
+                  onClick={async () => {
+                    if (product.stock === 0) return
+                    setAddingToCart(true)
+                    try {
+                      await addToCart(product._id, 1)
+                    } finally {
+                      setAddingToCart(false)
+                    }
+                  }}
+                  disabled={product.stock === 0 || addingToCart}
+                >
+                  {product.stock === 0 ? 'Out of stock' : addingToCart ? 'Adding...' : 'Add to cart'}
+                </Button>
               </div>
-            </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      {/* Edit Dialog */}
-      <EditProductDialog
-        product={product}
-        isOpen={isEditDialogOpen}
-        onClose={() => setIsEditDialogOpen(false)}
-        onSaved={() => {
-          setIsEditDialogOpen(false);
-          window.location.reload();
-        }}
-      />
+      <EditProductDialog product={product} isOpen={isEditDialogOpen} onClose={() => setIsEditDialogOpen(false)} onSaved={() => { setIsEditDialogOpen(false); window.location.reload() }} />
     </>
-  );
+  )
 }

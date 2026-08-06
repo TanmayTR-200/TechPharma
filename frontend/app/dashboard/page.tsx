@@ -4,263 +4,155 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useDashboard } from "@/hooks/use-dashboard"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { AddProductDialog } from "@/components/add-product-dialog"
 import { EditProfileDialog } from "@/components/edit-profile-dialog"
 import { AnalyticsDialog } from "@/components/analytics-dialog"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAuth } from "@/contexts/auth"
-import { useProduct } from "@/contexts/product-context"
 import { splitName } from "@/types/user"
 import DashboardLayout from '@/components/dashboard-layout'
 import { formatDateShort } from '@/lib/formatDate'
-import { Package, Eye, Mail, DollarSign } from "lucide-react"
+import { Package, Eye, ShoppingCart, DollarSign, ArrowUpRight } from "lucide-react"
+import { motion } from "framer-motion"
 
-// Response Types
-interface DashboardResponse {
-  success: boolean;
-  data: {
-    stats: DashboardStats;
-    orders: Order[];
-  };
-  error?: string;
-}
-
-interface DashboardErrorResponse {
-  error: string;
-  message?: string;
-  details?: string;
-}
-
-// Data Types
-interface Order {
-  _id: string
-  user: string
-  items: Array<{
-    product: {
-      name: string
-      _id: string
-    }
-    quantity: number
-    price: number
-  }>
-  totalAmount: number
-  status: string
-  createdAt: string
-  paymentDetails: {
-    status: string
-    method: string
-  }
-}
-
-interface DashboardStats {
-  totalProducts: number
-  productViews: number
-  recentOrders: number
-  revenue: number
+function StatSkeleton() {
+  return (
+    <div className="glass-card p-5 animate-fade-up">
+      <div className="shimmer h-3 w-16 mb-2" />
+      <div className="shimmer h-8 w-24 mb-1" />
+      <div className="shimmer h-2 w-20" />
+    </div>
+  )
 }
 
 export default function DashboardPage() {
   const { user } = useAuth()
-  const { userProducts } = useProduct()
   const router = useRouter()
   const { data, error, isLoading } = useDashboard()
-
-  const stats = data?.stats || {
-    totalProducts: 0,
-    productViews: 0,
-    recentOrders: 0,
-    revenue: 0
-  }
-  
-  // Get only the 5 most recent orders
+  const stats = data?.stats || { totalProducts: 0, productViews: 0, recentOrders: 0, revenue: 0 }
   const orders = (data?.orders || []).slice(0, 5)
 
-  useEffect(() => {
-    if (!user) {
-      router.push('/auth?mode=login');
-    }
-  }, [user, router]);
-
-  if (error) {
-    return (
-      <DashboardLayout>
-        <div className="flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-            <span className="text-red-600 text-2xl">!</span>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">Error Loading Dashboard</h3>
-          <p className="text-sm text-gray-500">{error instanceof Error ? error.message : String(error)}</p>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={() => window.location.reload()}
-          >
-            Try Again
-          </Button>
-        </div>
-      </DashboardLayout>
-    )
-  }
+  useEffect(() => { if (!user) router.push('/auth?mode=login') }, [user, router])
 
   if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="flex flex-col items-center justify-center p-8">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard data...</p>
+        <div className="w-full space-y-6">
+          <div className="shimmer h-8 w-48" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+            {[1, 2, 3, 4].map(i => <StatSkeleton key={i} />)}
+          </div>
+          <div className="grid lg:grid-cols-3 gap-5">
+            <div className="lg:col-span-2 glass-card p-5">
+              <div className="shimmer h-4 w-32 mb-4" />
+              <div className="space-y-3">
+                {[1, 2, 3].map(i => <div key={i} className="flex gap-3"><div className="shimmer h-8 w-8 rounded-md" /><div className="flex-1 space-y-2"><div className="shimmer h-3 w-1/2" /><div className="shimmer h-2 w-1/3" /></div></div>)}
+              </div>
+            </div>
+            <div className="glass-card p-5"><div className="shimmer h-4 w-20 mb-4" /><div className="shimmer h-8 w-8 rounded-full mb-3" /><div className="shimmer h-3 w-24 mb-2" /><div className="shimmer h-3 w-16" /></div>
+          </div>
         </div>
       </DashboardLayout>
     )
   }
 
+  const tiles = [
+    { icon: Package, label: 'Products', value: stats.totalProducts, variant: 'stat-primary', text: 'text-white' },
+    { icon: Eye, label: 'Views', value: stats.productViews, variant: 'stat-teal', text: 'text-white' },
+    { icon: ShoppingCart, label: 'Orders', value: orders.length, variant: 'stat-amber', text: 'text-white' },
+    { icon: DollarSign, label: 'Revenue', value: stats.revenue > 0 ? '\u20B9' + stats.revenue.toLocaleString('en-IN') : '\u20B90', variant: 'stat-emerald', text: 'text-white' },
+  ]
+
   return (
     <DashboardLayout>
-      <div className="space-y-8 p-6 md:p-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[
-            {
-              id: 'products',
-              title: 'Total Active Products',
-              icon: <Package className="h-4 w-4 text-gray-400" />,
-              value: stats.totalProducts,
-              description: stats.totalProducts === 0 
-                ? "No products available"
-                : `${stats.totalProducts} active product${stats.totalProducts === 1 ? '' : 's'}`
-            },
-            {
-              id: 'views',
-              title: "This Month's Views",
-              icon: <Eye className="h-4 w-4 text-gray-400" />,
-              value: stats.productViews,
-              description: stats.productViews === 0 
-                ? "No product views yet"
-                : `${stats.productViews} view${stats.productViews === 1 ? '' : 's'} this month`
-            },
-            {
-              id: 'orders',
-              title: 'Recent Orders',
-              icon: <Package className="h-4 w-4 text-gray-400" />,
-              value: orders.length,
-              description: orders.length === 0 
-                ? "No orders received yet"
-                : `${orders.length} recent order${orders.length === 1 ? '' : 's'}`
-            },
-            {
-              id: 'revenue',
-              title: 'Total Revenue',
-              icon: <span className="h-4 w-4 text-gray-400 font-bold text-xl">₹</span>,
-              value: stats.revenue > 0 ? `₹${stats.revenue.toLocaleString('en-IN')}` : '₹0',
-              description: stats.revenue === 0 ? "No revenue generated yet" : "From completed orders"
-            }
-          ].map(card => (
-            <Card key={card.id} className="hover:shadow-md transition-shadow bg-black text-white">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 border-b border-zinc-800">
-                <CardTitle className="text-sm font-medium text-white">{card.title}</CardTitle>
-                {card.icon}
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="text-2xl font-bold text-white">{card.value}</div>
-                <p className="text-xs text-gray-400">{card.description}</p>
-              </CardContent>
-            </Card>
+      <div className="w-full space-y-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Welcome back, {user?.name?.split(' ')[0] || 'User'}</p>
+        </motion.div>
+
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+          {tiles.map((t, idx) => (
+            <motion.div
+              key={t.label}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05 }}
+              className={t.variant + ' rounded-xl p-5 transition-all hover:translate-y-[-3px]'}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-white/80 mb-1">{t.label}</p>
+                  <p className="text-4xl font-bold text-white">{t.value}</p>
+                </div>
+                <div className="bg-white/20 p-3 rounded-xl">
+                  <t.icon className="h-6 w-6 text-white" />
+                </div>
+              </div>
+            </motion.div>
           ))}
         </div>
 
-        {/* Quick Actions */}
-        <Card className="mb-8 bg-black text-white">
-          <CardHeader className="border-b border-zinc-800">
-            <CardTitle className="text-white">Quick Actions</CardTitle>
-            <CardDescription className="text-gray-400">Common actions to manage your store</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
+        <div className="grid lg:grid-cols-3 gap-5">
+          {/* Left */}
+          <div className="lg:col-span-2 space-y-5">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick actions</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <AddProductDialog />
-              </div>
-              <div className="flex-1">
                 <EditProfileDialog />
-              </div>
-              <div className="flex-1">
                 <AnalyticsDialog />
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </motion.div>
 
-        {/* Show orders if available */}
-        {orders.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Recent Orders */}
-            <Card className="hover:shadow-md transition-shadow bg-black text-white">
-              <CardHeader className="border-b border-zinc-800">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-white">Recent Orders</CardTitle>
-                    <CardDescription className="text-gray-400">Your 5 most recent orders - check Orders tab for full history</CardDescription>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => router.push('/orders')}
-                    className="text-white hover:text-white border-zinc-700 hover:bg-zinc-800"
-                  >
-                    View All Orders
-                  </Button>
+            {orders.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-foreground">Recent orders</h3>
+                  <Button variant="ghost" size="sm" onClick={() => router.push('/orders')} className="text-primary text-xs h-7">View all <ArrowUpRight className="ml-1 h-3 w-3" /></Button>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[400px] pr-4">
-                  <div className="space-y-4">
-                    {orders.map((order: Order) => (
-                      <div
-                        key={order._id}
-                        className="flex items-center justify-between p-4 border border-zinc-800 rounded-lg bg-zinc-900"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium text-sm text-white">{order._id}</span>
-                            <Badge
-                              variant={
-                                order.status === "CONFIRMED"
-                                  ? "default"
-                                  : order.status === "PENDING"
-                                    ? "secondary"
-                                    : "outline"
-                              }
-                              className="text-xs"
-                            >
-                              {order.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-400">{order.user}</p>
-                          <div className="text-xs text-gray-500 space-y-1">
-                            {order.items.map((item: {
-                              product: { name: string; _id: string };
-                              quantity: number;
-                              price: number;
-                            }, index: number) => (
-                              <p key={`${order._id}-item-${item.product._id}-${index}`} className="text-gray-400">
-                                {item.product.name} × {item.quantity}
-                              </p>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-sm text-white">₹{order.totalAmount}</p>
-                          <p className="text-xs text-gray-400">{formatDateShort(order.createdAt)}</p>
+                <div className="divide-y divide-border">
+                  {orders.map((o) => (
+                    <div key={o._id} className="flex items-center justify-between py-3 hover:bg-secondary/30 rounded-md px-2 -mx-2 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary flex-shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2"><span className="text-sm font-medium text-foreground truncate">#{o._id}</span><Badge variant="secondary" className="text-xs">{o.status}</Badge></div>
+                          <p className="text-xs text-muted-foreground truncate">{o.items?.[0]?.product?.name}</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
+                      <div className="text-right flex-shrink-0"><p className="text-sm font-medium text-foreground">{'\u20B9' + o.totalAmount}</p><p className="text-xs text-muted-foreground">{formatDateShort(o.createdAt)}</p></div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
-        )}
+
+          {/* Right */}
+          <div className="space-y-5">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card p-5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Profile</p>
+              <div className="flex items-center gap-3 mb-4">
+                <Avatar className="h-9 w-9"><AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">{user ? (() => { const { firstName, lastName } = splitName(user.name); return (firstName[0] + (lastName[0] || '')).toUpperCase() })() : 'U'}</AvatarFallback></Avatar>
+                <div className="min-w-0"><p className="text-sm font-medium text-foreground truncate">{user?.name || 'User'}</p><p className="text-xs text-muted-foreground truncate">{user?.company?.name || 'Company not set'}</p></div>
+              </div>
+              <Button asChild variant="outline" size="sm" className="w-full rounded-md text-xs"><a href="/settings">Manage profile</a></Button>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="glass-card p-5">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Revenue</p>
+              <p className="text-2xl font-bold gradient-text">{'\u20B9' + stats.revenue.toLocaleString('en-IN')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{stats.revenue > 0 ? 'From completed orders' : 'No revenue yet'}</p>
+              <div className="mt-3 pt-3 border-t border-border space-y-2">
+                <div className="flex justify-between text-xs"><span className="text-muted-foreground">Active products</span><span className="font-medium text-foreground">{stats.totalProducts}</span></div>
+                <div className="flex justify-between text-xs"><span className="text-muted-foreground">Monthly views</span><span className="font-medium text-foreground">{stats.productViews}</span></div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
       </div>
     </DashboardLayout>
   )

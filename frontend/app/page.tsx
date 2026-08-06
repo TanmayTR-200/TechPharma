@@ -1,24 +1,17 @@
-"use client";
-
-import {HeroSection} from "@/components/hero-section"
-import { CategoryGrid } from "@/components/category-grid"
-import { FeaturedProducts } from "@/components/featured-products"
-import { TrustedSuppliers } from "@/components/trusted-suppliers"
-import { Footer } from "@/components/footer"
-import { ProductProvider } from "@/contexts/product-provider"
-import { Toaster } from "@/components/ui/toaster"
+import { HeroSection } from '@/components/hero-section'
+import { CategoryGrid } from '@/components/category-grid'
+import { FeaturedProducts } from '@/components/featured-products'
+import { Footer } from '@/components/footer'
 
 export default function HomePage() {
   return (
-    <ProductProvider>
-      <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col pt-14 relative z-10">
+      <main className="flex-1">
         <HeroSection />
         <CategoryGrid />
         <FeaturedProducts />
-        <TrustedSuppliers />
-        <Footer />
-        <Toaster />
-      </div>
-    </ProductProvider>
+      </main>
+      <Footer />
+    </div>
   )
 }

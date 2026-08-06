@@ -52,17 +52,17 @@ export function ProductSellerActions({ productId, onEdit }: ProductSellerActions
       <Button
         onClick={onEdit}
         variant="outline"
-        className="w-full border-white text-white hover:bg-zinc-800"
+        className="w-full"
       >
-        Edit Product
+        Edit product
       </Button>
       <Button
         onClick={handleDelete}
         variant="destructive"
-        className="w-full !bg-red-600 hover:!bg-red-700 text-white"
+        className="w-full"
         disabled={isDeleting}
       >
-        {isDeleting ? 'Deleting...' : 'Delete Product'}
+        {isDeleting ? 'Deleting...' : 'Delete product'}
       </Button>
     </div>
   );

@@ -4,6 +4,7 @@ import { ReactNode } from 'react';
 import AuthProvider from '@/contexts/auth';
 import ProductProvider from '@/contexts/product-context';
 import { CartProvider } from '@/contexts/cart';
+import { NotificationProvider } from '@/contexts/notification-context';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { CloudinaryScriptProvider } from '@/components/cloudinary-script-provider';
@@ -16,20 +17,21 @@ export function ProvidersWrapper({ children }: ProvidersWrapperProps) {
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme="dark"
-      enableSystem={false}
+      defaultTheme="light"
+      enableSystem={true}
       disableTransitionOnChange
-      forcedTheme="dark"
       storageKey="techpharma-theme"
     >
       <CloudinaryScriptProvider>
         <AuthProvider>
-          <ProductProvider>
-            <CartProvider>
-              {children}
-              <Toaster />
-            </CartProvider>
-          </ProductProvider>
+          <NotificationProvider>
+            <ProductProvider>
+              <CartProvider>
+                {children}
+                <Toaster />
+              </CartProvider>
+            </ProductProvider>
+          </NotificationProvider>
         </AuthProvider>
       </CloudinaryScriptProvider>
     </ThemeProvider>

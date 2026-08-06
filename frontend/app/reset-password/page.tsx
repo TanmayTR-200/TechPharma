@@ -65,15 +65,15 @@ export default function ResetPassword() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="p-8 bg-white rounded-xl shadow-lg w-full max-w-md text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Invalid Reset Link</h1>
-          <p className="text-gray-600 mb-6">
+      <div className="min-h-screen flex items-center justify-center bg-secondary relative z-10">
+        <div className="p-8 bg-card rounded-xl shadow-lg w-full max-w-md text-center">
+          <h1 className="text-2xl font-bold text-destructive mb-4">Invalid Reset Link</h1>
+          <p className="text-muted-foreground mb-6">
             This password reset link is invalid or has expired. Please request a new password reset link.
           </p>
           <Button
             onClick={() => router.push('/forgot-password')}
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-primary/10 hover:bg-primary/10"
           >
             Request New Reset Link
           </Button>
@@ -83,10 +83,10 @@ export default function ResetPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="p-8 bg-white rounded-xl shadow-lg w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-secondary relative z-10">
+      <div className="p-8 bg-card rounded-xl shadow-lg w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-6">Reset Your Password</h1>
-        <p className="text-gray-600 text-center mb-8">
+        <p className="text-muted-foreground text-center mb-8">
           Please enter your new password below.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -124,7 +124,7 @@ export default function ResetPassword() {
           </div>
           <Button
             type="submit"
-            className="w-full bg-blue-600 hover:bg-blue-700"
+            className="w-full bg-primary/10 hover:bg-primary/10"
             disabled={isLoading}
           >
             {isLoading ? "Resetting..." : "Reset Password"}

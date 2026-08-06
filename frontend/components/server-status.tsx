@@ -61,11 +61,11 @@ export function ServerStatus() {
   if (isConnected) return null; // Don't show anything when connected
 
   return (
-    <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-md shadow-lg z-50 flex items-center space-x-2">
-      <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+    <div className="fixed bottom-4 right-4 bg-destructive/10 text-foreground px-4 py-2 rounded-md shadow-lg z-50 flex items-center space-x-2">
+      <div className="w-2 h-2 bg-card rounded-full animate-pulse" />
       <span>Server Disconnected</span>
       <button
-        className="ml-4 px-2 py-1 bg-white text-red-500 rounded hover:bg-gray-100"
+        className="ml-4 px-2 py-1 bg-card text-destructive rounded hover:bg-secondary"
         onClick={() => window.location.reload()}
       >
         Retry

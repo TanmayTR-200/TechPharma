@@ -1,155 +1,98 @@
+import { Footer } from "@/components/footer"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Terms and Conditions - TechPharma",
+  description: "The terms and conditions for using TechPharma marketplace.",
+}
+
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto bg-white shadow-md rounded-lg p-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-6">Terms of Service</h1>
-        <p className="text-sm text-gray-600 mb-8">Last updated: January 16, 2026</p>
+    <div className="min-h-screen relative z-10 pt-16">
+      <main className="max-w-2xl mx-auto px-6 py-10">
+        <h1 className="text-2xl font-bold text-foreground mb-1">Terms and Conditions</h1>
+        <p className="text-xs text-muted-foreground mb-8">Last updated: August 2026</p>
 
-        <div className="space-y-6 text-gray-700">
+        <div className="space-y-6">
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">1. Acceptance of Terms</h2>
-            <p>
-              By accessing and using TechPharma's B2B marketplace platform, you accept and agree to be bound by 
-              the terms and provision of this agreement. If you do not agree to these terms, please do not use 
-              our services.
+            <h2 className="text-sm font-semibold text-foreground mb-2">1. Acceptance of terms</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              By creating an account or using TechPharma, you agree to these terms. If you do not agree, do not use the platform.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">2. Eligibility</h2>
-            <p className="mb-3">To use our platform, you must:</p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Be at least 18 years of age</li>
-              <li>Have the legal authority to enter into binding contracts</li>
-              <li>Represent a legitimate business entity</li>
-              <li>Provide accurate and complete registration information</li>
-              <li>Comply with all applicable laws and regulations</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">3. Account Registration</h2>
-            <p className="mb-3">When creating an account, you agree to:</p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Provide accurate and truthful information</li>
-              <li>Maintain the security of your account credentials</li>
-              <li>Notify us immediately of any unauthorized access</li>
-              <li>Be responsible for all activities under your account</li>
-              <li>Complete business verification when required</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">4. Supplier Obligations</h2>
-            <p className="mb-3">As a supplier on our platform, you must:</p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Provide accurate product descriptions and pricing</li>
-              <li>Honor all confirmed orders and transactions</li>
-              <li>Ship products within the specified timeframe</li>
-              <li>Maintain product quality and authenticity</li>
-              <li>Comply with all applicable regulations and licenses</li>
-              <li>Not sell prohibited or counterfeit items</li>
-              <li>Respond to customer inquiries promptly</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">5. Buyer Obligations</h2>
-            <p className="mb-3">As a buyer on our platform, you must:</p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Place orders only for legitimate business purposes</li>
-              <li>Provide accurate delivery information</li>
-              <li>Make timely payments for confirmed orders</li>
-              <li>Communicate professionally with suppliers</li>
-              <li>Review products upon receipt and report issues promptly</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">6. Prohibited Activities</h2>
-            <p className="mb-3">You may not:</p>
-            <ul className="list-disc pl-6 space-y-2">
-              <li>Violate any laws or regulations</li>
-              <li>Infringe on intellectual property rights</li>
-              <li>Engage in fraudulent or deceptive practices</li>
-              <li>Sell prohibited or restricted items</li>
-              <li>Manipulate reviews or ratings</li>
-              <li>Harass or abuse other users</li>
-              <li>Interfere with platform operations</li>
-              <li>Use automated systems to access the platform</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">7. Fees and Payments</h2>
-            <p>
-              Transaction fees, commission rates, and payment terms are outlined in our pricing policy. All fees 
-              are subject to change with 30 days' notice. Payments must be made through approved payment methods 
-              only.
+            <h2 className="text-sm font-semibold text-foreground mb-2">2. Account registration</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              You must provide accurate information when registering. You are responsible for keeping your password secure and for all activity under your account. You must be 18 or older to use this platform.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">8. Intellectual Property</h2>
-            <p>
-              All content on the TechPharma platform, including text, graphics, logos, and software, is the 
-              property of TechPharma or its licensors and is protected by copyright and intellectual property laws.
+            <h2 className="text-sm font-semibold text-foreground mb-2">3. Supplier responsibilities</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Suppliers must list accurate product information, including pricing, specifications, and images. Suppliers are responsible for fulfilling orders and honoring quoted prices. Misleading listings may result in account suspension.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">9. Dispute Resolution</h2>
-            <p>
-              Any disputes arising from the use of our platform will be resolved through good faith negotiation. 
-              If a resolution cannot be reached, disputes will be subject to binding arbitration in Bangalore, India.
+            <h2 className="text-sm font-semibold text-foreground mb-2">4. Buyer responsibilities</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Buyers must provide accurate delivery information and make payments through the platform. Placing fraudulent orders or abusing the messaging system may result in account suspension.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">10. Limitation of Liability</h2>
-            <p>
-              TechPharma is not liable for any indirect, incidental, special, or consequential damages arising 
-              from your use of the platform. Our total liability shall not exceed the amount of fees paid by you 
-              in the 12 months preceding the claim.
+            <h2 className="text-sm font-semibold text-foreground mb-2">5. Orders and payments</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Orders placed through TechPharma create a direct agreement between buyer and supplier. TechPharma facilitates the transaction but is not a party to the sale. Payment is processed at the time of order unless cash on delivery is selected.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">11. Termination</h2>
-            <p>
-              We reserve the right to suspend or terminate your account at any time for violation of these terms, 
-              fraudulent activity, or any other reason we deem necessary to protect the platform and its users.
+            <h2 className="text-sm font-semibold text-foreground mb-2">6. Prohibited activities</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              You may not use TechPharma to list illegal products, engage in fraud, send spam, scrape data, or attempt to circumvent platform fees. Violations may result in immediate account termination.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">12. Changes to Terms</h2>
-            <p>
-              We may modify these terms at any time. Changes will be effective immediately upon posting. Your 
-              continued use of the platform after changes constitutes acceptance of the modified terms.
+            <h2 className="text-sm font-semibold text-foreground mb-2">7. Intellectual property</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              The TechPharma name, logo, and platform code are owned by TechPharma. Product images and listings belong to the respective suppliers. Do not copy or redistribute content without permission.
             </p>
           </section>
 
           <section>
-            <h2 className="text-2xl font-semibold text-gray-900 mb-3">13. Contact Information</h2>
-            <p>
-              For questions about these Terms of Service, contact us at:
+            <h2 className="text-sm font-semibold text-foreground mb-2">8. Limitation of liability</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              TechPharma is not liable for the quality, safety, or legality of products listed by suppliers. We are not liable for disputes between buyers and sellers. Our liability is limited to the transaction fees collected.
             </p>
-            <div className="mt-3 pl-6">
-              <p>Email: <a href="mailto:techpharma10@gmail.com" className="text-blue-600 hover:underline">techpharma10@gmail.com</a></p>
-              <p>Phone: <a href="tel:+911800-123-4567" className="text-blue-600 hover:underline">+91 1800-123-4567</a></p>
-              <p>Location: Bangalore, India</p>
-            </div>
           </section>
 
-          <section className="mt-8 p-4 bg-gray-100 rounded-lg">
-            <p className="text-sm text-gray-600">
-              By using TechPharma's platform, you acknowledge that you have read, understood, and agree to be 
-              bound by these Terms of Service.
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2">9. Account termination</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              We may suspend or terminate accounts that violate these terms. You may delete your account at any time by contacting us.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2">10. Changes to terms</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              We may update these terms as the platform grows. We will notify users of significant changes. Continued use after changes constitutes acceptance.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold text-foreground mb-2">11. Contact</h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Questions about these terms? Email us at techpharma10@gmail.com.
             </p>
           </section>
         </div>
-      </div>
+      </main>
+      <Footer />
     </div>
-  );
+  )
 }

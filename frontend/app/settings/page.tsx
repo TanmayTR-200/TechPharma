@@ -1,128 +1,194 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/auth'
+import { useState } from 'react'
+import { User, Store, Bell, Shield } from 'lucide-react'
+import DashboardLayout from '@/components/dashboard-layout'
 import { EditProfileDialog } from '@/components/edit-profile-dialog'
+import { useAuth } from '@/contexts/auth'
 
-import { formatDateShort } from '@/lib/formatDate'
+const tabs = [
+  { id: 'profile', label: 'Profile', icon: User },
+  { id: 'store', label: 'Store', icon: Store },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'security', label: 'Security', icon: Shield },
+]
 
 export default function SettingsPage() {
   const { user } = useAuth()
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!user) {
-      router.push('/auth?mode=login')
-    }
-  }, [user, router])
-
-  // Force rerender when user data changes
-  const [, forceUpdate] = useState({});
-  useEffect(() => {
-    const handleUserUpdate = () => forceUpdate({});
-    window.addEventListener('userUpdated', handleUserUpdate);
-    return () => window.removeEventListener('userUpdated', handleUserUpdate);
-  }, []);
+  const [activeTab, setActiveTab] = useState('profile')
+  const [editOpen, setEditOpen] = useState(false)
 
   return (
-    <div className="min-h-screen p-8 bg-white">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex flex-col space-y-4 mb-8">
-          <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-zinc-900">Profile Settings</h1>
-          </div>
-          <div className="flex justify-end">
-            <EditProfileDialog />
-          </div>
+    <DashboardLayout>
+      <div className="w-full flex flex-col" style={{ height: 'calc(100vh - 152px)' }}>
+        <div className="mb-4">
+          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+          <p className="mt-1 text-muted-foreground">Manage your account and preferences</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Profile Overview Card */}
-          <div className="col-span-1 bg-zinc-900 rounded-lg shadow-lg p-6 border border-zinc-700">
-            <div className="flex flex-col items-center space-y-4">
-              <div className="w-32 h-32 rounded-full bg-zinc-800 flex items-center justify-center overflow-hidden">
-                {user?.company?.logo ? (
-                  <img 
-                    src={user.company.logo} 
-                    alt="Company Logo"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="text-4xl font-bold text-white">
-                    {user?.company?.name?.[0]?.toUpperCase() || user?.name?.[0]?.toUpperCase()}
+        <div className="grid gap-6 lg:grid-cols-[200px_1fr] flex-1 min-h-0">
+          {/* Tabs */}
+          <aside>
+            <nav className="space-y-1">
+              {tabs.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      activeTab === tab.id
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </nav>
+          </aside>
+
+          {/* Content */}
+          <div className="rounded-lg border border-border bg-card p-6 overflow-y-auto min-h-0">
+            {activeTab === 'profile' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-foreground">Profile information</h2>
+                  <button
+                    onClick={() => setEditOpen(true)}
+                    className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-foreground hover:bg-secondary/30"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-4 border-b border-border pb-4">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-xl font-bold text-muted-foreground">
+                    {user?.name?.[0]?.toUpperCase() || 'U'}
                   </div>
-                )}
-              </div>
-              <h2 className="text-xl font-semibold text-white">{user?.name}</h2>
-              <p className="text-zinc-300">{user?.company?.name || 'Company not set'}</p>
-            </div>
-          </div>
+                  <div>
+                    <p className="text-base font-medium text-foreground">{user?.name || 'User'}</p>
+                    <p className="text-sm text-muted-foreground">{user?.email || 'No email'}</p>
+                  </div>
+                </div>
 
-          {/* Account Details Card */}
-          <div className="col-span-2 space-y-8">
-            <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-zinc-700 space-y-6">
-              <h2 className="text-xl font-semibold text-white border-b border-zinc-700 pb-2">Account Information</h2>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">Full Name</label>
-                  <p className="mt-1 text-lg text-white">{user?.name || 'Not set'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">Email Address</label>
-                  <p className="mt-1 text-lg text-white">{user?.email || 'Not set'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">Phone Number</label>
-                  <p className="mt-1 text-lg text-white">{user?.phone || 'Not set'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">Account Created On</label>
-                  <p className="mt-1 text-lg text-white">
-                    {user?.createdAt ? (
-                      formatDateShort(user.createdAt)
-                    ) : user?._id ? (
-                      formatDateShort(new Date(parseInt(user._id)).toISOString())
-                    ) : (
-                      'Not available'
-                    )}
-                  </p>
-                </div>
+                <dl className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Full name</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">{user?.name || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Email</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">{user?.email || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Phone</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">{user?.phone || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">Role</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground capitalize">{user?.role || '-'}</dd>
+                  </div>
+                </dl>
               </div>
-            </div>
+            )}
 
-            <div className="bg-zinc-900 rounded-lg shadow-lg p-6 border border-zinc-700 space-y-6">
-              <h2 className="text-xl font-semibold text-white border-b border-zinc-700 pb-2">Company Information</h2>
-              <div className="grid grid-cols-2 gap-6">
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">Company Name</label>
-                  <p className="mt-1 text-lg text-white">{user?.company?.name || 'Not set'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-zinc-300">Website</label>
-                  <p className="mt-1 text-lg">
-                    {user?.company?.website ? (
-                      <a href={user.company.website} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline">
-                        {user.company.website}
-                      </a>
-                    ) : (
-                      <span className="text-white">Not set</span>
-                    )}
-                  </p>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-sm font-medium text-zinc-300">Company Description</label>
-                  <p className="mt-1 text-lg text-white">{user?.company?.description || 'No description available'}</p>
-                </div>
-                <div className="col-span-2">
-                  <label className="text-sm font-medium text-zinc-300">Business Address</label>
-                  <p className="mt-1 text-lg text-white">{user?.company?.address || 'Not set'}</p>
+            {activeTab === 'store' && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-foreground">Store settings</h2>
+                <p className="text-sm text-muted-foreground">Configure your store details and preferences.</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">Store name</label>
+                    <input
+                      type="text"
+                      defaultValue={user?.company?.name || ''}
+                      placeholder="Your store name"
+                      className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">Store address</label>
+                    <textarea
+                      rows={3}
+                      defaultValue={user?.company?.address || ''}
+                      placeholder="Enter your store address"
+                      className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">
+                    Save changes
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-foreground">Notification preferences</h2>
+                <div className="space-y-3">
+                  {[
+                    { label: 'New orders', desc: 'Get notified when you receive a new order' },
+                    { label: 'Low stock alerts', desc: 'Get notified when product stock is low' },
+                    { label: 'Messages', desc: 'Get notified when you receive a new message' },
+                    { label: 'Weekly summary', desc: 'Receive a weekly sales summary' },
+                  ].map((item) => (
+                    <div key={item.label} className="flex items-center justify-between border-b border-border pb-3 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground">{item.desc}</p>
+                      </div>
+                      <label className="relative inline-flex cursor-pointer items-center">
+                        <input type="checkbox" defaultChecked className="peer sr-only" />
+                        <div className="peer h-5 w-9 rounded-full bg-slate-200 after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-card after:transition-all peer-checked:bg-primary peer-checked:after:translate-x-4" />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'security' && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-foreground">Security</h2>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">Current password</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">New password</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-foreground">Confirm new password</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">
+                    Update password
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </div>
+
+      <EditProfileDialog />
+    </DashboardLayout>
   )
 }

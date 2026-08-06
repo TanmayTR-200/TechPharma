@@ -45,7 +45,7 @@ export function ProductPagination({ currentPage, totalPages }: ProductPagination
                 key={pageNumber}
                 variant={pageNumber === currentPage ? "default" : "outline"}
                 size="sm"
-                className={pageNumber === currentPage ? "bg-accent text-accent-foreground" : ""}
+                className={pageNumber === currentPage ? "bg-primary text-primary-foreground" : ""}
                 onClick={() => handlePageChange(pageNumber)}
               >
                 {pageNumber}
@@ -58,7 +58,7 @@ export function ProductPagination({ currentPage, totalPages }: ProductPagination
               <Button
                 variant={totalPages === currentPage ? "default" : "outline"}
                 size="sm"
-                className={totalPages === currentPage ? "bg-accent text-accent-foreground" : ""}
+                className={totalPages === currentPage ? "bg-primary text-primary-foreground" : ""}
                 onClick={() => handlePageChange(totalPages)}
               >
                 {totalPages}

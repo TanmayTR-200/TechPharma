@@ -75,7 +75,7 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
   const handleGetQuote = async () => {
     if (!user) {
       toast({
-        title: 'Authentication Required',
+        title: 'Sign in required',
         description: 'Please sign in to request a quote',
         variant: 'destructive',
       });
@@ -90,18 +90,13 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
 
       // TODO: Implement quote functionality
       toast({
-        title: 'Coming Soon',
-        description: 'Quote functionality will be available soon',
-      });
-      
-      toast({
-        title: 'Message Sent',
-        description: 'Quote request functionality coming soon',
+        title: 'Coming soon',
+        description: 'Quote requests will be available soon',
       });
     } catch (error: any) {
       toast({
-        title: 'Failed to Send Message',
-        description: error.message || 'An error occurred while sending your message',
+        title: 'Error',
+        description: error.message || 'Something went wrong',
         variant: 'destructive',
       });
     }
@@ -170,22 +165,22 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
   // Show management actions for the product owner
   if (mode === 'management' && canEditProduct(product._id)) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3">
         <Button
           onClick={handleToggleStatus}
           variant="outline"
           className="w-full"
         >
-          {product.status === 'active' ? 'Deactivate Product' : 'Activate Product'}
+          {product.status === 'active' ? 'Deactivate' : 'Activate'}
         </Button>
         
         <Button
           onClick={handleDelete}
           variant="destructive"
-          className="w-full bg-red-600 hover:bg-red-700"
+          className="w-full"
           disabled={isDeleting}
         >
-          {isDeleting ? 'Deleting...' : 'Delete Product'}
+          {isDeleting ? 'Deleting...' : 'Delete product'}
         </Button>
       </div>
     );
@@ -194,7 +189,7 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
   const handleAddToCart = async () => {
     if (!user) {
       toast({
-        title: 'Authentication Required',
+        title: 'Sign in required',
         description: 'Please sign in to add items to cart',
         variant: 'destructive',
       });
@@ -217,13 +212,13 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
 
   // Show marketplace actions for buyers
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Button
         onClick={handlePurchase}
         disabled={isProcessing || product.status !== 'active'}
-        className="w-full bg-primary hover:bg-primary/90"
+        className="w-full"
       >
-        {isProcessing ? 'Processing...' : product.status === 'active' ? 'Buy Now' : 'Product Unavailable'}
+        {isProcessing ? 'Processing...' : product.status === 'active' ? 'Buy now' : 'Unavailable'}
       </Button>
       
       {product.status === 'active' && (
@@ -234,7 +229,7 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
             className="w-full"
             disabled={isAddingToCart}
           >
-            {isAddingToCart ? 'Adding to Cart...' : 'Add to Cart'}
+            {isAddingToCart ? 'Adding...' : 'Add to cart'}
           </Button>
           
           <Button
@@ -242,7 +237,7 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
             variant="outline"
             className="w-full"
           >
-            Get Quote
+            Get quote
           </Button>
         </>
       )}

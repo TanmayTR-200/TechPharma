@@ -278,20 +278,18 @@ const ProductProvider = ({ children }: { children: React.ReactNode }): React.Rea
         return
       }
 
-      // Create quote request
-      await fetch(`${API_ENDPOINTS.products.base}/quotes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ productId: product._id }),
-      })
-
-      toast({
-        title: "Quote Requested",
-        description: "The supplier will contact you soon",
-      })
+      // Redirect to messages with the seller, pre-filling a quote request message
+      const supplierId = product.supplierId || product.userId
+      if (supplierId) {
+        const productInfo = encodeURIComponent(JSON.stringify({ id: product._id, name: product.name, price: product.price }))
+        router.push('/messages/' + supplierId + '?product=' + productInfo)
+      } else {
+        toast({
+          title: "Error",
+          description: "Could not identify the seller for this product.",
+          variant: "destructive",
+        })
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -336,6 +334,59 @@ const ProductProvider = ({ children }: { children: React.ReactNode }): React.Rea
 
   // Load initial products
   useEffect(() => {
+    // Always load demo products first
+    const demoProducts: Product[] = [
+      {
+        _id: '1',
+        name: 'Arduino set',
+        description: 'Arduino',
+        price: 1000,
+        category: 'electronics',
+        stock: 13,
+        images: ['https://res.cloudinary.com/dj92mesew/image/upload/v1761573294/Arduino_Set_w9z1vh.webp'],
+        supplierId: 'demo',
+        userId: 'demo',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        _id: '2',
+        name: 'Firefighter Suit',
+        description: 'Firefighting',
+        price: 5000,
+        category: 'safety',
+        stock: 18,
+        images: ['https://res.cloudinary.com/dj92mesew/image/upload/v1761400591/firefighting_suit_d9x6ux.jpg'],
+        supplierId: 'demo',
+        userId: 'demo',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        _id: '3',
+        name: 'Drilling Machine',
+        description: 'Solo',
+        price: 2000,
+        category: 'machinery',
+        stock: 14,
+        images: [
+          'https://res.cloudinary.com/dj92mesew/image/upload/v1760700899/71fRsB4x_UL_l5srdn.jpg',
+          'https://res.cloudinary.com/dj92mesew/image/upload/v1761291550/drilling_1_sotwy7.webp'
+        ],
+        supplierId: 'demo',
+        userId: 'demo',
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ]
+    setProducts(demoProducts)
+    setUserProducts(demoProducts)
+    setIsLoading(false)
+    
+    // If user is logged in, try to refresh with real data
     if (user) {
       refreshProducts()
     }

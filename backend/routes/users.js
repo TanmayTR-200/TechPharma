@@ -20,9 +20,17 @@ const getUsersData = () => {
   return JSON.parse(fs.readFileSync(usersPath, 'utf8'));
 };
 
-// Get user by ID
+// Get user by ID — only self or admin
 router.get('/:id', authenticate, (req, res) => {
   try {
+    // Authorization: user can only view their own profile, unless admin
+    if (req.params.id !== req.user._id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this user'
+      });
+    }
+
     const users = getUsersData();
     const user = users.find(u => u._id === req.params.id);
 
@@ -38,8 +46,8 @@ router.get('/:id', authenticate, (req, res) => {
       user: {
         _id: user._id,
         name: user.name,
-        email: user.email,
-        role: user.role
+        role: user.role,
+        company: user.company
       }
     });
   } catch (error) {
@@ -51,16 +59,23 @@ router.get('/:id', authenticate, (req, res) => {
   }
 });
 
-// List all users (for admin purposes)
+// List all users — admin only
 router.get('/', authenticate, (req, res) => {
   try {
+    // Authorization: admin only
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized'
+      });
+    }
+
     const users = getUsersData();
     res.json({
       success: true,
       users: users.map(u => ({
         _id: u._id,
         name: u.name,
-        email: u.email,
         role: u.role
       }))
     });

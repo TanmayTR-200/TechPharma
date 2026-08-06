@@ -37,7 +37,7 @@
     "description": "Arduino",
     "price": 1000,
     "category": "electronics",
-    "stock": 13,
+    "stock": 15,
     "images": [
       "https://res.cloudinary.com/dj92mesew/image/upload/v1761573294/Arduino_Set_w9z1vh.webp"
     ],
@@ -45,7 +45,7 @@
     "userId": "1760360335467",
     "_id": "1761573298298",
     "createdAt": "2025-10-27T13:54:58.298Z",
-    "updatedAt": "2025-10-27T13:54:58.299Z",
+    "updatedAt": "2026-08-05T16:01:59.177Z",
     "supplierId": "1760360335467"
   }
 ]

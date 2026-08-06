@@ -25,7 +25,6 @@ export function SignupForm() {
   });
   const { handleSignup, verifyOtp, resendOtp, isVerifying, otpSent } = useAuthForm();
 
-
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -62,116 +61,120 @@ export function SignupForm() {
         <Label htmlFor="name">Full Name</Label>
         <div className="relative">
           <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input 
-            id="name" 
-            placeholder="Your Full Name" 
-            className="pl-10"
+          <Input
+            id="name"
+            placeholder="Your Full Name"
+            className="pl-10 rounded-lg"
             value={formData.name}
             onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             required
           />
         </div>
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="company-name">Company Name</Label>
         <div className="relative">
           <Building2 className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input 
-            id="company-name" 
-            placeholder="Your Company Ltd." 
-            className="pl-10"
+          <Input
+            id="company-name"
+            placeholder="Your Company Ltd."
+            className="pl-10 rounded-lg"
             value={formData.companyName}
             onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
             required
           />
         </div>
       </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="signup-email">Business Email</Label>
-        <div className="relative">
-          <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input 
-            id="signup-email" 
-            placeholder="abc@company.com" 
-            type="email" 
-            className="pl-10"
-            value={formData.email}
-            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-            required
-          />
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="signup-email">Business Email</Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="signup-email"
+              placeholder="abc@company.com"
+              type="email"
+              className="pl-10 rounded-lg"
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              required
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="signup-phone">Phone Number</Label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="signup-phone"
+              placeholder="+91..."
+              type="tel"
+              className="pl-10 rounded-lg"
+              value={formData.phone}
+              onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+              required
+            />
+          </div>
         </div>
       </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="signup-phone">Phone Number</Label>
-        <div className="relative">
-          <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input 
-            id="signup-phone" 
-            placeholder="+91..." 
-            type="tel" 
-            className="pl-10"
-            value={formData.phone}
-            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-            required
-          />
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="signup-password">Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="signup-password"
+              placeholder="Create a strong password"
+              type={showPassword ? "text" : "password"}
+              className="pl-10 pr-10 rounded-lg"
+              value={formData.password}
+              onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+              required
+              minLength={8}
+              aria-label="Password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm Password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="confirm-password"
+              placeholder="Confirm your password"
+              type={showConfirmPassword ? "text" : "password"}
+              className="pl-10 pr-10 rounded-lg"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+              required
+              minLength={8}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
       </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="signup-password">Password</Label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="signup-password"
-            placeholder="Create a strong password"
-            type={showPassword ? "text" : "password"}
-            className="pl-10 pr-10"
-            value={formData.password}
-            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-            required
-            minLength={8}
-            aria-label="Password"
-          />
-          <button
-            type="button"
-            onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-          >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
-      
-      <div className="space-y-2">
-        <Label htmlFor="confirm-password">Confirm Password</Label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            id="confirm-password"
-            placeholder="Confirm your password"
-            type={showConfirmPassword ? "text" : "password"}
-            className="pl-10 pr-10"
-            value={formData.confirmPassword}
-            onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-            required
-            minLength={8}
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-3 text-muted-foreground hover:text-foreground"
-          >
-            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
-      
+
       <div className="flex items-center space-x-2">
-        <input type="checkbox" id="terms" className="rounded" required />
+        <input type="checkbox" id="terms" className="rounded border-border" required />
         <Label htmlFor="terms" className="text-sm">
           I agree to the{" "}
           <Link href="/terms" className="text-primary hover:underline">
@@ -183,13 +186,13 @@ export function SignupForm() {
           </Link>
         </Label>
       </div>
-      
-      <Button type="submit" className="w-full" size="lg" disabled={otpSent || isSubmitting}>
+
+      <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg" size="lg" disabled={otpSent || isSubmitting}>
         {isSubmitting ? (
           "Connecting..."
         ) : otpSent ? (
           <>
-            <span className="mr-2">✓</span>
+            <span className="mr-2">&#10003;</span>
             Verification Email Sent
           </>
         ) : (
@@ -197,7 +200,6 @@ export function SignupForm() {
         )}
       </Button>
 
-      {/* OTP Verification Modal */}
       {otpSent && (
         <OtpVerification
           isOpen={otpSent}

@@ -4,116 +4,87 @@ import { useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/auth"
 import { splitName } from "@/types/user"
-import { type ElementType } from 'react';
+import { type ElementType } from 'react'
 import {
-  Package,
-  BarChart3,
-  ShoppingCart,
-  Settings,
-  LogOut,
-  Mail,
-  TrendingUp
+  Package, BarChart3, ShoppingCart, Settings, LogOut, Mail, TrendingUp, Menu, X
 } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { motion } from "framer-motion"
 
-interface SidebarItem {
-  icon: ElementType;
-  label: string;
-  href: string;
-  roles?: string[];
-}
+interface SidebarItem { icon: ElementType; label: string; href: string; roles?: string[] }
 
 const sidebarItems: SidebarItem[] = [
   { icon: BarChart3, label: "Dashboard", href: "/dashboard" },
   { icon: Package, label: "Products", href: "/products" },
   { icon: ShoppingCart, label: "Orders", href: "/orders" },
-  { icon: TrendingUp, label: "Sales Tracking", href: "/sales", roles: ["supplier"] },
+  { icon: TrendingUp, label: "Sales", href: "/sales", roles: ["supplier"] },
   { icon: Package, label: "Sold Products", href: "/sold-products", roles: ["supplier"] },
   { icon: Mail, label: "Messages", href: "/messages" },
-  { icon: Settings, label: "Profile Settings", href: "/settings" },
+  { icon: Settings, label: "Settings", href: "/settings" },
 ]
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth()
   const pathname = usePathname()
-
-  const handleLogout = () => {
-    logout();
-  }
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="fixed inset-y-0 left-0 z-40 w-64 bg-zinc-900 border-r border-zinc-800 lg:block hidden pt-14">
-        <div className="flex flex-col h-full">
-          {/* Navigation */}
-          <nav className="flex-1 px-4 py-6 space-y-2">
-            {sidebarItems.map((item) => {
-              // Skip menu items that are role-restricted and user doesn't have the role
-              if (item.roles && (!user || !item.roles.includes(user.role))) {
-                return null;
-              }
-              return (
+    <div className="min-h-screen relative z-10">
+      <button
+        className="fixed top-16 left-3 z-50 lg:hidden flex items-center justify-center h-9 w-9 glass-card"
+        onClick={() => setMobileOpen(!mobileOpen)}
+      >
+        {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+      </button>
+
+      {mobileOpen && <div className="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm lg:hidden" onClick={() => setMobileOpen(false)} />}
+
+      <aside className={"fixed inset-y-0 left-0 z-40 w-56 bg-card border-r border-border transition-transform duration-200 lg:translate-x-0 " + (mobileOpen ? 'translate-x-0' : '-translate-x-full') + " pt-14"}>
+        <nav className="px-3 py-4 space-y-0.5">
+          {sidebarItems.map((item, idx) => {
+            if (item.roles && (!user || !item.roles.includes(user.role))) return null
+            const isActive = pathname === item.href
+            return (
+              <motion.div key={item.label} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.04 }}>
                 <Link
-                  key={item.label}
                   href={item.href}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    pathname === item.href 
-                      ? "bg-blue-600 text-white" 
-                      : "text-gray-300 hover:bg-zinc-800 hover:text-white"
-                  }`}
+                  onClick={() => setMobileOpen(false)}
+                  className={"flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all " + (isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground")}
                 >
-                  <item.icon className="w-5 h-5" />
+                  <item.icon className="w-4 h-4" />
                   {item.label}
                 </Link>
-              );
-            })}
-          </nav>
+              </motion.div>
+            )
+          })}
+        </nav>
 
-          {/* User Profile and Logout */}
-          <div className="mt-auto">
-            <div className="p-4 border-t border-zinc-800">
-              <div className="flex items-center gap-3">
-                <Avatar className="w-10 h-10">
-                  <AvatarImage src="/placeholder-user.jpg" />
-                  <AvatarFallback className="bg-zinc-800 text-white">
-                    {user ? (() => {
-                      const { firstName, lastName } = splitName(user.name);
-                      return `${firstName[0]}${lastName[0] || ''}`.toUpperCase()
-                    })() : 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
-                    {user ? user.name : 'User'}
-                  </p>
-                  {user?.company?.name && (
-                    <p className="text-xs text-gray-400 truncate">
-                      {user.company.name}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium w-full bg-red-600 text-white hover:bg-red-700 transition-colors mt-4"
-              >
-                <LogOut className="w-5 h-5" />
-                Logout
-              </button>
+        <div className="absolute bottom-0 left-0 right-0 border-t border-border p-3">
+          <div className="flex items-center gap-2 px-2 py-2 mb-1">
+            <Avatar className="w-8 h-8">
+              <AvatarImage src="/placeholder-user.jpg" />
+              <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                {user ? (() => {
+                  const { firstName, lastName } = splitName(user.name)
+                  return (firstName[0] + (lastName[0] || '')).toUpperCase()
+                })() : 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{user ? user.name : 'User'}</p>
+              {user && user.company && user.company.name ? <p className="text-xs text-muted-foreground truncate">{user.company.name}</p> : null}
             </div>
           </div>
+          <button onClick={() => logout()} className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors">
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
         </div>
-      </div>
+      </aside>
 
-      <div className="lg:pl-64">
-        <main className="p-4 md:p-6 lg:p-8 bg-white mt-14">
+      <div className="lg:pl-56 relative z-10">
+        <main className="w-full p-4 sm:px-6 lg:px-8 pt-[88px] pb-6 min-h-screen">
           {children}
         </main>
       </div>

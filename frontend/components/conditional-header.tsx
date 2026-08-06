@@ -5,7 +5,7 @@ import { AppHeader } from './app-header';
 
 export function ConditionalHeader() {
   const pathname = usePathname();
-  
+
   if (pathname.startsWith('/auth')) {
     return null;
   }

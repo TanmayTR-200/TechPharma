@@ -9,6 +9,7 @@ interface Notification {
   title: string;
   message: string;
   read: boolean;
+  archived?: boolean;
   createdAt: string;
   metadata?: {
     orderId?: string;
@@ -25,6 +26,9 @@ interface NotificationContextType {
   addNotification: (notification: Omit<Notification, '_id' | 'createdAt'>) => Promise<void>;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  archiveNotification: (notificationId: string) => Promise<void>;
+  unarchiveNotification: (notificationId: string) => Promise<void>;
+  deleteNotification: (notificationId: string) => Promise<void>;
   fetchNotifications: () => Promise<void>;
 }
 
@@ -39,8 +43,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     if (!user) return;
     try {
       const data = await fetcher(API_ENDPOINTS.notifications.list);
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.notifications?.filter((n: Notification) => !n.read).length || 0);
+      const all = data.notifications || [];
+      setNotifications(all);
+      setUnreadCount(all.filter((n: Notification) => !n.read && !n.archived).length || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
@@ -49,7 +54,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!user) return;
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000); // Poll every minute
+    const interval = setInterval(fetchNotifications, 60000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -68,8 +73,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const markAsRead = async (notificationId: string) => {
     try {
+      const token = localStorage.getItem('token');
       await fetcher(API_ENDPOINTS.notifications.markAsRead(notificationId), {
         method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       });
       setNotifications(prev =>
         prev.map(n => (n._id === notificationId ? { ...n, read: true } : n))
@@ -82,13 +89,65 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const markAllAsRead = async () => {
     try {
+      const token = localStorage.getItem('token');
       await fetcher(API_ENDPOINTS.notifications.markAllAsRead, {
         method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
       });
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
+    }
+  };
+
+  const archiveNotification = async (notificationId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetcher(API_ENDPOINTS.notifications.archive(notificationId), {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      });
+      setNotifications(prev =>
+        prev.map(n => (n._id === notificationId ? { ...n, archived: true } : n))
+      );
+      const target = notifications.find(n => n._id === notificationId);
+      if (target && !target.read) setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error archiving notification:', error);
+    }
+  };
+
+  const unarchiveNotification = async (notificationId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetcher(API_ENDPOINTS.notifications.unarchive(notificationId), {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      });
+      setNotifications(prev =>
+        prev.map(n => (n._id === notificationId ? { ...n, archived: false } : n))
+      );
+      const target = notifications.find(n => n._id === notificationId);
+      if (target && !target.read) setUnreadCount(prev => prev + 1);
+    } catch (error) {
+      console.error('Error unarchiving notification:', error);
+    }
+  };
+
+  const deleteNotification = async (notificationId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetcher(API_ENDPOINTS.notifications.markAsRead(notificationId), {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+      });
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
+      const target = notifications.find(n => n._id === notificationId);
+      if (target && !target.read) setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      // If DELETE endpoint doesn't exist, remove locally
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
     }
   };
 
@@ -100,6 +159,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         addNotification,
         markAsRead,
         markAllAsRead,
+        archiveNotification,
+        unarchiveNotification,
+        deleteNotification,
         fetchNotifications,
       }}
     >

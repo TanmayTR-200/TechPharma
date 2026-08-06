@@ -1,279 +1,109 @@
-"use client"
+'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/auth'
-
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
-import ShoppingCart from "lucide-react/dist/esm/icons/shopping-cart";
-import Link from 'next/link'
-import Image from 'next/image'
+import { ShoppingBag, Package, Truck, CheckCircle } from 'lucide-react'
+import DashboardLayout from '@/components/dashboard-layout'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
-import { formatDateShort } from '@/lib/formatDate'
-
-interface Product {
-  _id: string;
-  name: string;
-  image: string;
-  price: number;
-}
-
-interface OrderItem {
-  _id: string;
-  product: Product;
-  quantity: number;
-  price: number;
-}
 
 interface Order {
-  _id: string;
-  items: OrderItem[];
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  totalAmount: number;
-  createdAt: string;
-  archived?: boolean;
+  _id: string
+  orderNumber?: string
+  items: { name: string; quantity: number; price: number }[]
+  total: number
+  status: string
+  createdAt: string
+}
+
+const statusConfig: Record<string, { color: string; icon: any }> = {
+  pending: { color: 'bg-secondary text-muted-foreground', icon: Package },
+  processing: { color: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: Package },
+  shipped: { color: 'bg-sky-500/15 text-sky-600 dark:text-sky-400', icon: Truck },
+  delivered: { color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', icon: CheckCircle },
 }
 
 export default function OrdersPage() {
-  const { user } = useAuth()
-  const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
-  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
-    if (!user) {
-      router.push('/auth?mode=login')
-      return
-    }
-
-    const fetchOrders = async () => {
+    async function fetchOrders() {
       try {
-        setLoading(true)
-        const token = localStorage.getItem('token')
-        
-        if (!token) {
-          router.push('/auth?mode=login')
-          return
-        }
-
-        // Check if user is a buyer
-        if (user?.role !== 'buyer') {
-          setOrders([])
-          setLoading(false)
-          return
-        }
-
-        const response = await fetch('http://localhost:5000/api/orders', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        })
-
-        if (response.status === 401) {
-          // Token invalid or expired
-          localStorage.removeItem('token')
-          router.push('/auth?mode=login')
-          return
-        }
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const data = await response.json()
-        if (data.success) {
-          // Add archived field if not present
-          const ordersWithArchived = (data.orders || []).map((order: any) => ({
-            ...order,
-            archived: order.archived || false
-          }))
-          setOrders(ordersWithArchived)
-        } else {
-          console.error('Failed to fetch orders:', data.message)
-          setOrders([])
-        }
-      } catch (error) {
-        console.error('Error fetching orders:', error)
-        setOrders([])
+        const data = await fetcher(API_ENDPOINTS.orders.list)
+        setOrders(data.orders || [])
+      } catch (err) {
+        // Use empty state
       } finally {
         setLoading(false)
       }
     }
-
     fetchOrders()
-  }, [user, router])
+  }, [])
 
   return (
-    <div className="min-h-screen">
-      <div className="container py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-2 text-black">
-              {showArchived ? 'Archived Orders' : user?.role === 'supplier' ? 'Manage Orders' : 'My Orders'}
-            </h1>
-            <p className="text-gray-600 text-lg">
-              {showArchived 
-                ? 'View and restore archived orders'
-                : user?.role === 'supplier' 
-                  ? 'View and manage orders from your customers'
-                  : 'Track and manage your purchases'}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowArchived(!showArchived)}
-              className="flex items-center gap-2"
-            >
-              {showArchived ? (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                  View Active Orders
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                  View Archived Orders
-                </>
-              )}
-            </Button>
-            {user?.role === 'buyer' && !showArchived && (
-              <Button asChild>
-                <Link href="/products">Browse Products</Link>
-              </Button>
-            )}
-          </div>
+    <DashboardLayout>
+      <div className="w-full space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Orders</h1>
+          <p className="mt-1 text-muted-foreground">Track and manage all your orders</p>
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-24 animate-pulse rounded-lg border border-border bg-secondary" />
+            ))}
           </div>
         ) : orders.length === 0 ? (
-          <div className="text-center py-12 bg-black text-white rounded-lg">
-            <ShoppingCart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold mb-2 text-white">No orders yet</h3>
-            <p className="text-gray-400 text-lg mb-4">
-              {user?.role === 'supplier' 
-                ? 'Start adding products to receive orders from customers'
-                : 'Browse our marketplace to make your first purchase'}
-            </p>
-            <Button variant="outline" className="text-white hover:text-white border-zinc-700 hover:bg-zinc-800">
-              <Link href={user?.role === 'supplier' ? '/dashboard' : '/products'}>
-                {user?.role === 'supplier' ? 'Go to Dashboard' : 'Browse Products'}
-              </Link>
-            </Button>
+          <div className="rounded-lg border border-dashed border-border bg-card p-10 text-center mx-auto" style={{ maxWidth: 512 }}>
+            <ShoppingBag className="mx-auto h-10 w-10 text-muted-foreground/40" />
+            <h3 className="mt-4 text-base font-medium text-foreground">No orders yet</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Orders will appear here once you start selling.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {orders.filter((order) => order.archived === showArchived).map((order) => (
-              <Card key={order._id} className="border border-gray-300 shadow-sm hover:shadow-md transition-shadow">
-                <CardHeader className="bg-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-black text-xl">Order #{order._id}</CardTitle>
-                      <CardDescription className="text-gray-600 font-medium">Placed on {formatDateShort(order.createdAt)}</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <Badge className={
-                        order.status === 'pending' ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' :
-                        order.status === 'processing' ? 'bg-blue-100 text-blue-800 hover:bg-blue-200' :
-                        order.status === 'completed' ? 'bg-green-100 text-green-800 hover:bg-green-200' :
-                        order.status === 'cancelled' ? 'bg-red-100 text-red-800 hover:bg-red-200' :
-                        'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                      }>
-                        {order.status}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={async () => {
-                          try {
-                            const token = localStorage.getItem('token')
-                            await fetcher(API_ENDPOINTS.orders.archive(order._id), {
-                              method: 'POST',
-                              body: JSON.stringify({ archived: !order.archived })
-                            });
-
-                            setOrders(orders.map(o => 
-                              o._id === order._id ? { ...o, archived: !order.archived } : o
-                            ));
-
-                            // Show success notification
-                            const toast = (await import('@/components/ui/use-toast')).toast;
-                            toast({
-                              title: order.archived ? 'Order Restored' : 'Order Archived',
-                              description: order.archived 
-                                ? 'The order has been restored from archives'
-                                : 'The order has been moved to archives',
-                              duration: 3000
-                            });
-                          } catch (error) {
-                            console.error('Error archiving order:', error);
-                            // Show error notification
-                            const toast = (await import('@/components/ui/use-toast')).toast;
-                            toast({
-                              title: 'Error',
-                              description: 'Failed to update order status. Please try again.',
-                              variant: 'destructive',
-                              duration: 3000
-                            });
-                          }
-                        }}
-                        className="hover:text-accent"
-                      >
-                        {order.archived ? (
-                          <ChevronUp className="h-4 w-4" />
-                        ) : (
-                          <ChevronDown className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="bg-white">
-                  <div className="space-y-4">
-                    {order.items.map((item: any) => (
-                      <div key={item._id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-                        <div className="flex items-center gap-4">
-                          <Image
-                            src={item.product.image || '/placeholder.png'}
-                            alt={item.product.name}
-                            width={48}
-                            height={48}
-                            className="rounded-md border border-gray-200"
-                          />
-                          <div>
-                            <p className="font-semibold text-black text-lg">{item.product.name}</p>
-                            <p className="text-base text-gray-600 font-medium">
-                              Quantity: {item.quantity}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="font-bold text-black text-lg">
-                          ${item.price * item.quantity}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                  <Separator className="my-4 bg-gray-300" />
-                  <div className="flex justify-between p-4 bg-gray-100 rounded-lg">
-                    <p className="font-semibold text-black text-lg">Total Amount:</p>
-                    <p className="font-bold text-black text-xl">${order.totalAmount}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            <table className="w-full text-sm">
+              <thead className="border-b border-border bg-secondary/50">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Items</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {orders.map((order) => {
+                  const status = order.status?.toLowerCase() || 'pending'
+                  const config = statusConfig[status] || statusConfig.pending
+                  const StatusIcon = config.icon
+                  return (
+                    <tr key={order._id} className="hover:bg-secondary/30">
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        #{order.orderNumber || order._id.slice(-6)}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {order.items?.length || 0} item(s)
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        ₹{(order.total || 0).toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${config.color}`}>
+                          <StatusIcon className="h-3 w-3" />
+                          {order.status || 'Pending'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '-'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
-    </div>
+    </DashboardLayout>
   )
 }

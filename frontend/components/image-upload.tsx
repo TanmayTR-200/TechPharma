@@ -77,11 +77,11 @@ export function ImageUpload({
   return (
     <div className={cn("space-y-4", className)}>
       {!isCloudinaryReady ? (
-        <div className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center">
-          <p className="text-sm text-gray-500">Loading upload functionality...</p>
+        <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+          <p className="text-sm text-muted-foreground">Loading upload functionality...</p>
         </div>
       ) : imageUrl ? (
-        <div className="relative rounded-lg overflow-hidden border-2 border-dashed border-gray-200">
+        <div className="relative rounded-lg overflow-hidden border-2 border-dashed border-border">
           <Image
             src={imageUrl}
             alt="Uploaded image"
@@ -89,12 +89,12 @@ export function ImageUpload({
             height={300}
             className="w-full h-[200px] object-cover"
           />
-          <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <div className="absolute inset-0 bg-background/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
             <Button
               onClick={handleUpload}
               variant="secondary"
               size="sm"
-              className="bg-white hover:bg-gray-100"
+              className="bg-card hover:bg-secondary"
             >
               <Upload className="w-4 h-4 mr-2" />
               Change
@@ -112,11 +112,11 @@ export function ImageUpload({
       ) : (
         <div
           onClick={handleUpload}
-          className="border-2 border-dashed border-gray-200 rounded-lg p-8 text-center cursor-pointer hover:border-gray-300 transition-colors"
+          className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:border-border transition-colors"
         >
           <div className="flex flex-col items-center gap-2">
-            <div className="p-3 rounded-full bg-gray-50">
-              <ImageIcon className="w-6 h-6 text-gray-400" />
+            <div className="p-3 rounded-full bg-secondary">
+              <ImageIcon className="w-6 h-6 text-muted-foreground" />
             </div>
             <div className="flex flex-col items-center gap-3">
               <Button
@@ -139,9 +139,9 @@ export function ImageUpload({
               </Button>
 
               <div className="flex items-center gap-2">
-                <div className="h-px w-16 bg-gray-200" />
-                <span className="text-sm text-gray-500">or</span>
-                <div className="h-px w-16 bg-gray-200" />
+                <div className="h-px w-16 bg-secondary" />
+                <span className="text-sm text-muted-foreground">or</span>
+                <div className="h-px w-16 bg-secondary" />
               </div>
 
               <Button
@@ -191,7 +191,7 @@ export function ImageUpload({
                 Take Photo
               </Button>
             </div>
-            <p className="text-sm text-gray-500 mt-3">
+            <p className="text-sm text-muted-foreground mt-3">
               PNG, JPG, GIF up to 10MB
             </p>
           </div>

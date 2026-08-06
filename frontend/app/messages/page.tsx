@@ -1,100 +1,114 @@
-"use client"
+'use client'
 
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/auth';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { API_ENDPOINTS, fetcher } from '@/lib/api-config';
-import { formatDateTime } from '@/lib/formatDate';
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { MessageSquare, Search } from 'lucide-react'
+import DashboardLayout from '@/components/dashboard-layout'
+import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
 
-interface Message {
-  _id: string;
-  sender: string;
-  receiver: string;
-  content: string;
-  createdAt: string;
-  senderName: string;
-  receiverName: string;
+interface Conversation {
+  _id: string
+  name?: string
+  participant?: { name: string }
+  lastMessage?: string
+  lastMessageTime?: string
+  senderName?: string
+  receiverName?: string
+  unreadCount?: number
 }
 
 export default function MessagesPage() {
-  const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchMessages = async () => {
-      // Guard early for missing auth information. Do this outside the try/finally
-      // so we don't accidentally skip the finally block and leave the page
-      // stuck in a loading state.
-      const token = localStorage.getItem('token');
-      if (!token || !user) {
-        setLoading(false);
-        return;
-      }
-
+    async function fetchConversations() {
       try {
-        const response = await fetcher(`${API_ENDPOINTS.messages.list}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        setMessages(response.messages || []);
-      } catch (error) {
-        console.error('Error fetching messages:', error);
+        const data = await fetcher(API_ENDPOINTS.messages.conversations)
+        setConversations(data.conversations || [])
+      } catch (err) {
+        // Use empty state
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
+    fetchConversations()
+  }, [])
 
-    fetchMessages();
-  }, [user]);
+  const filtered = conversations.filter((c) => {
+    const name = c.senderName || c.receiverName || c.participant?.name || ''
+    return !search || name.toLowerCase().includes(search.toLowerCase())
+  })
 
   return (
-    <div className="h-screen flex flex-col">
-      {/* Fixed Header */}
-      <div className="flex-none p-6 border-b border-gray-800">
-        <h1 className="text-2xl font-bold text-white">Messages</h1>
-      </div>
-
-      {/* Scrollable Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-6">
-          {loading ? (
-            <div className="animate-pulse space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-24 bg-gray-800 rounded-lg"/>
-              ))}
-            </div>
-          ) : !messages.length ? (
-            <Card className="bg-gray-900 border-gray-700">
-              <CardContent className="py-12">
-                <div className="text-center text-gray-300">
-                  <p className="text-lg font-medium">No messages yet</p>
-                  <p className="text-sm mt-1">Your messages will appear here</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message) => (
-                <Card key={message._id} className="bg-gray-900 border-gray-700 hover:border-blue-500 transition-colors">
-                  <CardHeader>
-                    <CardTitle className="text-white text-lg">
-                      {user?._id === message.sender ? message.receiverName : message.senderName}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-300">{message.content}</p>
-                    <p className="text-sm text-gray-400 mt-2">{formatDateTime(message.createdAt)}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+    <DashboardLayout>
+      <div className="w-full space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Messages</h1>
+          <p className="mt-1 text-muted-foreground">Chat with buyers and suppliers</p>
         </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search conversations..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-lg border border-border bg-card py-2.5 pl-10 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+
+        {/* Conversations list */}
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-lg border border-border bg-secondary" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-card p-10 text-center mx-auto" style={{ maxWidth: 512 }}>
+            <MessageSquare className="mx-auto h-10 w-10 text-muted-foreground/40" />
+            <h3 className="mt-4 text-base font-medium text-foreground">No conversations</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Messages from buyers and suppliers will appear here.</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-border bg-card">
+            {filtered.map((conv) => {
+              const name = conv.senderName || conv.receiverName || conv.participant?.name || 'Unknown'
+              return (
+                <Link
+                  key={conv._id}
+                  href={`/messages/${conv._id}`}
+                  className="flex items-center gap-3 border-b border-border p-4 last:border-0 hover:bg-secondary/30"
+                >
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-sm font-bold text-muted-foreground">
+                    {name[0]?.toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-foreground">{name}</p>
+                      {conv.lastMessageTime && !isNaN(new Date(conv.lastMessageTime).getTime()) && (
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(conv.lastMessageTime).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {conv.lastMessage || 'No messages yet'}
+                    </p>
+                  </div>
+                  {conv.unreadCount && conv.unreadCount > 0 && (
+                    <span className="h-2 w-2 rounded-full bg-primary" />
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </div>
-    </div>
-  );
+    </DashboardLayout>
+  )
 }

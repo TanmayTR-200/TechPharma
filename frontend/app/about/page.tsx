@@ -1,33 +1,53 @@
-"use client";
+"use client"
 
+import { Footer } from "@/components/footer"
+import { CheckCircle2 } from "lucide-react"
 
-import { Footer } from "@/components/footer";
+const features = [
+  "Verified suppliers",
+  "Secure payments",
+  "Direct messaging",
+  "Bulk pricing",
+]
 
 export default function AboutPage() {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative z-10 pt-16">
+      <main className="max-w-2xl mx-auto px-6 py-10">
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-foreground mb-2">About TechPharma</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            TechPharma is a B2B marketplace where suppliers list products and buyers find them. We verify suppliers, handle payments, and let you focus on business.
+          </p>
+        </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-4xl font-serif font-bold mb-8">About TradeMart</h1>
-        <div className="prose prose-lg max-w-none">
-          <p className="text-xl mb-6">
-            TradeMart is your premier B2B marketplace connecting businesses with trusted suppliers worldwide.
+        <div className="bg-card border border-border rounded-lg p-5 mb-4">
+          <h2 className="text-sm font-semibold text-foreground mb-2">How it works</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Suppliers create an account, list their products with photos and pricing, and receive orders from buyers. Buyers search for products, compare prices, and contact suppliers directly.
           </p>
-          <h2 className="text-2xl font-bold mt-8 mb-4">Our Mission</h2>
-          <p>
-            To create a seamless and reliable platform that facilitates business connections and trade relationships globally.
-          </p>
-          <h2 className="text-2xl font-bold mt-8 mb-4">Why Choose TradeMart?</h2>
-          <ul className="list-disc pl-6 space-y-2">
-            <li>Verified suppliers and quality products</li>
-            <li>Secure transactions and payment protection</li>
-            <li>24/7 customer support</li>
-            <li>Global shipping and logistics solutions</li>
-            <li>Competitive pricing and bulk discounts</li>
-          </ul>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-5 mb-4">
+          <h2 className="text-sm font-semibold text-foreground mb-3">What you get</h2>
+          <div className="space-y-2">
+            {features.map((f) => (
+              <div key={f} className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                <span className="text-sm text-foreground">{f}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-lg p-5 text-center">
+          <p className="text-sm text-foreground mb-3">Ready to start?</p>
+          <a href="/auth?mode=signup" className="inline-flex items-center justify-center bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2 rounded-md text-sm transition-colors">
+            Create an account
+          </a>
         </div>
       </main>
       <Footer />
     </div>
-  );
+  )
 }

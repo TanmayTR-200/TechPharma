@@ -66,7 +66,7 @@ export default function NewProductPage() {
   return (
     <CloudinaryScriptProvider>
       <div className="container max-w-2xl mx-auto py-8">
-        <h1 className="text-3xl font-serif font-bold mb-6">Add New Product</h1>
+        <h1 className="text-3xl font-bold mb-6">Add New Product</h1>
         <form onSubmit={handleSubmit} className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="name">Product Name</Label>

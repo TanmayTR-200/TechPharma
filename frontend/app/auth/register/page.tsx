@@ -38,19 +38,17 @@ export default function RegisterPage() {
     try {
       const data = await authApi.register(formData);
 
-      // If verification is required, show OTP dialog
       if (data.requiresVerification && data.token) {
-        setToken(data.token); // Store token temporarily for verification
+        setToken(data.token);
         setShowOtpDialog(true);
         toast({
           title: "Check your email",
           description: data.message || "We've sent you a verification code."
         });
       } else if (data.token) {
-        // No verification required - store token and redirect
         localStorage.setItem('token', data.token);
         toast({
-          title: "Registration successful!",
+          title: "Account created",
           description: "You can now log in with your credentials.",
         });
         router.push('/auth?mode=login&message=registration_success');
@@ -69,23 +67,23 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-gray-50 to-gray-100">
-      <div className="w-full max-w-md space-y-8 rounded-xl bg-white p-8 shadow-[0_8px_30px_rgb(0,0,0,0.12)]">
+    <div className="flex min-h-screen items-center justify-center bg-secondary/30 px-4 py-12 relative z-10">
+      <div className="w-full max-w-md space-y-6 rounded-lg border border-border bg-card p-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Create an account</h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Create an account</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
             Already have an account?{' '}
-            <Link href="/auth?mode=login" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/auth?mode=login" className="font-medium text-primary hover:text-primary">
               Sign in
             </Link>
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-4">
             <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                Full Name
+              <label htmlFor="name" className="block text-sm font-medium text-foreground">
+                Full name
               </label>
               <Input
                 id="name"
@@ -94,14 +92,14 @@ export default function RegisterPage() {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1"
+                className="mt-1.5"
                 placeholder="John Doe"
                 disabled={isLoading}
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="email" className="block text-sm font-medium text-foreground">
                 Email address
               </label>
               <Input
@@ -112,14 +110,14 @@ export default function RegisterPage() {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="mt-1"
+                className="mt-1.5"
                 placeholder="you@example.com"
                 disabled={isLoading}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="password" className="block text-sm font-medium text-foreground">
                 Password
               </label>
               <Input
@@ -130,15 +128,15 @@ export default function RegisterPage() {
                 required
                 value={formData.password}
                 onChange={handleChange}
-                className="mt-1"
+                className="mt-1.5"
                 placeholder="••••••••"
                 disabled={isLoading}
               />
             </div>
 
             <div>
-              <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
-                Company Name
+              <label htmlFor="companyName" className="block text-sm font-medium text-foreground">
+                Company name
               </label>
               <Input
                 id="companyName"
@@ -146,7 +144,7 @@ export default function RegisterPage() {
                 type="text"
                 value={formData.companyName}
                 onChange={handleChange}
-                className="mt-1"
+                className="mt-1.5"
                 placeholder="Your Company Ltd."
                 disabled={isLoading}
               />
@@ -162,14 +160,14 @@ export default function RegisterPage() {
           </Button>
         </form>
 
-        <div className="mt-6">
-          <p className="text-center text-sm text-gray-600">
+        <div className="mt-2">
+          <p className="text-center text-xs text-muted-foreground">
             By creating an account, you agree to our{' '}
-            <Link href="/terms" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/terms" className="font-medium text-primary hover:text-primary">
               Terms of Service
             </Link>{' '}
             and{' '}
-            <Link href="/privacy" className="font-medium text-blue-600 hover:text-blue-500">
+            <Link href="/privacy" className="font-medium text-primary hover:text-primary">
               Privacy Policy
             </Link>
           </p>
@@ -185,14 +183,12 @@ export default function RegisterPage() {
             const result = await authApi.verifyOtp(otp, token);
             
             if (result.success) {
-              // Store token and redirect
               localStorage.setItem('token', token);
               toast({
-                title: "Verification successful!",
+                title: "Email verified",
                 description: result.message || "Your email has been verified. You can now log in.",
               });
               
-              // Redirect to login
               router.push('/auth?mode=login&message=registration_success');
               return true;
             } else {
@@ -215,7 +211,7 @@ export default function RegisterPage() {
 
             if (result.success) {
               toast({
-                title: "Code sent!",
+                title: "Code sent",
                 description: result.message || "Check your email for the new verification code.",
               });
             } else {
@@ -227,7 +223,7 @@ export default function RegisterPage() {
               description: error.message || "Please try again later",
               variant: "destructive"
             });
-            throw error; // Re-throw to handle in the OTP component
+            throw error;
           }
         }}
       />

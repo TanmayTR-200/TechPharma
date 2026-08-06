@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import Link from 'next/link';
 import { authApi } from '@/lib/api';
+import { Mail, ArrowLeft } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -20,15 +21,12 @@ export default function ForgotPasswordPage() {
 
     try {
       const response = await authApi.forgotPassword(email);
-
       toast({
-        title: "Success!",
+        title: "Check your email",
         description: response.message || "Reset instructions have been sent to your email.",
       });
-
-      // Delay redirect to allow user to read the message
       setTimeout(() => {
-        router.push(`/auth/reset-password?token=${response.token}`);
+        router.push('/auth/reset-password?token=' + response.token);
       }, 3000);
     } catch (error: any) {
       toast({
@@ -42,85 +40,50 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      {/* Top Navigation Bar */}
-      <nav className="bg-[#0A0A0A] border-b border-gray-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-transparent flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">T</span>
-                </div>
-                <span className="text-xl font-semibold text-white hidden sm:inline">TechPharma</span>
-              </Link>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link 
-                href="/auth?mode=login"
-                className="text-sm text-white border border-white/50 px-4 py-2 rounded-md hover:bg-white/10 transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/auth?mode=signup"
-                className="text-sm bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
-              >
-                Sign Up
-              </Link>
-            </div>
+    <div className="min-h-screen relative z-10 flex flex-col justify-center px-4 py-12">
+      <div className="w-full max-w-sm mx-auto">
+        <Link href="/" className="flex items-center gap-2 mb-8">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+            <span className="text-primary-foreground font-bold text-xs">T</span>
           </div>
-        </div>
-      </nav>
+          <span className="font-semibold text-sm tracking-tight text-foreground">TechPharma</span>
+        </Link>
 
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md space-y-8 rounded-xl bg-[#0A0A0A] p-8 shadow-[0_0_40px_rgba(0,0,0,0.6)] border border-[#1a1a1a]">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold tracking-tight text-white">Reset your password</h1>
-            <p className="mt-2 text-sm text-gray-400">
-              Enter your email and we&apos;ll send you instructions to reset your password.
-            </p>
-          </div>
+        <div className="glass-card p-6">
+          <h1 className="text-xl font-semibold text-foreground mb-1">Reset your password</h1>
+          <p className="text-sm text-muted-foreground mb-6">Enter your email and we'll send you instructions to reset it.</p>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-200">
-              Email address
-            </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 bg-[#141414] border-[#1a1a1a] text-white placeholder:text-gray-500 focus:ring-primary/20 focus:border-primary"
-              placeholder="you@example.com"
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">Email address</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  disabled={isLoading}
+                  className="w-full h-10 rounded-md border border-border bg-secondary text-sm text-foreground placeholder:text-muted-foreground pl-9 pr-3 focus:outline-none focus:border-primary/50 disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
               disabled={isLoading}
-            />
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full border-2 border-primary bg-transparent hover:bg-primary text-white font-semibold transition-all duration-200"
-            disabled={isLoading}
-          >
-            {isLoading ? "Sending..." : "Send reset instructions"}
-          </Button>
-
-          <div className="text-center">
-            <Link
-              href="/auth?mode=login"
-              className="text-sm font-medium text-gray-400 hover:text-primary transition-colors"
+              className="flex w-full items-center justify-center rounded-md bg-primary h-10 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              Back to login
-            </Link>
-          </div>
-        </form>
+              {isLoading ? "Sending..." : "Send reset instructions"}
+            </button>
+          </form>
+
+          <Link href="/auth?mode=login" className="mt-4 flex items-center justify-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
+            <ArrowLeft className="h-3 w-3" /> Back to login
+          </Link>
+        </div>
       </div>
     </div>
-  </div>
   );
 }

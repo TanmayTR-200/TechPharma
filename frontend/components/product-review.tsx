@@ -96,7 +96,7 @@ export function ProductReview({ productId, onReviewAdded }: ProductReviewProps) 
                 <Star
                   key={value}
                   className={`w-8 h-8 cursor-pointer ${
-                    value <= rating ? "fill-yellow-400 text-yellow-400" : "text-gray-300"
+                    value <= rating ? "fill-yellow-400 text-primary" : "text-muted-foreground"
                   }`}
                   onClick={() => setRating(value)}
                 />

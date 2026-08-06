@@ -22,7 +22,6 @@ export function EditProfileDialog() {
     logo: '',
   });
 
-  // Load current user data when dialog opens
   const loadUserProfile = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -33,7 +32,7 @@ export function EditProfileDialog() {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       let data;
       try {
         const text = await response.text();
@@ -68,7 +67,6 @@ export function EditProfileDialog() {
 
   const handleLogoUpload = () => {
     const widget = createUploadWidget(
-      // Success callback
       (url) => {
         setProfile(prev => ({ ...prev, logo: url }));
         toast({
@@ -76,7 +74,6 @@ export function EditProfileDialog() {
           description: 'Logo uploaded successfully',
         });
       },
-      // Error callback
       (error) => {
         toast({
           title: 'Upload Failed',
@@ -116,11 +113,8 @@ export function EditProfileDialog() {
         phone?: string;
       }
 
-      const updatedFields: UpdateFields = {
-        company: {}
-      };
+      const updatedFields: UpdateFields = { company: {} };
 
-      // Only add fields that have values
       if (profile.companyName) updatedFields.company.name = profile.companyName;
       if (profile.description) updatedFields.company.description = profile.description;
       if (profile.website) updatedFields.company.website = profile.website;
@@ -128,7 +122,6 @@ export function EditProfileDialog() {
       if (profile.logo) updatedFields.company.logo = profile.logo;
       if (profile.phone) updatedFields.phone = profile.phone;
 
-      // Don't submit if no fields were changed
       if (Object.keys(updatedFields.company).length === 0 && !updatedFields.phone) {
         toast({
           title: 'No Changes',
@@ -138,11 +131,9 @@ export function EditProfileDialog() {
         return;
       }
 
-      console.log('Sending update:', updatedFields); // Debug log
-
       const response = await fetch('http://localhost:5000/api/profile', {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
@@ -153,7 +144,6 @@ export function EditProfileDialog() {
       try {
         const text = await response.text();
         responseData = JSON.parse(text);
-        console.log('Update response:', responseData);
       } catch (parseError) {
         console.error('Error parsing response:', parseError);
         throw new Error('Invalid server response format');
@@ -163,7 +153,6 @@ export function EditProfileDialog() {
         throw new Error(responseData.message || responseData.error || 'Failed to update profile');
       }
 
-      // Update the profile state with the new data
       setProfile({
         companyName: responseData.company?.name || '',
         description: responseData.company?.description || '',
@@ -173,15 +162,13 @@ export function EditProfileDialog() {
         logo: responseData.company?.logo || '',
       });
 
-      // Update auth context by fetching fresh data
       await refreshUserData();
 
       toast({
         title: 'Success',
         description: 'Profile updated successfully',
       });
-      
-      // Close the dialog after successful update
+
       setOpen(false);
     } catch (err) {
       const error = err as Error;
@@ -202,12 +189,12 @@ export function EditProfileDialog() {
       if (isOpen) loadUserProfile();
     }}>
       <DialogTrigger asChild>
-        <Button className="flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 px-6 py-2 rounded-lg">
-          <Settings className="w-5 h-5" />
-          Edit Profile Settings
+        <Button className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-5 py-2 rounded-lg">
+          <Settings className="w-4 h-4" />
+          Edit Profile
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] rounded-2xl border-border">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>
           <DialogDescription>
@@ -222,7 +209,7 @@ export function EditProfileDialog() {
               value={profile.companyName}
               onChange={(e) => setProfile({ ...profile, companyName: e.target.value })}
               placeholder="Your company name"
-              className="text-white selection:bg-blue-500/50 selection:text-white"
+              className="rounded-lg"
             />
           </div>
 
@@ -233,7 +220,7 @@ export function EditProfileDialog() {
               value={profile.description}
               onChange={(e) => setProfile({ ...profile, description: e.target.value })}
               placeholder="Brief description of your company"
-              className="text-white selection:bg-blue-500/50 selection:text-white"
+              className="rounded-lg"
             />
           </div>
 
@@ -245,7 +232,7 @@ export function EditProfileDialog() {
               value={profile.website}
               onChange={(e) => setProfile({ ...profile, website: e.target.value })}
               placeholder="https://your-website.com"
-              className="text-white selection:bg-blue-500/50 selection:text-white"
+              className="rounded-lg"
             />
           </div>
 
@@ -257,7 +244,7 @@ export function EditProfileDialog() {
               value={profile.phone}
               onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
               placeholder="+91 1234567890"
-              className="text-white selection:bg-blue-500/50 selection:text-white"
+              className="rounded-lg"
             />
           </div>
 
@@ -268,7 +255,7 @@ export function EditProfileDialog() {
               value={profile.address}
               onChange={(e) => setProfile({ ...profile, address: e.target.value })}
               placeholder="Your business address"
-              className="text-white selection:bg-blue-500/50 selection:text-white"
+              className="rounded-lg"
             />
           </div>
 
@@ -278,7 +265,7 @@ export function EditProfileDialog() {
               type="button"
               variant="outline"
               onClick={handleLogoUpload}
-              className="w-full border border-white hover:bg-zinc-800"
+              className="w-full border-border hover:bg-muted rounded-lg"
             >
               {profile.logo ? 'Change Logo' : 'Upload Logo'}
             </Button>
@@ -287,16 +274,15 @@ export function EditProfileDialog() {
                 <div className="w-8 h-8 rounded overflow-hidden">
                   <img src={profile.logo} alt="Preview" className="w-full h-full object-cover" />
                 </div>
-                <p className="text-sm text-green-600">Logo uploaded successfully!</p>
+                <p className="text-sm text-primary">Logo uploaded successfully!</p>
               </div>
             )}
           </div>
 
-          <Button 
-            type="submit" 
-            disabled={loading} 
-            className="w-full border border-white hover:bg-zinc-800"
-            variant="ghost"
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
           >
             {loading ? (
               <>

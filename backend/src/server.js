@@ -369,7 +369,10 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         _id: user._id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        company: user.company || null,
+        phone: user.phone || '',
+        createdAt: user.createdAt
       },
       data: {
         totalProducts: userProducts.length
@@ -384,19 +387,98 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
+// Category counts
+app.get('/api/products/category-counts', async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, '../data/products.json'));
+    const counts = {};
+    products.forEach(p => {
+      if (p.status === 'active' && p.category) {
+        counts[p.category] = (counts[p.category] || 0) + 1;
+      }
+    });
+    res.json({ success: true, counts });
+  } catch (error) {
+    console.error('Category counts error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching category counts' });
+  }
+});
+
+// Featured products
+app.get('/api/products/featured', async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, '../data/products.json'));
+    const users = readJsonFile(path.join(__dirname, '../data/users.json'));
+
+    const token = req.headers.authorization?.split(' ')[1];
+    let isAuthed = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+    }
+
+    const userMap = new Map(users.map(u => [u._id, u]));
+
+    const featured = products
+      .filter(p => p.status === 'active')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 6)
+      .map(p => {
+        const supplier = userMap.get(p.userId);
+        return {
+          ...p,
+          supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller',
+          supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null
+        };
+      });
+
+    res.json({ success: true, products: featured });
+  } catch (error) {
+    console.error('Featured products error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching featured products' });
+  }
+});
+
 // Product Routes
 app.get('/api/products', async (req, res) => {
   try {
     const products = readJsonFile(path.join(__dirname, '../data/products.json'));
-    
+    const users = readJsonFile(path.join(__dirname, '../data/users.json'));
+
+    // Determine if requester is authenticated (supplier name only shown to logged-in users)
+    const token = req.headers.authorization?.split(' ')[1];
+    let isAuthed = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+    }
+
+    // Prebuild a userId -> user map ONCE to avoid N+1 lookups inside the loop
+    const userMap = new Map(users.map(u => [u._id, u]));
+
     // Filter active products and sort by createdAt
     const activeProducts = products
       .filter(p => p.status === 'active')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map(p => {
+        const supplier = userMap.get(p.userId);   // O(1) lookup
+        const { userId, supplierId, createdAt, updatedAt, ...publicFields } = p;
+        return {
+          ...publicFields,
+          supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller',
+          supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null
+        };
+      });
+
+    // Pagination
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 20));
+    const total = activeProducts.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const paginated = activeProducts.slice((page - 1) * pageSize, page * pageSize);
 
     res.json({
       success: true,
-      products: activeProducts
+      products: paginated,
+      pagination: { page, pageSize, total, totalPages }
     });
   } catch (error) {
     console.error('Products error:', error);
@@ -404,6 +486,43 @@ app.get('/api/products', async (req, res) => {
       success: false,
       message: 'Error fetching products'
     });
+  }
+});
+
+// Get single product by ID
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, '../data/products.json'));
+    const product = products.find(p => p._id === req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Fetch supplier name
+    const users = readJsonFile(path.join(__dirname, '../data/users.json'));
+    const supplier = users.find(u => u._id === product.userId);
+
+    // Only show real supplier name to authenticated users
+    const token = req.headers.authorization?.split(' ')[1];
+    let isAuthed = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+    }
+    
+    res.json({
+      success: true,
+      product: {
+        ...product,
+        userId: undefined,
+        supplierId: undefined,
+        supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null,
+        supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller'
+      }
+    });
+  } catch (error) {
+    console.error('Product fetch error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching product' });
   }
 });
 
@@ -460,10 +579,44 @@ app.post('/api/products', authMiddleware, async (req, res) => {
   }
 });
 
+// Update product
+app.put('/api/products/:id', authMiddleware, async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, '../data/products.json'));
+    const index = products.findIndex(p => p._id === req.params.id);
+
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    if (products[index].userId !== req.user._id) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this product' });
+    }
+
+    const { name, description, price, category, stock, images } = req.body;
+    products[index] = {
+      ...products[index],
+      name: name?.trim() || products[index].name,
+      description: description?.trim() || products[index].description,
+      price: price !== undefined ? Number(price) : products[index].price,
+      category: category?.trim() || products[index].category,
+      stock: stock !== undefined ? Number(stock) : products[index].stock,
+      images: images || products[index].images,
+      updatedAt: new Date().toISOString()
+    };
+
+    writeJsonFile(path.join(__dirname, '../data/products.json'), products);
+    res.json({ success: true, product: products[index] });
+  } catch (error) {
+    console.error('Update product error:', error);
+    res.status(500).json({ success: false, message: 'Error updating product' });
+  }
+});
+
 app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   try {
-    const products = readJsonFile(path.join(__dirname, '../../data/products.json'));
-    const index = products.findIndex(p => p.id === parseInt(req.params.id));
+    const products = readJsonFile(path.join(__dirname, '../data/products.json'));
+    const index = products.findIndex(p => p._id === req.params.id);
 
     if (index === -1) {
       return res.status(404).json({
@@ -498,6 +651,31 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// User routes
+app.get('/api/users/:id', authMiddleware, async (req, res) => {
+  try {
+    const users = readJsonFile(path.join(__dirname, '../data/users.json'));
+    const user = users.find(u => u._id === req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      }
+    });
+  } catch (error) {
+    console.error('User fetch error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching user' });
+  }
+});
+
 // Import routes
 const dashboardRoutes = require('./routes/dashboard');
 const messagesRoutes = require('./routes/messages');
@@ -505,6 +683,110 @@ const messagesRoutes = require('./routes/messages');
 // Use routes
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/messages', messagesRoutes);
+
+// Notification routes
+app.get('/api/notifications', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    const userNotifs = all.filter(n => !n.userId || n.userId === req.user._id);
+    res.json({ success: true, notifications: userNotifs });
+  } catch (error) {
+    console.error('Notifications error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching notifications' });
+  }
+});
+
+app.get('/api/notifications/archived', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    const archived = all.filter(n => n.userId === req.user._id && n.archived);
+    res.json({ success: true, notifications: archived });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching archived notifications' });
+  }
+});
+
+app.post('/api/notifications', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    const newNotif = {
+      _id: Date.now().toString(),
+      userId: req.user._id,
+      title: req.body.title || '',
+      message: req.body.message || '',
+      type: req.body.type || 'info',
+      read: false,
+      archived: false,
+      createdAt: new Date().toISOString()
+    };
+    all.push(newNotif);
+    writeJsonFile(path.join(__dirname, '../data/notifications.json'), all);
+    res.status(201).json({ success: true, notification: newNotif });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error creating notification' });
+  }
+});
+
+app.post('/api/notifications/:id/read', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    const idx = all.findIndex(n => n._id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
+    all[idx].read = true;
+    writeJsonFile(path.join(__dirname, '../data/notifications.json'), all);
+    res.json({ success: true, notification: all[idx] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error marking as read' });
+  }
+});
+
+app.post('/api/notifications/mark-all-read', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    all.forEach(n => { if (!n.userId || n.userId === req.user._id) n.read = true; });
+    writeJsonFile(path.join(__dirname, '../data/notifications.json'), all);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error marking all as read' });
+  }
+});
+
+app.post('/api/notifications/:id/archive', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    const idx = all.findIndex(n => n._id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
+    all[idx].archived = true;
+    writeJsonFile(path.join(__dirname, '../data/notifications.json'), all);
+    res.json({ success: true, notification: all[idx] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error archiving notification' });
+  }
+});
+
+app.post('/api/notifications/:id/unarchive', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    const idx = all.findIndex(n => n._id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
+    all[idx].archived = false;
+    writeJsonFile(path.join(__dirname, '../data/notifications.json'), all);
+    res.json({ success: true, notification: all[idx] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error unarchiving notification' });
+  }
+});
+
+app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
+  try {
+    let all = readJsonFile(path.join(__dirname, '../data/notifications.json'));
+    all = all.filter(n => n._id !== req.params.id);
+    writeJsonFile(path.join(__dirname, '../data/notifications.json'), all);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error deleting notification' });
+  }
+});
 
 // Error handler
 app.use((err, req, res, next) => {

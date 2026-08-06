@@ -1,154 +1,94 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useAuth } from "@/contexts/auth";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Building2, Search } from "lucide-react";
+import dynamic from 'next/dynamic';
+import { Search, Moon, Sun } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { UserMenu } from './user-menu';
-import { CartDialog } from './cart-dialog';
-import { NotificationBell } from './notification-bell';
+import { ThemeToggle } from './theme-toggle';
+
+// Code-split the heavy interactive components so they only load when needed,
+// keeping the initial bundle smaller.
+const UserMenu = dynamic(() => import('./user-menu').then(m => m.UserMenu), { ssr: false });
+const CartDialog = dynamic(() => import('./cart-dialog').then(m => m.CartDialog), { ssr: false });
+const NotificationBell = dynamic(() => import('./notification-bell').then(m => m.NotificationBell), { ssr: false });
+
+const navLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/products', label: 'Products' },
+  { href: '/about', label: 'About' },
+];
 
 export function AppHeader() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
-  const [scope, setScope] = useState<'product' | 'category' | undefined>(undefined);
+  const [mobileSearch, setMobileSearch] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
-  const isEditing = useRef(false);
 
-  // Sync header search input with the URL `search` param when on products page.
-  // Do not override while the user is actively editing the input.
   useEffect(() => {
-    try {
-      if (isEditing.current) return;
-      if (pathname && pathname.startsWith('/products')) {
-        const s = searchParams?.get('search') || '';
-        // If there's no scope param we treat it as "All" implicitly. Keep scope undefined in the header.
-        const sc = (searchParams?.get('scope') as 'product' | 'category') || undefined;
-        setQuery(s);
-        setScope(sc);
-      }
-    } catch (err) {
-      // ignore when searchParams not available
+    if (pathname?.startsWith('/products')) {
+      setQuery(searchParams?.get('search') || '');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams?.toString(), pathname]);
 
-  const handleLogout = () => {
-    logout();
-  };
-
-  const handleSearch = (e?: React.SyntheticEvent) => {
+  const handleSearch = (e) => {
     e?.preventDefault?.();
-    const q = query.trim();
-    // If query is empty, show product listing (no search)
-    if (!q) {
-      router.push('/products');
-      return;
-    }
-
-    // Build params. If user selected Category scope, map the query to the `category` param
-    // so the products page and sidebar filters behave as expected.
-    const params = new URLSearchParams();
-    if (scope === 'category') {
-      // products page expects category in lower-case for its client-side filters
-      params.set('category', q.toLowerCase());
-    } else {
-      params.set('search', q);
-      if (scope) params.set('scope', scope);
-    }
-    router.push(`/products?${params.toString()}`);
+    router.push(query.trim() ? '/products?search=' + query.trim() : '/products');
   };
 
   return (
-    <header className="fixed top-0 z-50 w-full h-14 bg-black">
-      <div className="flex h-full items-center justify-between px-4">
-        <div className="flex items-center gap-8">
-          <Link href="/" className="flex items-center space-x-2 text-white">
-            <Building2 className="h-6 w-6 text-white" />
-            <span className="font-bold text-xl">TechPharma</span>
+    <header className="fixed top-0 z-50 w-full h-14 bg-card border-b border-border">
+      <div className="w-full px-4 sm:px-5 h-full flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary shadow-md shadow-primary/25">
+              <span className="text-primary-foreground font-bold text-xs">T</span>
+            </div>
+            <span className="font-semibold text-sm tracking-tight hidden sm:block">TechPharma</span>
           </Link>
-        </div>
-
-  <div className="flex-1 max-w-4xl px-4">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <form className="w-full" onSubmit={handleSearch}>
-              <Input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery((e.target as HTMLInputElement).value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    // form submit will handle it
-                    return;
-                  }
-                }}
-                onFocus={() => { isEditing.current = true; }}
-                onBlur={() => {
-                  // stop overriding after user finishes editing
-                  // NOTE: do not navigate here — clicking the scope buttons causes the input to blur
-                  // and we don't want that to trigger an unintended navigation when the search is empty.
-                  isEditing.current = false;
-                }}
-                placeholder="Search for products or categories..."
-                // increase right padding so the scope buttons + search button don't overlap the text
-                className="w-full h-10 pl-10 pr-56 bg-zinc-800 border-zinc-700 text-white placeholder:text-gray-400 focus:ring-blue-600 focus:border-blue-600"
-              />
-              <div className="absolute right-0 top-0 h-full flex items-center">
-                <div className="hidden sm:flex items-center gap-2 mr-2">
-                  {/* Clear button moved here so it appears to the left of the scope filters */}
-                  {query.trim() !== '' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuery('');
-                        router.push('/products');
-                      }}
-                      aria-label="Clear search"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/6 hover:bg-white/10 text-white"
-                    >
-                      <span className="text-sm">×</span>
-                    </button>
-                  )}
-                  {/* no explicit "All" button — absence of selection is treated as All */}
-                  <button
-                    type="button"
-                    onClick={() => setScope(prev => prev === 'product' ? undefined : 'product')}
-                    className={`px-3 py-1 rounded-md text-sm ${scope === 'product' ? 'bg-blue-600 text-white' : 'bg-transparent text-white/80 hover:bg-zinc-800'}`}
-                  >
-                    Product
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setScope(prev => prev === 'category' ? undefined : 'category')}
-                    className={`px-3 py-1 rounded-md text-sm ${scope === 'category' ? 'bg-blue-600 text-white' : 'bg-transparent text-white/80 hover:bg-zinc-800'}`}
-                  >
-                    Category
-                  </button>
-                </div>
-                {/* let the button participate in flex layout so it doesn't overlap the scope buttons */}
-                <Button
-                  type="button"
-                  onClick={handleSearch}
-                  className="h-full rounded-l-none bg-blue-600 hover:bg-blue-700 text-white px-4"
-                  size="sm"
+          <nav className="hidden md:flex items-center gap-1 ml-4">
+            {navLinks.map((link) => {
+              const isActive = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={'px-2.5 py-1 rounded-md text-[13px] font-medium transition-colors ' + (isActive ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50')}
                 >
-                  <Search className="h-4 w-4 mr-2" />
-                  Search
-                </Button>
-              </div>
-
-              {/* Clear button moved into the scope-group so it appears left of the filters */}
-            </form>
-          </div>
+                  {link.label}
+                </Link>
+              );
+            })}
+          </nav>
         </div>
 
-        <nav className="flex items-center gap-4 text-white">
+        <div className="flex-1 max-w-xs hidden md:block">
+          <form onSubmit={handleSearch} className="relative w-full">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search products..."
+              className="h-8 pl-9 pr-3 text-[13px] rounded-md bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground focus:border-primary/50"
+            />
+          </form>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <ThemeToggle />
+          <button
+            className="md:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-secondary text-muted-foreground"
+            onClick={() => setMobileSearch(!mobileSearch)}
+          >
+            <Search className="h-4 w-4" />
+          </button>
+
           {user ? (
             <>
               <CartDialog />
@@ -157,16 +97,32 @@ export function AppHeader() {
             </>
           ) : (
             <>
-              <Button asChild className="bg-white text-black hover:bg-zinc-100 border border-zinc-300">
-                <Link href="/auth?mode=login">Sign In</Link>
+              <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-[13px]">
+                <Link href="/auth?mode=login">Sign in</Link>
               </Button>
-              <Button asChild className="bg-white text-black hover:bg-zinc-100 border border-zinc-300">
-                <Link href="/auth?mode=signup">Sign Up</Link>
+              <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground text-[13px] shadow-md shadow-primary/20">
+                <Link href="/auth?mode=signup">Get started</Link>
               </Button>
             </>
           )}
-        </nav>
+        </div>
       </div>
+
+      {mobileSearch && (
+        <div className="md:hidden border-t border-border p-3 bg-card">
+          <form onSubmit={handleSearch} className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search products..."
+              autoFocus
+              className="h-10 pl-10 pr-4 rounded-md bg-secondary border-border text-foreground"
+            />
+          </form>
+        </div>
+      )}
     </header>
   );
 }

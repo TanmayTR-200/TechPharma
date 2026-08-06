@@ -28,8 +28,8 @@ router.get('/', async (req, res) => {
     // Calculate stats
     const recentOrders = userOrders.length;
     
-    // Count total active products globally (all users)
-    const totalProducts = products.filter(p => p.status === 'active').length;
+    // Count the current user's active products only
+    const totalProducts = products.filter(p => p.status === 'active' && (p.userId === req.user._id || p.supplierId === req.user._id)).length;
     
     let revenue = 0;
     let productViews = 0;

@@ -8,7 +8,7 @@ import { API_ENDPOINTS, fetcher } from '@/lib/api-config';
 import { Product } from '@/types/product';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
 interface EditProductDialogProps {
@@ -157,7 +157,7 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
   return (
     <Dialog open={isOpen} onOpenChange={() => onClose()}>
       <DialogContent 
-        className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-black text-white border-zinc-800"
+        className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-popover text-popover-foreground border-border rounded-lg"
         aria-labelledby={dialogTitleId}
         aria-describedby={dialogDescriptionId}
       >
@@ -223,12 +223,9 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="electronics">Electronics</SelectItem>
                 <SelectItem value="machinery">Machinery</SelectItem>
-                <SelectItem value="tools">Tools</SelectItem>
-                <SelectItem value="safety">Safety Equipment</SelectItem>
-                <SelectItem value="lighting">Lighting</SelectItem>
-                <SelectItem value="lighting">Lighting</SelectItem>
+                <SelectItem value="safety">Safety</SelectItem>
+                <SelectItem value="electronics">Electronics</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -242,19 +239,19 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
                 className="w-full h-auto py-4 flex flex-col items-center gap-2"
                 onClick={handleImageUpload}
               >
-                <Loader2 className="w-6 h-6" />
-                <span>Upload Product Images</span>
-                <p className="text-sm text-gray-400 font-normal">PNG, JPG, GIF up to 5MB each (max 5 images)</p>
+                <Upload className="w-6 h-6" />
+                <span>Upload product images</span>
+                <p className="text-sm text-muted-foreground font-normal">PNG, JPG, GIF up to 5MB each (max 5 images)</p>
               </Button>
               
               {images.length > 0 && (
                 <div className="space-y-4">
                   {/* Current Image Display */}
-                  <div className="relative aspect-video rounded-lg overflow-hidden border border-zinc-700">
+                  <div className="relative aspect-video rounded-lg overflow-hidden border border-border">
                     <img
                       src={images[currentImageIndex]}
                       alt={`Product image ${currentImageIndex + 1}`}
-                      className="w-full h-full object-contain bg-zinc-900"
+                      className="w-full h-full object-contain bg-muted"
                     />
                     <button
                       type="button"
@@ -262,7 +259,7 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
                         setImages(prev => prev.filter((_, i) => i !== currentImageIndex));
                         setCurrentImageIndex(prev => prev > 0 ? prev - 1 : 0);
                       }}
-                      className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-sm"
+                      className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-sm"
                     >
                       ×
                     </button>
@@ -273,18 +270,18 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
                         <button
                           type="button"
                           onClick={() => setCurrentImageIndex(prev => (prev - 1 + images.length) % images.length)}
-                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 flex items-center justify-center transition-all"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white/90 text-slate-900 rounded-full w-8 h-8 flex items-center justify-center transition-all"
                           aria-label="Previous image"
                         >
-                          ←
+                          &#8592;
                         </button>
                         <button
                           type="button"
                           onClick={() => setCurrentImageIndex(prev => (prev + 1) % images.length)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 flex items-center justify-center transition-all"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/70 hover:bg-white/90 text-slate-900 rounded-full w-8 h-8 flex items-center justify-center transition-all"
                           aria-label="Next image"
                         >
-                          →
+                          &#8594;
                         </button>
                       </>
                     )}
@@ -293,14 +290,14 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
                   {/* Image Thumbnails */}
                   <div className="grid grid-cols-5 gap-2">
                     {images.map((image, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setCurrentImageIndex(index)}
-                        className={`relative aspect-square rounded overflow-hidden border-2 ${
-                          currentImageIndex === index ? 'border-blue-500' : 'border-transparent'
-                        }`}
-                      >
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setCurrentImageIndex(index)}
+                      className={`relative aspect-square rounded overflow-hidden border-2 ${
+                        currentImageIndex === index ? 'border-emerald-600' : 'border-transparent'
+                      }`}
+                    >
                         <img
                           src={image}
                           alt={`Thumbnail ${index + 1}`}
@@ -319,7 +316,6 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
               variant="outline"
               onClick={onClose}
               type="button"
-              className="border-white text-white hover:bg-zinc-800"
             >
               Cancel
             </Button>
@@ -327,7 +323,7 @@ export function EditProductDialog({ product, isOpen, onClose, onSaved }: EditPro
               type="submit"
               disabled={isSaving}
             >
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {isSaving ? 'Saving...' : 'Save changes'}
             </Button>
           </DialogFooter>
         </form>

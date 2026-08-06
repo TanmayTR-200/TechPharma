@@ -1,5 +1,12 @@
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -9,6 +16,13 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     optimizeCss: true,
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname),
+    };
+    return config;
   },
   async headers() {
     return [
@@ -27,7 +41,8 @@ const nextConfig = {
       'res.cloudinary.com',
       'industrialshoppy.com',
       'placeholder.co',
-      'localhost'
+      'localhost',
+      'images.unsplash.com'
     ],
     remotePatterns: [
       {
@@ -37,6 +52,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: '**.industrialshoppy.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
       }
     ]
   },

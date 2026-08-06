@@ -4,9 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const authenticate = require('../middleware/auth');
 
-// Helper functions to read/write data
 const getMessagesFilePath = () => path.join(__dirname, '../../data/messages.json');
-const getConversationsFilePath = () => path.join(__dirname, '../../data/conversations.json');
 
 function readJsonFile(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -23,199 +21,117 @@ function writeJsonFile(filePath, data) {
 // Get all conversations for the current user
 router.get('/conversations', authenticate, async (req, res) => {
   try {
-    const conversations = readJsonFile(getConversationsFilePath());
     const messages = readJsonFile(getMessagesFilePath());
     const users = readJsonFile(path.join(__dirname, '../../data/users.json'));
 
-    // Filter conversations where the user is either sender or receiver
-    const userConversations = conversations
-      .filter(conv => conv.sender === req.user._id || conv.receiver === req.user._id)
-      .map(conv => {
-        // Get the last message for each conversation
-        const lastMessage = messages
-          .filter(msg => msg.conversationId === conv._id)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    // Prebuild a user map ONCE to avoid N+1 lookups per conversation partner
+    const userMap = new Map(users.map(u => [u._id, u]));
 
-        // Get user details for sender and receiver
-        const sender = users.find(u => u._id === conv.sender);
-        const receiver = users.find(u => u._id === conv.receiver);
+    // Group messages by conversation partner (senderId/receiverId pair)
+    const conversationMap = new Map();
 
-        return {
-          ...conv,
-          senderName: sender?.name || 'Unknown User',
-          receiverName: receiver?.name || 'Unknown User',
-          lastMessage: lastMessage?.content || '',
-          lastMessageTime: lastMessage?.createdAt || conv.createdAt,
-          unreadCount: messages.filter(msg => 
-            msg.conversationId === conv._id && 
-            msg.sender !== req.user._id && 
-            !msg.readBy?.includes(req.user._id)
-          ).length
-        };
-      })
-      .sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+    messages.forEach(msg => {
+      const partnerId = msg.senderId === req.user._id ? msg.receiverId : msg.senderId;
+      const isUser = msg.senderId === req.user._id;
 
-    res.json({ 
-      success: true, 
-      conversations: userConversations 
+      if (!conversationMap.has(partnerId)) {
+        const partner = userMap.get(partnerId);   // O(1) lookup
+        conversationMap.set(partnerId, {
+          _id: partnerId,
+          senderName: partner?.name || 'Unknown User',
+          messages: [],
+          lastMessageTime: null,
+          unreadCount: 0,
+        });
+      }
+
+      const conv = conversationMap.get(partnerId);
+      conv.messages.push(msg);
+      conv.lastMessageTime = msg.timestamp;
+      if (!isUser && !msg.read) {
+        conv.unreadCount++;
+      }
     });
+
+    const conversations = Array.from(conversationMap.values())
+      .map(c => ({
+        _id: c._id,
+        senderName: c.senderName,
+        lastMessage: c.messages[c.messages.length - 1]?.content || '',
+        lastMessageTime: c.lastMessageTime,
+        unreadCount: c.unreadCount,
+      }))
+      .sort((a, b) => new Date(b.lastMessageTime || 0).getTime() - new Date(a.lastMessageTime || 0).getTime());
+
+    res.json({ success: true, conversations });
   } catch (error) {
     console.error('Error fetching conversations:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch conversations'
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch conversations' });
   }
 });
 
-// Get messages for a specific conversation
-router.get('/:conversationId', authenticate, async (req, res) => {
+// Get messages between current user and another user
+router.get('/:userId', authenticate, async (req, res) => {
   try {
-    const { conversationId } = req.params;
-    const conversations = readJsonFile(getConversationsFilePath());
+    const { userId } = req.params;
     const messages = readJsonFile(getMessagesFilePath());
     const users = readJsonFile(path.join(__dirname, '../../data/users.json'));
 
-    // Find the conversation
-    const conversation = conversations.find(c => c._id === conversationId);
-    if (!conversation) {
-      return res.status(404).json({
-        success: false,
-        message: 'Conversation not found'
-      });
-    }
+    // Filter messages between these two users (either direction)
+    const thread = messages
+      .filter(msg =>
+        (msg.senderId === req.user._id && msg.receiverId === userId) ||
+        (msg.senderId === userId && msg.receiverId === req.user._id)
+      )
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    // Verify user is part of the conversation
-    if (conversation.sender !== req.user._id && conversation.receiver !== req.user._id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view this conversation'
-      });
-    }
-
-    // Get user details
-    const sender = users.find(u => u._id === conversation.sender);
-    const receiver = users.find(u => u._id === conversation.receiver);
-
-    // Get messages for this conversation
-    const conversationMessages = messages
-      .filter(msg => msg.conversationId === conversationId)
-      .map(msg => ({
-        ...msg,
-        senderName: users.find(u => u._id === msg.sender)?.name || 'Unknown User'
-      }))
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-    // Mark messages as read
-    const updatedMessages = messages.map(msg => {
-      if (msg.conversationId === conversationId && msg.sender !== req.user._id) {
-        return {
-          ...msg,
-          readBy: [...new Set([...(msg.readBy || []), req.user._id])]
-        };
+    // Mark received messages as read
+    const updated = messages.map(msg => {
+      if (msg.senderId === userId && msg.receiverId === req.user._id) {
+        return { ...msg, read: true };
       }
       return msg;
     });
-    writeJsonFile(getMessagesFilePath(), updatedMessages);
+    writeJsonFile(getMessagesFilePath(), updated);
 
-    res.json({
-      success: true,
-      conversation: {
-        ...conversation,
-        senderName: sender?.name || 'Unknown User',
-        receiverName: receiver?.name || 'Unknown User'
-      },
-      messages: conversationMessages
-    });
+    res.json({ success: true, messages: thread });
   } catch (error) {
     console.error('Error fetching messages:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch messages'
-    });
+    res.status(500).json({ success: false, message: 'Failed to fetch messages' });
   }
 });
 
 // Send a new message
 router.post('/send', authenticate, async (req, res) => {
   try {
-    const { conversationId, content, receiverId } = req.body;
+    const { content, receiverId } = req.body;
 
     if (!content?.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Message content is required'
-      });
+      return res.status(400).json({ success: false, message: 'Message content is required' });
     }
 
-    const conversations = readJsonFile(getConversationsFilePath());
+    if (!receiverId) {
+      return res.status(400).json({ success: false, message: 'receiverId is required' });
+    }
+
     const messages = readJsonFile(getMessagesFilePath());
-    const users = readJsonFile(path.join(__dirname, '../../data/users.json'));
 
-    let conversation;
-    if (conversationId) {
-      // Find existing conversation
-      conversation = conversations.find(c => c._id === conversationId);
-      if (!conversation) {
-        return res.status(404).json({
-          success: false,
-          message: 'Conversation not found'
-        });
-      }
-
-      // Verify user is part of the conversation
-      if (conversation.sender !== req.user._id && conversation.receiver !== req.user._id) {
-        return res.status(403).json({
-          success: false,
-          message: 'Not authorized to send messages in this conversation'
-        });
-      }
-    } else if (receiverId) {
-      // Create new conversation
-      conversation = {
-        _id: Date.now().toString(),
-        sender: req.user._id,
-        receiver: receiverId,
-        createdAt: new Date().toISOString()
-      };
-      conversations.push(conversation);
-      writeJsonFile(getConversationsFilePath(), conversations);
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: 'Either conversationId or receiverId is required'
-      });
-    }
-
-    // Create new message
     const newMessage = {
       _id: Date.now().toString(),
-      conversationId: conversation._id,
-      sender: req.user._id,
+      senderId: req.user._id,
+      receiverId: receiverId,
       content: content.trim(),
-      createdAt: new Date().toISOString(),
-      readBy: [req.user._id]
+      timestamp: new Date().toISOString(),
+      read: false,
     };
 
     messages.push(newMessage);
     writeJsonFile(getMessagesFilePath(), messages);
 
-    // Add sender name to response
-    const sender = users.find(u => u._id === req.user._id);
-    
-    res.json({
-      success: true,
-      message: {
-        ...newMessage,
-        senderName: sender?.name || 'Unknown User'
-      }
-    });
+    res.json({ success: true, message: newMessage });
   } catch (error) {
     console.error('Error sending message:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send message'
-    });
+    res.status(500).json({ success: false, message: 'Failed to send message' });
   }
 });
 

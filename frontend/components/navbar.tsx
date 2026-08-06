@@ -1,151 +1,144 @@
-"use client"
+'use client'
 
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
-import { Search } from "lucide-react"
-import Menu from "lucide-react/dist/esm/icons/menu"
-import { useAuth } from "@/contexts/auth"
-import { useProduct } from "@/contexts/product-context"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Menu, X, ShoppingCart } from 'lucide-react'
+import { useCart } from '@/contexts/cart'
+import { useAuth } from '@/contexts/auth'
+import { CartDialog } from './cart-dialog'
+
+const navLinks = [
+  { href: '/', label: 'Home' },
+  { href: '/products', label: 'Products' },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/orders', label: 'Orders' },
+  { href: '/sales', label: 'Sales' },
+]
 
 export function Navbar() {
-  const { user, login, logout } = useAuth();
-  const { searchProducts } = useProduct();
-  const [searchQuery, setSearchQuery] = useState("");
+  const pathname = usePathname()
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [cartOpen, setCartOpen] = useState(false)
+  const { cart } = useCart()
+  const totalItems = cart?.items?.length ?? 0
+  const { user } = useAuth()
+
   return (
-    <nav className="border-b bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <h1 className="text-2xl font-serif font-bold text-primary">TechPharma</h1>
-            </div>
-          </div>
-
-          {/* Search Bar */}
-          <div className="hidden md:flex flex-1 max-w-2xl mx-8">
-            <div className="relative w-full">
-              <Input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for products, suppliers, or categories..."
-                className="w-full pl-4 pr-12 py-2 border-2 border-border focus:border-accent"
-              />
-              <Button 
-                size="sm" 
-                className="absolute right-1 top-1 bottom-1 px-3 bg-accent hover:bg-accent/90"
-                onClick={() => searchProducts(searchQuery)}
-              >
-                <Search className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Navigation Links & Auth */}
-          <div className="hidden md:flex items-center space-x-4">
-            {!user && (
-              <Button 
-                variant="ghost" 
-                className="text-foreground hover:text-accent"
-                onClick={() => window.location.href = '/auth?mode=signup&type=supplier'}
-              >
-                Become a Supplier
-              </Button>
-            )}
-            {user ? (
-              <div className="flex items-center space-x-4">
-                <Button
-                  variant="ghost"
-                  className="text-foreground hover:text-accent"
-                  onClick={() => window.location.href = '/dashboard'}
-                >
-                  Dashboard
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-accent text-accent hover:bg-accent hover:text-accent-foreground bg-transparent"
-                  onClick={logout}
-                >
-                  Logout
-                </Button>
+    <>
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white">
+        <div className="container-app">
+          <div className="flex h-16 items-center justify-between">
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-sm font-bold text-white">
+                T
               </div>
-            ) : (
-              <>
-                <Button
-                  className="bg-white text-black border border-zinc-300 hover:bg-zinc-100"
-                  onClick={() => window.location.href = '/auth?mode=login'}
-                >
-                  Sign In
-                </Button>
-                <Button 
-                  className="bg-white text-black border border-zinc-300 hover:bg-zinc-100"
-                  onClick={() => window.location.href = '/auth?mode=signup'}
-                >
-                  Sign Up
-                </Button>
-              </>
-            )}
-          </div>
+              <span className="text-lg font-bold text-slate-900">TechPharma</span>
+            </Link>
 
-          {/* Mobile menu */}
-          <div className="md:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <Menu className="h-5 w-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {user ? (
-                  <>
-                    <DropdownMenuItem onClick={() => window.location.href = '/dashboard'}>
-                      Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={logout}>
-                      Logout
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    <DropdownMenuItem onClick={() => window.location.href = '/auth?mode=signup&type=supplier'}>
-                      Become a Supplier
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.location.href = '/auth?mode=login'}>
-                      Login
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.location.href = '/auth?mode=signup'}>
-                      Sign Up
-                    </DropdownMenuItem>
-                  </>
+            {/* Desktop nav */}
+            <nav className="hidden items-center gap-1 md:flex">
+              {navLinks.map((link) => {
+                const isActive = pathname === link.href
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                )
+              })}
+            </nav>
+
+            {/* Right actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-100"
+                aria-label="Cart"
+              >
+                <ShoppingCart className="h-5 w-5" />
+                {totalItems > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-emerald-600 px-1 text-xs font-bold text-white">
+                    {totalItems}
+                  </span>
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+              </button>
+
+              {user ? (
+                <Link
+                  href="/dashboard"
+                  className="hidden items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:flex"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
+                    {user.name?.[0]?.toUpperCase() || 'U'}
+                  </span>
+                  <span>{user.name?.split(' ')[0] || 'Account'}</span>
+                </Link>
+              ) : (
+                <Link
+                  href="/login"
+                  className="hidden rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 sm:block"
+                >
+                  Sign in
+                </Link>
+              )}
+
+              {/* Mobile menu button */}
+              <button
+                onClick={() => setMobileOpen(!mobileOpen)}
+                className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"
+                aria-label="Menu"
+              >
+                {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Mobile Search */}
-        <div className="md:hidden pb-4">
-          <div className="relative">
-            <Input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery((e.target as HTMLInputElement).value)}
-              placeholder="Search products..."
-              className="w-full pl-4 pr-12 py-2 border-2 border-border focus:border-accent"
-            />
-            <Button
-              size="sm"
-              className="absolute right-1 top-1 bottom-1 px-3 bg-accent hover:bg-accent/90"
-              onClick={() => searchProducts(searchQuery)}
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </nav>
+        {/* Mobile nav */}
+        {mobileOpen && (
+          <nav className="border-t border-slate-200 bg-white md:hidden">
+            <div className="container-app space-y-1 py-3">
+              {navLinks.map((link) => {
+                const isActive = pathname === link.href
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={`block rounded-lg px-3 py-2 text-sm font-medium ${
+                      isActive
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                )
+              })}
+              {!user && (
+                <Link
+                  href="/login"
+                  onClick={() => setMobileOpen(false)}
+                  className="block rounded-lg bg-emerald-600 px-3 py-2 text-center text-sm font-medium text-white"
+                >
+                  Sign in
+                </Link>
+              )}
+            </div>
+          </nav>
+        )}
+      </header>
+
+      <CartDialog open={cartOpen} onOpenChange={setCartOpen} />
+    </>
   )
 }

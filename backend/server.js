@@ -61,62 +61,36 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    // Check if it's a test token
-    if (token.startsWith('test-token-')) {
-      const email = req.headers['x-user-email'] || 'tanmaytr05@gmail.com';
-      
-      // Look up the actual user in the database
-      const usersFile = path.join(__dirname, 'data/users.json');
-      const users = readJsonFile(usersFile);
-      const user = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
-      
-      if (user) {
-        // Use the actual user data from the database
-        req.user = {
-          _id: user._id,
-          id: user._id,
-          email: user.email,
-          name: user.name,
-          role: user.role || 'user'
-        };
-      } else {
-        // Fallback for test accounts that don't exist in DB
-        req.user = { 
-          _id: '1760257427529', // Use the admin's ID as fallback
-          id: '1760257427529',
-          email: email,
-          name: email.split('@')[0],
-          role: 'user'
-        };
-      }
-      return next();
-    }
-
-    // For JWT tokens
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
-      req.user = {
-        _id: decoded._id,
-        id: decoded._id,
-        email: decoded.email,
-        name: decoded.name,
-        role: decoded.role || 'user'
-      };
-      return next();
-    } catch (jwtError) {
-      console.error('JWT verification failed:', jwtError);
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token'
-      });
-    }
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = {
+      _id: decoded._id,
+      id: decoded._id,
+      email: decoded.email,
+      name: decoded.name,
+      role: decoded.role || 'user'
+    };
+    return next();
   } catch (error) {
     console.error('Auth error:', error);
     return res.status(401).json({
       success: false,
-      message: 'Authentication failed'
+      message: 'Invalid or expired token'
     });
   }
+};
+
+// Input sanitization helper
+const sanitize = (str) => {
+  if (typeof str !== 'string') return str;
+  return str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+           .replace(/<[^>]+>/g, '')
+           .trim();
+};
+
+// Email validation helper
+const isValidEmail = (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
 // Configure nodemailer transporter
@@ -174,6 +148,25 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
+    // Validate email format
+    if (!isValidEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please enter a valid email address'
+      });
+    }
+
+    // Validate password strength
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long'
+      });
+    }
+
+    // Sanitize name
+    const cleanName = sanitize(name);
+
     const usersFile = path.join(__dirname, 'data/users.json');
     const users = readJsonFile(usersFile);
     
@@ -193,7 +186,7 @@ app.post('/api/auth/register', async (req, res) => {
     // Create new user
     const newUser = {
       _id: Date.now().toString(),
-      name: name.trim(),
+      name: cleanName,
       email: email.toLowerCase().trim(),
       password: hashedPassword,
       company: company || {},
@@ -293,7 +286,10 @@ app.post('/api/auth/login', async (req, res) => {
         _id: user._id,
         email: user.email,
         name: user.name,
-        role: user.role || 'user'
+        role: user.role || 'user',
+        company: user.company || {},
+        phone: user.phone,
+        createdAt: user.createdAt
       }
     });
   } catch (error) {
@@ -508,19 +504,8 @@ app.get('/api/products/category-counts', async (req, res) => {
       }
     });
     
-    // Round to nearest 10
-    const roundedCounts = {};
-    Object.keys(categoryCounts).forEach(cat => {
-      const count = categoryCounts[cat];
-      if (count === 0) {
-        roundedCounts[cat] = 0;
-      } else if (count < 10) {
-        roundedCounts[cat] = 10;
-      } else {
-        // Round to nearest 10
-        roundedCounts[cat] = Math.ceil(count / 10) * 10;
-      }
-    });
+    // Return real counts — no rounding
+    const roundedCounts = categoryCounts;
     
     res.json({
       success: true,
@@ -539,7 +524,8 @@ app.get('/api/products/category-counts', async (req, res) => {
 app.get('/api/products/featured', async (req, res) => {
   try {
     const products = readJsonFile(path.join(__dirname, 'data/products.json'));
-    const orders = readJsonFile(path.join(__dirname, 'data/orders.json'));
+    const ordersPath = path.join(__dirname, 'data/orders.json');
+    const orders = fs.existsSync(ordersPath) ? readJsonFile(ordersPath) : [];
     const users = readJsonFile(path.join(__dirname, 'data/users.json'));
     
     // Get active products only
@@ -666,11 +652,18 @@ app.post('/api/products', authenticate, async (req, res) => {
     let products = readJsonFile(productsFilePath);
     
     const newProduct = {
-      ...req.body,
+      name: sanitize(req.body.name),
+      description: sanitize(req.body.description),
+      price: parseFloat(req.body.price),
+      category: sanitize(req.body.category),
+      stock: parseInt(req.body.stock),
+      images: Array.isArray(req.body.images) ? req.body.images.filter(img => typeof img === 'string' && img.startsWith('http')) : [],
+      status: 'active',
       _id: Date.now().toString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      supplierId: req.user._id
+      supplierId: req.user._id,
+      userId: req.user._id
     };
 
     products.push(newProduct);
@@ -685,6 +678,39 @@ app.post('/api/products', authenticate, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error creating product'
+    });
+  }
+});
+
+// Get single product by ID
+app.get('/api/products/:id', async (req, res) => {
+  try {
+    const productId = req.params.id;
+    const productsFilePath = path.join(__dirname, 'data/products.json');
+    const products = readJsonFile(productsFilePath);
+    
+    const product = products.find(p => 
+      p._id === productId || 
+      p._id === String(productId) ||
+      String(p._id) === String(productId)
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      product
+    });
+  } catch (error) {
+    console.error('Get product error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching product'
     });
   }
 });
@@ -717,12 +743,19 @@ app.put('/api/products/:id', authenticate, async (req, res) => {
       });
     }
 
-    // Update product
+    // Update product — whitelist only allowed fields
     const updatedProduct = {
       ...product,
-      ...req.body,
-      _id: product._id, // Preserve the original ID
-      supplierId: product.supplierId, // Preserve the original supplier
+      name: req.body.name !== undefined ? sanitize(req.body.name) : product.name,
+      description: req.body.description !== undefined ? sanitize(req.body.description) : product.description,
+      price: req.body.price !== undefined ? parseFloat(req.body.price) : product.price,
+      category: req.body.category !== undefined ? sanitize(req.body.category) : product.category,
+      stock: req.body.stock !== undefined ? parseInt(req.body.stock) : product.stock,
+      images: Array.isArray(req.body.images) ? req.body.images.filter(img => typeof img === 'string' && img.startsWith('http')) : product.images,
+      status: req.body.status !== undefined ? sanitize(req.body.status) : product.status,
+      _id: product._id,
+      supplierId: product.supplierId,
+      userId: product.userId,
       updatedAt: new Date().toISOString()
     };
 
@@ -764,6 +797,14 @@ app.delete('/api/products/:id', authenticate, async (req, res) => {
     }
 
     const product = products[productIndex];
+
+    // Verify ownership
+    if (product.supplierId !== req.user._id && product.userId !== req.user._id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to delete this product'
+      });
+    }
 
     if (product.images && Array.isArray(product.images)) {
       for (const imageUrl of product.images) {

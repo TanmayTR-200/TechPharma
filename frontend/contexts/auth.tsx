@@ -72,6 +72,24 @@ function AuthProviderComponent({ children }: { children: React.ReactNode }) {
         localStorage.setItem('refreshToken', result.refreshToken);
       }
       setUser(result.user);
+
+      // Fetch full user profile (including company) before redirecting
+      try {
+        const profileResponse = await fetcher(API_ENDPOINTS.auth.me, {
+          headers: {
+            'Authorization': `Bearer ${result.token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          cache: 'no-store'
+        });
+        if (profileResponse?.user) {
+          setUser(profileResponse.user);
+        }
+      } catch (e) {
+        // Fall back to login response user data already set above
+      }
+
       router.push('/dashboard');
     } catch (error: any) {
       console.error('Login error:', error);

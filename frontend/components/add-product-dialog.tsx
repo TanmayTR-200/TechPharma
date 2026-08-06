@@ -1,325 +1,196 @@
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { Button } from './ui/button';
-import { useAuth } from '@/contexts/auth';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { useToast } from '@/hooks/use-toast';
-import { useProduct } from '@/contexts/product-context';
-import { Loader2 } from 'lucide-react';
-import { uploadToCloudinary } from '@/lib/cloudinary';
+'use client'
 
-export function AddProductDialog() {
-  const { toast } = useToast();
-  const router = useRouter();
-  const { createProduct } = useProduct();
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  const [product, setProduct] = useState({
-    name: '',
-    description: '',
-    price: '',
-    category: '',
-    stock: '',
-    images: [] as string[],
-  });
+import { useState, useEffect } from 'react'
+import { X, Loader2, Upload } from 'lucide-react'
 
-  const handleImageUpload = () => {
-    // Create a hidden file input element
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/png, image/jpeg, image/gif';
-    fileInput.multiple = true;
+interface AddProductDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onProductAdded?: () => void
+}
 
-    // Handle file selection
-    fileInput.onchange = async (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (!files || files.length === 0) return;
+export function AddProductDialog({ open, onOpenChange, onProductAdded }: AddProductDialogProps) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [price, setPrice] = useState('')
+  const [stock, setStock] = useState('')
+  const [category, setCategory] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-      // Validate number of images
-      if (files.length + product.images.length > 5) {
-        toast({
-          title: 'Too Many Images',
-          description: `You can only upload up to 5 images total. You can select ${5 - product.images.length} more images.`,
-          variant: 'destructive',
-        });
-        return;
-      }
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [open])
 
-      // Validate file sizes
-      for (let i = 0; i < files.length; i++) {
-        if (files[i].size > 5 * 1024 * 1024) { // 5MB
-          toast({
-            title: 'File Too Large',
-            description: `${files[i].name} is larger than 5MB`,
-            variant: 'destructive',
-          });
-          return;
-        }
-      }
-
-      let uploadedCount = 0;
-      const errors = [];
-
-      // Upload files one by one
-      for (const file of Array.from(files)) {
-        try {
-          const result = await uploadToCloudinary(file);
-          
-          if (result.url) {
-            setProduct(prev => ({
-              ...prev,
-              images: [...prev.images, result.url]
-            }));
-            uploadedCount++;
-          } else {
-            throw new Error(`Failed to upload ${file.name}`);
-          }
-        } catch (error) {
-          console.error('Upload error:', error);
-          errors.push(file.name);
-        }
-      }
-
-      // Show final status
-      if (uploadedCount > 0) {
-        toast({
-          title: 'Upload Complete',
-          description: `Successfully uploaded ${uploadedCount} image${uploadedCount !== 1 ? 's' : ''}`,
-          variant: 'default',
-        });
-      }
-
-      if (errors.length > 0) {
-        toast({
-          title: 'Some Uploads Failed',
-          description: `Failed to upload: ${errors.join(', ')}`,
-          variant: 'destructive',
-        });
-      }
-    };
-
-    // Trigger file selection
-    fileInput.click();
-  };
+  if (!open) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+    e.preventDefault()
+    setError('')
+    setLoading(true)
 
     try {
-      if (!user?._id) {
-        throw new Error('You must be logged in to create a product');
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description,
+          price: parseFloat(price),
+          stock: parseInt(stock),
+          category,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.message || 'Failed to add product')
       }
 
-      if (!product.name || !product.description || !product.price || !product.category || !product.stock) {
-        throw new Error('Please fill in all required fields');
-      }
-
-      if (product.images.length === 0) {
-        throw new Error('Please upload at least one product image');
-      }
-
-      const productData = {
-        userId: user._id,
-        name: product.name.trim(),
-        description: product.description.trim(),
-        price: parseFloat(product.price),
-        category: product.category,
-        stock: parseInt(product.stock),
-        images: product.images,
-        status: 'active' as const
-      };
-
-      // Create the product
-      await createProduct(productData);
-
+      onProductAdded?.()
+      onOpenChange(false)
       // Reset form
-      setProduct({
-        name: '',
-        description: '',
-        price: '',
-        category: '',
-        stock: '',
-        images: [],
-      });
-
-      // Close dialog
-      setIsOpen(false);
-
-      toast({
-        title: 'Success',
-        description: 'Product created successfully',
-        variant: 'default',
-      });
-    } catch (error) {
-      console.error('Error creating product:', error);
-      
-      let errorMessage = 'Failed to create product. Please try again.';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      setName('')
+      setDescription('')
+      setPrice('')
+      setStock('')
+      setCategory('')
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="flex items-center gap-2 border-white hover:bg-zinc-800" disabled={loading}>
-          Add New Product
-          <span>+</span>
-        </Button>
-      </DialogTrigger>
-      <DialogContent
-        className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto bg-black text-white border-zinc-800"
-        aria-describedby="add-product-description"
-        onPointerDownOutside={(e) => {
-          // Prevent closing dialog if form is submitting
-          if (loading) {
-            e.preventDefault();
-          }
-        }}
-        onInteractOutside={(e) => {
-          // Prevent closing dialog if form is submitting
-          if (loading) {
-            e.preventDefault();
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle className="text-white">Add New Product</DialogTitle>
-          <DialogDescription id="add-product-description">
-            Fill out the form below to add a new product to your inventory.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="name">Product Name</Label>
-            <Input
-              id="name"
-              value={product.name}
-              onChange={(e) => setProduct({ ...product, name: e.target.value })}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-slate-900/50"
+        onClick={() => onOpenChange(false)}
+      />
+
+      {/* Dialog */}
+      <div className="relative w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <h2 className="text-base font-semibold text-slate-900">Add new product</h2>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="space-y-4 p-5">
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Product name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               required
+              placeholder="e.g. Drilling Machine"
+              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={product.description}
-              onChange={(e) => setProduct({ ...product, description: e.target.value })}
-              required
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Description</label>
+            <textarea
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Brief description of the product"
+              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="price">Price</Label>
-              <Input
-                id="price"
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Price (₹)</label>
+              <input
                 type="number"
-                value={product.price}
-                onChange={(e) => setProduct({ ...product, price: e.target.value })}
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
                 required
+                placeholder="0.00"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="stock">Stock</Label>
-              <Input
-                id="stock"
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Stock</label>
+              <input
                 type="number"
-                value={product.stock}
-                onChange={(e) => setProduct({ ...product, stock: e.target.value })}
+                value={stock}
+                onChange={(e) => setStock(e.target.value)}
                 required
+                placeholder="0"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">Category</Label>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Category</label>
             <select
-              id="category"
-              value={product.category}
-              onChange={(e) => setProduct({ ...product, category: e.target.value })}
-              className="flex h-9 w-[200px] items-center justify-between rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
             >
-              <option value="" disabled>Select Category</option>
-              <option value="electronics">Electronics</option>
+              <option value="">Select a category</option>
               <option value="machinery">Machinery</option>
-              <option value="tools">Tools</option>
-              <option value="safety">Safety Equipment</option>
-              <option value="lighting">Lighting</option>
+              <option value="safety">Safety</option>
+              <option value="electronics">Electronics</option>
             </select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="images">Product Images</Label>
-            <div className="space-y-4">
-              <Button 
-                type="button" 
-                variant="secondary" 
-                className="w-full h-auto py-4 flex flex-col items-center gap-2"
-                onClick={handleImageUpload}
-              >
-                <Loader2 className="w-6 h-6" />
-                <span>Upload Product Images</span>
-                <p className="text-sm text-gray-400 font-normal">PNG, JPG, GIF up to 5MB each (max 5 images)</p>
-              </Button>
-              
-              {product.images.length > 0 && (
-                <div className="grid grid-cols-2 gap-4">
-                  {product.images.map((image, index) => (
-                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-zinc-700">
-                      <img
-                        src={image}
-                        alt={`Product image ${index + 1}`}
-                        className="w-full h-full object-contain bg-zinc-900"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setProduct(prev => ({
-                            ...prev,
-                            images: prev.images.filter((_, i) => i !== index)
-                          }));
-                        }}
-                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-sm"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Product image</label>
+            <div className="flex items-center justify-center rounded-lg border border-dashed border-slate-300 p-6">
+              <div className="text-center">
+                <Upload className="mx-auto h-8 w-8 text-slate-400" />
+                <p className="mt-2 text-sm text-slate-600">Click to upload</p>
+                <p className="text-xs text-slate-400">PNG, JPG up to 5MB</p>
+              </div>
             </div>
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating Product...
-              </>
-            ) : (
-              'Create Product'
-            )}
-          </Button>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? 'Adding...' : 'Add product'}
+            </button>
+          </div>
         </form>
-      </DialogContent>
-    </Dialog>
-  );
+      </div>
+    </div>
+  )
 }
