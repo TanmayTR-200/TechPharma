@@ -1,15 +1,17 @@
+'use strict';
+
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5000; // Use port from env or default to 5000
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Helper to read JSON files
 function readJsonFile(filePath) {
@@ -27,16 +29,19 @@ function writeJsonFile(filePath, data) {
 // Initialize storage
 function initStorage() {
   try {
-    const dataDir = path.join(__dirname, 'data');
+    // Create data directory if it doesn't exist
+    const dataDir = path.join(__dirname, './data');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     
+    // Create products.json if it doesn't exist
     const productsFile = path.join(dataDir, 'products.json');
     if (!fs.existsSync(productsFile)) {
       writeJsonFile(productsFile, []);
     }
     
+    // Create users.json if it doesn't exist
     const usersFile = path.join(dataDir, 'users.json');
     if (!fs.existsSync(usersFile)) {
       writeJsonFile(usersFile, []);
@@ -50,591 +55,430 @@ function initStorage() {
   }
 }
 
-// Authentication middleware
-const authenticate = async (req, res, next) => {
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
-    }
-
-    // Verify JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = {
-      _id: decoded._id,
-      id: decoded._id,
-      email: decoded.email,
-      name: decoded.name,
-      role: decoded.role || 'user'
-    };
-    return next();
-  } catch (error) {
-    console.error('Auth error:', error);
-    return res.status(401).json({
-      success: false,
-      message: 'Invalid or expired token'
-    });
-  }
-};
-
-// Input sanitization helper
-const sanitize = (str) => {
-  if (typeof str !== 'string') return str;
-  return str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-           .replace(/<[^>]+>/g, '')
-           .trim();
-};
-
-// Email validation helper
-const isValidEmail = (email) => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-};
-
-// Configure nodemailer transporter
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD
-  },
-  debug: true
-});
-
 // Enable CORS for frontend
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'https://techpharma-frontend.onrender.com'
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow all for now
-    }
-  },
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Cache-Control', 'If-None-Match', 'ETag'],
-  exposedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Cache-Control',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  exposedHeaders: ['ETag']
 }));
-
-// Handle preflight requests
-app.options('*', cors());
 
 // Middleware
 app.use(express.json());
 app.use(morgan('dev'));
 
-// Register endpoint
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      storage: 'file-based'
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).json({ 
+      status: 'error',
+      message: 'Service unavailable',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Auth middleware
+const authMiddleware = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    // Set user data in request
+    req.user = { 
+      _id: decoded.userId,
+      id: decoded.userId // Include both id formats for compatibility
+    };
+    
+    next();
+  } catch (error) {
+    console.error('Auth error:', error);
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid token'
+    });
+  }
+};
+
+
+
+// Auth Routes
 app.post('/api/auth/register', async (req, res) => {
   try {
-    const { name, email, password, company } = req.body;
-    console.log('Registration attempt for email:', email);
-    
-    if (!name || !email || !password) {
+    const { email, password, name, role } = req.body;
+
+    if (!email || !password || !name || !role) {
       return res.status(400).json({
         success: false,
-        message: 'Name, email, and password are required'
+        message: 'All fields are required'
       });
     }
 
-    // Validate email format
-    if (!isValidEmail(email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please enter a valid email address'
-      });
-    }
-
-    // Validate password strength
-    if (password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: 'Password must be at least 8 characters long'
-      });
-    }
-
-    // Sanitize name
-    const cleanName = sanitize(name);
-
-    const usersFile = path.join(__dirname, 'data/users.json');
+    // Read users from file
+    const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
-    
-    // Check if user already exists
-    const existingUser = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
-    if (existingUser) {
+
+    // Check if user exists
+    if (users.find(u => u.email === email)) {
       return res.status(400).json({
         success: false,
-        message: 'User already exists'
+        message: 'Email already registered'
       });
     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    // Create new user
-    const newUser = {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = {
       _id: Date.now().toString(),
-      name: cleanName,
-      email: email.toLowerCase().trim(),
+      email,
       password: hashedPassword,
-      company: company || {},
-      role: 'supplier',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      name,
+      role,
+      createdAt: new Date().toISOString()
     };
 
-    users.push(newUser);
+    // Add to users array and save
+    users.push(user);
     writeJsonFile(usersFile, users);
 
-    // Generate token
-    const token = jwt.sign(
-      { 
-        _id: newUser._id,
-        email: newUser.email,
-        name: newUser.name,
-        role: newUser.role
-      },
-      process.env.JWT_SECRET || 'dev_jwt_secret',
-      { expiresIn: '24h' }
-    );
-
-    console.log('User registered successfully:', newUser.email);
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET);
 
     res.status(201).json({
       success: true,
-      token,
       user: {
-        _id: newUser._id,
-        email: newUser.email,
-        name: newUser.name,
-        role: newUser.role,
-        company: newUser.company,
-        createdAt: newUser.createdAt
-      }
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      },
+      token
     });
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Registration failed'
     });
   }
 });
 
-// Login endpoint
+const { sendPasswordResetEmail } = require('./src/utils/email');
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email is required' 
+      });
+    }
+
+    // Read users from file
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+
+    // Find user
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    
+    // Generate reset token whether user exists or not (for security)
+    const resetToken = jwt.sign(
+      { 
+        userId: user?._id || 'invalid',
+        purpose: 'reset'
+      },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    if (user) {
+      try {
+        // Send password reset email
+        await sendPasswordResetEmail(email, resetToken);
+        
+        // Store reset token with user
+        user.resetToken = {
+          token: resetToken,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
+        };
+        writeJsonFile(usersFile, users);
+        
+        console.log(`Password reset email sent to ${email}`);
+      } catch (emailError) {
+        console.error('Failed to send password reset email:', emailError);
+        // Log the reset link as fallback
+        console.log(`
+=========================================
+🔑 Password Reset Requested (Email Failed)
+-----------------------------------------
+Email: ${email}
+Reset Link: ${process.env.FRONTEND_URL}/auth/reset-password?token=${resetToken}
+=========================================`);
+      }
+    }
+
+    // Always return the same response whether user exists or not
+    return res.json({
+      success: true,
+      message: 'If an account exists with that email, you will receive password reset instructions.',
+      token: resetToken // Include token in response for development
+    });
+  } catch (error) {
+    console.error('Password reset error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error processing password reset request'
+    });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, otp, password } = req.body;
+    if (!token || !otp || !password) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    // Read users
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    
+    // Find user
+    const user = users.find(u => u._id === decoded.userId);
+    if (!user || !user.resetOtp) {
+      return res.status(400).json({ message: 'Invalid or expired reset code' });
+    }
+
+    // Verify OTP and expiry
+    if (user.resetOtp.code !== otp || new Date() > new Date(user.resetOtp.expiresAt)) {
+      return res.status(400).json({ message: 'Invalid or expired reset code' });
+    }
+
+    // Update password
+    user.password = await bcrypt.hash(password, 10);
+    user.resetOtp = null; // Clear reset OTP
+    writeJsonFile(usersFile, users);
+
+    return res.json({
+      success: true,
+      message: 'Password has been reset successfully'
+    });
+
+  } catch (error) {
+    console.error('Reset password error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error processing request'
+    });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log('Login attempt for email:', email);
-    
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required'
-      });
-    }
 
-    const usersFile = path.join(__dirname, 'data/users.json');
+    // Read users from file
+    const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
-    const user = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
-    
+
+    // Find user by email
+    const user = users.find(u => u.email === email);
     if (!user) {
-      console.log('User not found:', email);
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Invalid credentials'
       });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    console.log('Password match result:', isMatch);
-    
-    if (!isMatch) {
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Invalid credentials'
       });
     }
 
-    const token = jwt.sign(
-      { 
-        _id: user._id,
-        email: user.email,
-        name: user.name,
-        role: user.role || 'user'
-      },
-      process.env.JWT_SECRET || 'dev_jwt_secret',
-      { expiresIn: '24h' }
-    );
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET);
 
     res.json({
       success: true,
-      token,
       user: {
         _id: user._id,
         email: user.email,
         name: user.name,
-        role: user.role || 'user',
-        company: user.company || {},
-        phone: user.phone,
-        createdAt: user.createdAt
-      }
+        role: user.role
+      },
+      token
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Login failed'
     });
   }
 });
 
-// Get current user info endpoint with authentication
-app.get('/api/auth/me', authenticate, async (req, res) => {
+// Protected Routes
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    // User info is already attached by authenticate middleware
-    const { user } = req;
-    
-    // Find fresh user data from storage
-    const usersFile = path.join(__dirname, 'data/users.json');
+    // Read users from file
+    const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
-    const freshUserData = users.find(u => u._id === user._id || u.email === user.email);
-    
-    if (!freshUserData) {
+    const user = users.find(u => u._id === req.user._id);
+
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
       });
     }
 
-    // Return user info without sensitive data but ensure createdAt is included
-    const { password, resetToken, ...userInfo } = user;
+    // Read products from file
+    const productsFile = path.join(__dirname, './data/products.json');
+    const products = readJsonFile(productsFile);
+    const userProducts = products.filter(p => p.userId === user._id);
 
-    // Find fresh user data from storage to get latest company info
-    const latestUsersFile = path.join(__dirname, 'data/users.json');
-    const latestUsers = readJsonFile(latestUsersFile);
-    const latestUserData = latestUsers.find(u => u._id === userInfo._id);
-    
     res.json({
       success: true,
       user: {
-        ...userInfo,
-        company: latestUserData?.company || userInfo.company || {},
-        createdAt: user.createdAt || userInfo._id 
-          ? new Date(parseInt(userInfo._id)).toISOString()  // Fallback to ID-based date
-          : new Date().toISOString() // Ultimate fallback
+        _id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        company: user.company || null,
+        phone: user.phone || '',
+        createdAt: user.createdAt
+      },
+      data: {
+        totalProducts: userProducts.length
       }
     });
   } catch (error) {
-    console.error('Auth/me error:', error);
+    console.error('Profile error:', error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Error fetching profile'
     });
   }
 });
 
-// Forgot password endpoint
-app.post('/api/auth/forgot-password', async (req, res) => {
+// Category counts
+app.get('/api/products/category-counts', async (req, res) => {
   try {
-    const { email } = req.body;
-    const usersFile = path.join(__dirname, 'data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
-    
-    const resetToken = jwt.sign(
-      { userId: user?._id || 'invalid', purpose: 'reset' },
-      process.env.JWT_SECRET || 'dev_jwt_secret',
-      { expiresIn: '1h' }
-    );
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const counts = {};
+    products.forEach(p => {
+      if (p.status === 'active' && p.category) {
+        counts[p.category] = (counts[p.category] || 0) + 1;
+      }
+    });
+    res.json({ success: true, counts });
+  } catch (error) {
+    console.error('Category counts error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching category counts' });
+  }
+});
 
-    if (user) {
-      const userIndex = users.findIndex(u => u.email.toLowerCase().trim() === email.toLowerCase().trim());
-      users[userIndex].resetToken = {
-        token: resetToken,
-        expiresAt: new Date(Date.now() + 3600000) // 1 hour from now
-      };
-      writeJsonFile(usersFile, users);
+// Featured products
+app.get('/api/products/featured', async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
 
-      try {
-        console.log('Testing SMTP connection...');
-        await transporter.verify();
-        console.log('SMTP connection verified successfully');
-        
-        const resetLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/reset-password?token=${resetToken}`;
-        const mailOptions = {
-          from: {
-            name: 'TechPharma Support',
-            address: process.env.EMAIL_USER
-          },
-          to: email,
-          subject: 'Reset Your Password - TechPharma',
-          html: `
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-              <h2>Reset Your Password</h2>
-              <p>You have requested to reset your password. Click the link below to set a new password:</p>
-              <p>
-                <a href="${resetLink}" style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin: 20px 0;">
-                  Reset Password
-                </a>
-              </p>
-              <p>If you didn't request this, please ignore this email.</p>
-              <p>This link will expire in 1 hour for security reasons.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-              <p style="color: #666; font-size: 12px;">
-                This is an automated email from TechPharma. Please do not reply to this email.
-              </p>
-            </div>
-          `
+    const token = req.headers.authorization?.split(' ')[1];
+    let isAuthed = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+    }
+
+    const userMap = new Map(users.map(u => [u._id, u]));
+
+    const featured = products
+      .filter(p => p.status === 'active')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 6)
+      .map(p => {
+        const supplier = userMap.get(p.userId);
+        return {
+          ...p,
+          supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller',
+          supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null
         };
-        
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Password reset email sent successfully:', info.messageId);
-      } catch (emailError) {
-        console.error('Detailed email error:', emailError);
-        console.log('Email error details:', {
-          code: emailError.code,
-          message: emailError.message,
-          response: emailError.response,
-          stack: emailError.stack
-        });
-        console.log('=========================================');
-        console.log('🔑 Password Reset Requested (Email Failed)');
-        console.log('-----------------------------------------');
-        console.log('Email:', email);
-        console.log('Reset Link: http://localhost:3000/auth/reset-password?token=' + resetToken);
-        console.log('=========================================');
-        return res.status(500).json({
-          success: false,
-          message: 'Could not send password reset email. Please check your email address or try again later.'
-        });
-      }
-    }
+      });
 
-    res.json({
-      success: true,
-      message: 'If an account exists with this email, you will receive reset instructions. Check the server console for the reset link!'
-    });
+    res.json({ success: true, products: featured });
   } catch (error) {
-    console.error('Forgot password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
-  }
-});
-
-// Reset password endpoint
-app.post('/api/auth/reset-password', async (req, res) => {
-  try {
-    const { token, password } = req.body;
-    if (!token || !password) {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Token and new password are required' 
-      });
-    }
-
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev_jwt_secret');
-      if (decoded.purpose !== 'reset') {
-        throw new Error('Invalid token purpose');
-      }
-    } catch (error) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired reset token'
-      });
-    }
-
-    const usersFile = path.join(__dirname, 'data/users.json');
-    const users = readJsonFile(usersFile);
-    const userIndex = users.findIndex(u => u._id === decoded.userId);
-    
-    if (userIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    users[userIndex].password = hashedPassword;
-    writeJsonFile(usersFile, users);
-
-    res.json({
-      success: true,
-      message: 'Password has been reset successfully. You can now log in with your new password.'
-    });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error'
-    });
+    console.error('Featured products error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching featured products' });
   }
 });
 
 // Product Routes
-// Get category counts
-app.get('/api/products/category-counts', async (req, res) => {
-  try {
-    const products = readJsonFile(path.join(__dirname, 'data/products.json'));
-    const activeProducts = products.filter(p => p.status === 'active');
-    
-    const categoryCounts = {};
-    activeProducts.forEach(product => {
-      if (product.category) {
-        const cat = product.category.toLowerCase();
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      }
-    });
-    
-    // Return real counts — no rounding
-    const roundedCounts = categoryCounts;
-    
-    res.json({
-      success: true,
-      counts: roundedCounts
-    });
-  } catch (error) {
-    console.error('Category counts error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get category counts'
-    });
-  }
-});
-
-// Get featured products (top 4 products based on sales/views)
-app.get('/api/products/featured', async (req, res) => {
-  try {
-    const products = readJsonFile(path.join(__dirname, 'data/products.json'));
-    const ordersPath = path.join(__dirname, 'data/orders.json');
-    const orders = fs.existsSync(ordersPath) ? readJsonFile(ordersPath) : [];
-    const users = readJsonFile(path.join(__dirname, 'data/users.json'));
-    
-    // Get active products only
-    let activeProducts = products.filter(p => p.status === 'active');
-    
-    // Calculate sales count for each product
-    const productSales = {};
-    orders.forEach(order => {
-      if (order.items && Array.isArray(order.items)) {
-        order.items.forEach(item => {
-          const productId = item.productId || item._id;
-          productSales[productId] = (productSales[productId] || 0) + (item.quantity || 1);
-        });
-      }
-    });
-    
-    // Add sales count and supplier info to products
-    activeProducts = activeProducts.map(product => {
-      const salesCount = productSales[product._id] || 0;
-      const supplier = users.find(u => u._id === product.userId || u._id === product.supplierId);
-      
-      return {
-        ...product,
-        salesCount,
-        supplierName: supplier ? (supplier.company?.name || supplier.name || 'Unknown Supplier') : 'Unknown Supplier',
-        supplierLocation: supplier ? (supplier.company?.city || supplier.city || 'India') : 'India'
-      };
-    });
-    
-    // Sort by sales count (descending), then by createdAt (newest first)
-    activeProducts.sort((a, b) => {
-      if (b.salesCount !== a.salesCount) {
-        return b.salesCount - a.salesCount;
-      }
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-    
-    // Get top 4 products
-    const featuredProducts = activeProducts.slice(0, 4);
-    
-    res.json({
-      success: true,
-      products: featuredProducts
-    });
-  } catch (error) {
-    console.error('Featured products error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get featured products',
-      products: []
-    });
-  }
-});
-
 app.get('/api/products', async (req, res) => {
   try {
-    const { page = 1, sort = 'featured', category, search, priceMin, priceMax } = req.query;
-    let products = readJsonFile(path.join(__dirname, 'data/products.json'));
-    
-    let filteredProducts = products.filter(p => p.status === 'active');
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
 
-    if (category) {
-      const categories = category.toLowerCase().split(',');
-      filteredProducts = filteredProducts.filter(p => 
-        p.category && categories.includes(p.category.toLowerCase())
-      );
+    // Determine if requester is authenticated (supplier name only shown to logged-in users)
+    const token = req.headers.authorization?.split(' ')[1];
+    let isAuthed = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
     }
 
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredProducts = filteredProducts.filter(p => 
-        p.name.toLowerCase().includes(searchLower) || 
-        p.description.toLowerCase().includes(searchLower)
-      );
-    }
+    // Prebuild a userId -> user map ONCE to avoid N+1 lookups inside the loop
+    const userMap = new Map(users.map(u => [u._id, u]));
 
-    if (priceMin || priceMax) {
-      const min = priceMin ? parseFloat(priceMin) : 0;
-      const max = priceMax ? parseFloat(priceMax) : Number.MAX_VALUE;
-      filteredProducts = filteredProducts.filter(p => 
-        p.price >= min && p.price <= max
-      );
-    }
+    // Filter active products and sort by createdAt
+    const activeProducts = products
+      .filter(p => p.status === 'active')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map(p => {
+        const supplier = userMap.get(p.userId);   // O(1) lookup
+        const { userId, supplierId, createdAt, updatedAt, ...publicFields } = p;
+        return {
+          ...publicFields,
+          supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller',
+          supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null
+        };
+      });
 
-    switch (sort) {
-      case 'price-asc':
-        filteredProducts.sort((a, b) => a.price - b.price);
-        break;
-      case 'price-desc':
-        filteredProducts.sort((a, b) => b.price - a.price);
-        break;
-      case 'newest':
-        filteredProducts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-      case 'featured':
-      default:
-        break;
-    }
-
-    const pageSize = 12;
-    const startIndex = (parseInt(page) - 1) * pageSize;
-    const paginatedProducts = filteredProducts.slice(startIndex, startIndex + pageSize);
+    // Pagination
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize) || 20));
+    const total = activeProducts.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const paginated = activeProducts.slice((page - 1) * pageSize, page * pageSize);
 
     res.json({
       success: true,
-      products: paginatedProducts,
-      total: filteredProducts.length,
-      page: parseInt(page),
-      totalPages: Math.ceil(filteredProducts.length / pageSize)
+      products: paginated,
+      pagination: { page, pageSize, total, totalPages }
     });
   } catch (error) {
     console.error('Products error:', error);
@@ -645,189 +489,158 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// Create product
-app.post('/api/products', authenticate, async (req, res) => {
+// Get single product by ID
+app.get('/api/products/:id', async (req, res) => {
   try {
-    const productsFilePath = path.join(__dirname, 'data/products.json');
-    let products = readJsonFile(productsFilePath);
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const product = products.find(p => p._id === req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Fetch supplier name
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const supplier = users.find(u => u._id === product.userId);
+
+    // Only show real supplier name to authenticated users
+    const token = req.headers.authorization?.split(' ')[1];
+    let isAuthed = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+    }
     
-    const newProduct = {
-      name: sanitize(req.body.name),
-      description: sanitize(req.body.description),
-      price: parseFloat(req.body.price),
-      category: sanitize(req.body.category),
-      stock: parseInt(req.body.stock),
-      images: Array.isArray(req.body.images) ? req.body.images.filter(img => typeof img === 'string' && img.startsWith('http')) : [],
-      status: 'active',
-      _id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+    res.json({
+      success: true,
+      product: {
+        ...product,
+        userId: undefined,
+        supplierId: undefined,
+        supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null,
+        supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller'
+      }
+    });
+  } catch (error) {
+    console.error('Product fetch error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching product' });
+  }
+});
+
+app.post('/api/products', authMiddleware, async (req, res) => {
+  try {
+    const { name, description, price, category, stock, images } = req.body;
+
+    // Read existing products
+    const productsPath = path.join(__dirname, './data/products.json');
+    let products = [];
+    try {
+      products = readJsonFile(productsPath);
+    } catch (err) {
+      console.error('Error reading products file:', err);
+    }
+
+    // Generate new ID
+    const id = products.length ? Math.max(...products.map(p => Number(p.id) || 0)) + 1 : 1;
+
+    // Create new product
+    const product = {
+      id,
+      _id: String(id),
+      name: name?.trim(),
+      description: description?.trim(),
+      price: Number(price),
+      category: category?.trim(),
+      stock: Number(stock),
+      images: Array.isArray(images) ? images : [],
+      userId: req.user._id,
       supplierId: req.user._id,
-      userId: req.user._id
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
 
-    products.push(newProduct);
-    writeJsonFile(productsFilePath, products);
+    // Add to products array
+    products.push(product);
+
+    // Save back to file
+    writeJsonFile(productsPath, products);
 
     res.status(201).json({
       success: true,
-      product: newProduct
+      product
     });
   } catch (error) {
     console.error('Create product error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error creating product'
-    });
-  }
-});
-
-// Get single product by ID
-app.get('/api/products/:id', async (req, res) => {
-  try {
-    const productId = req.params.id;
-    const productsFilePath = path.join(__dirname, 'data/products.json');
-    const products = readJsonFile(productsFilePath);
-    
-    const product = products.find(p => 
-      p._id === productId || 
-      p._id === String(productId) ||
-      String(p._id) === String(productId)
-    );
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      product
-    });
-  } catch (error) {
-    console.error('Get product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching product'
+      message: 'Error creating product',
+      details: error.message
     });
   }
 });
 
 // Update product
-app.put('/api/products/:id', authenticate, async (req, res) => {
+app.put('/api/products/:id', authMiddleware, async (req, res) => {
   try {
-    const productId = req.params.id;
-    const productsFilePath = path.join(__dirname, 'data/products.json');
-    let products = readJsonFile(productsFilePath);
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const index = products.findIndex(p => p._id === req.params.id);
 
-    const productIndex = products.findIndex(p => 
-      p._id === productId || 
-      p._id === String(productId)
-    );
-
-    if (productIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found'
-      });
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    // Check if user owns the product or is admin
-    const product = products[productIndex];
-    if (product.supplierId !== req.user._id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this product'
-      });
+    if (products[index].userId !== req.user._id) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this product' });
     }
 
-    // Update product — whitelist only allowed fields
-    const updatedProduct = {
-      ...product,
-      name: req.body.name !== undefined ? sanitize(req.body.name) : product.name,
-      description: req.body.description !== undefined ? sanitize(req.body.description) : product.description,
-      price: req.body.price !== undefined ? parseFloat(req.body.price) : product.price,
-      category: req.body.category !== undefined ? sanitize(req.body.category) : product.category,
-      stock: req.body.stock !== undefined ? parseInt(req.body.stock) : product.stock,
-      images: Array.isArray(req.body.images) ? req.body.images.filter(img => typeof img === 'string' && img.startsWith('http')) : product.images,
-      status: req.body.status !== undefined ? sanitize(req.body.status) : product.status,
-      _id: product._id,
-      supplierId: product.supplierId,
-      userId: product.userId,
+    const { name, description, price, category, stock, images } = req.body;
+    products[index] = {
+      ...products[index],
+      name: name?.trim() || products[index].name,
+      description: description?.trim() || products[index].description,
+      price: price !== undefined ? Number(price) : products[index].price,
+      category: category?.trim() || products[index].category,
+      stock: stock !== undefined ? Number(stock) : products[index].stock,
+      images: images || products[index].images,
       updatedAt: new Date().toISOString()
     };
 
-    products[productIndex] = updatedProduct;
-    writeJsonFile(productsFilePath, products);
-
-    res.json({
-      success: true,
-      product: updatedProduct
-    });
+    writeJsonFile(path.join(__dirname, './data/products.json'), products);
+    res.json({ success: true, product: products[index] });
   } catch (error) {
     console.error('Update product error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error updating product'
-    });
+    res.status(500).json({ success: false, message: 'Error updating product' });
   }
 });
 
-// Delete product
-app.delete('/api/products/:id', authenticate, async (req, res) => {
+app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   try {
-    const productId = req.params.id;
-    const productsFilePath = path.join(__dirname, 'data/products.json');
-    let products = readJsonFile(productsFilePath);
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const index = products.findIndex(p => p._id === req.params.id);
 
-    const productIndex = products.findIndex(p => 
-      p.id === productId || 
-      p._id === productId ||
-      p.id === String(productId) || 
-      p._id === String(productId)
-    );
-
-    if (productIndex === -1) {
+    if (index === -1) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
       });
     }
 
-    const product = products[productIndex];
-
-    // Verify ownership
-    if (product.supplierId !== req.user._id && product.userId !== req.user._id && req.user.role !== 'admin') {
+    // Check if user owns the product
+    if (products[index].userId !== req.user._id) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to delete this product'
       });
     }
 
-    if (product.images && Array.isArray(product.images)) {
-      for (const imageUrl of product.images) {
-        if (imageUrl.includes('cloudinary.com')) {
-          try {
-            const publicId = getPublicIdFromUrl(imageUrl);
-            if (publicId) {
-              await deleteImage(publicId);
-              console.log('Deleted Cloudinary image:', publicId);
-            }
-          } catch (error) {
-            console.error('Failed to delete Cloudinary image:', error);
-          }
-        }
-      }
-    }
-
-    products.splice(productIndex, 1);
-    writeJsonFile(productsFilePath, products);
+    // Remove product
+    const [deletedProduct] = products.splice(index, 1);
+    writeJsonFile(path.join(__dirname, '../../data/products.json'), products);
 
     res.json({
       success: true,
-      message: 'Product deleted successfully'
+      message: 'Product deleted successfully',
+      deletedProduct
     });
   } catch (error) {
     console.error('Delete product error:', error);
@@ -838,98 +651,141 @@ app.delete('/api/products/:id', authenticate, async (req, res) => {
   }
 });
 
-// Profile routes
-app.put('/api/profile', authenticate, async (req, res) => {
+// User routes
+app.get('/api/users/:id', authMiddleware, async (req, res) => {
   try {
-    const usersFile = path.join(__dirname, 'data/users.json');
-    const users = readJsonFile(usersFile);
-    const userIndex = users.findIndex(u => u._id === req.user._id);
-    
-    if (userIndex === -1) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const user = users.find(u => u._id === req.params.id);
 
-    // Update user data
-    if (req.body.company) {
-      users[userIndex].company = {
-        ...users[userIndex].company || {},
-        ...req.body.company
-      };
-    }
-
-    if (req.body.phone !== undefined) {
-      users[userIndex].phone = req.body.phone;
-    }
-
-    // Save to file
-    writeJsonFile(usersFile, users);
-
-    // Return updated user data
-    const { password, resetToken, ...userData } = users[userIndex];
-    res.json(userData);
-  } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(500).json({ message: error.message });
-  }
-});
-
-app.get('/api/profile', authenticate, async (req, res) => {
-  try {
-    const usersFile = path.join(__dirname, 'data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === req.user._id);
-    
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Return user data without sensitive information
-    const { password, resetToken, ...userData } = user;
-    res.json(userData);
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      }
+    });
   } catch (error) {
-    console.error('Profile get error:', error);
-    res.status(500).json({ message: error.message });
+    console.error('User fetch error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching user' });
   }
 });
 
 // Import routes
-const analyticsRouter = require('./routes/dashboard/analytics');
-const dashboardRouter = require('./routes/dashboard');
-const messageRoutes = require('./routes/messages');
-const userRoutes = require('./routes/users');
-const notificationsRoutes = require('./routes/notifications');
-
-// Import cart routes
-const cartRoutes = require('./routes/cart');
+const dashboardRoutes = require('./src/routes/dashboard');
+const messagesRoutes = require('./src/routes/messages');
 
 // Use routes
-app.use('/api/dashboard/analytics', authenticate, analyticsRouter);
-app.use('/api/dashboard', authenticate, dashboardRouter);
-app.use('/api/messages', authenticate, messageRoutes);
-app.use('/api/users', authenticate, userRoutes);
-app.use('/api/cart', authenticate, cartRoutes);
-app.use('/api/notifications', notificationsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/messages', messagesRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.setHeader('Pragma', 'no-cache');
-  res.setHeader('Expires', '0');
-  
-  res.json({
-    status: 'ok',
-    success: true,
-    message: 'Server is running',
-    timestamp: new Date().toISOString(),
-    storage: {
-      type: 'File-based',
-      initialized: fs.existsSync(path.join(__dirname, 'data'))
-    },
-    server: {
-      port: PORT,
-      environment: process.env.NODE_ENV || 'development'
-    }
-  });
+// Notification routes
+app.get('/api/notifications', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const userNotifs = all.filter(n => !n.userId || n.userId === req.user._id);
+    res.json({ success: true, notifications: userNotifs });
+  } catch (error) {
+    console.error('Notifications error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching notifications' });
+  }
+});
+
+app.get('/api/notifications/archived', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const archived = all.filter(n => n.userId === req.user._id && n.archived);
+    res.json({ success: true, notifications: archived });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching archived notifications' });
+  }
+});
+
+app.post('/api/notifications', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const newNotif = {
+      _id: Date.now().toString(),
+      userId: req.user._id,
+      title: req.body.title || '',
+      message: req.body.message || '',
+      type: req.body.type || 'info',
+      read: false,
+      archived: false,
+      createdAt: new Date().toISOString()
+    };
+    all.push(newNotif);
+    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    res.status(201).json({ success: true, notification: newNotif });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error creating notification' });
+  }
+});
+
+app.post('/api/notifications/:id/read', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const idx = all.findIndex(n => n._id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
+    all[idx].read = true;
+    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    res.json({ success: true, notification: all[idx] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error marking as read' });
+  }
+});
+
+app.post('/api/notifications/mark-all-read', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    all.forEach(n => { if (!n.userId || n.userId === req.user._id) n.read = true; });
+    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error marking all as read' });
+  }
+});
+
+app.post('/api/notifications/:id/archive', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const idx = all.findIndex(n => n._id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
+    all[idx].archived = true;
+    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    res.json({ success: true, notification: all[idx] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error archiving notification' });
+  }
+});
+
+app.post('/api/notifications/:id/unarchive', authMiddleware, async (req, res) => {
+  try {
+    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const idx = all.findIndex(n => n._id === req.params.id);
+    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
+    all[idx].archived = false;
+    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    res.json({ success: true, notification: all[idx] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error unarchiving notification' });
+  }
+});
+
+app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
+  try {
+    let all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    all = all.filter(n => n._id !== req.params.id);
+    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error deleting notification' });
+  }
 });
 
 // Error handler
@@ -941,18 +797,67 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Start server
 const startServer = async () => {
-  initStorage();
-  console.log('Starting Express server...');
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log('=========================================');
-    console.log('🚀 Backend Server Running');
-    console.log('-----------------------------------------');
-    console.log('• Port:', PORT);
-    console.log('• URL: http://localhost:' + PORT);
-    console.log('• Storage: File-based');
-    console.log('=========================================');
-  });
+  try {
+    // Initialize storage
+    initStorage();
+    
+    // Start Express server
+    console.log('Starting Express server...');
+    const server = await new Promise((resolve, reject) => {
+      const srv = app.listen(PORT, '0.0.0.0')
+        .once('error', (err) => {
+          console.error('Server startup error:', err);
+          if (err.code === 'EADDRINUSE') {
+            console.error(`
+=================================================
+ERROR: Port ${PORT} is already in use
+Please stop any other server using port ${PORT} first
+You can use these commands to find and stop the process:
+  netstat -ano | findstr :${PORT}
+  taskkill /PID <PID> /F
+=================================================`);
+            process.exit(1);
+          } else {
+            reject(err);
+          }
+        })
+        .once('listening', () => {
+          console.log('Server is listening...');
+          resolve(srv);
+        });
+    });
+
+    console.log(`
+=========================================
+🚀 Backend Server Running
+-----------------------------------------
+• Port: ${PORT}
+• URL: http://localhost:${PORT}
+• Storage: File-based
+=========================================`);
+
+    // Graceful shutdown
+    const shutdown = async () => {
+      try {
+        console.log('\nShutting down...');
+        await server.close();
+        process.exit(0);
+      } catch (err) {
+        console.error('Shutdown error:', err);
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+
+    return server;
+  } catch (err) {
+    console.error('Startup error:', err);
+    process.exit(1);
+  }
 };
 
 startServer();
