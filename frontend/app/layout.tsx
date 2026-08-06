@@ -32,7 +32,7 @@ export default function RootLayout({
       <head>
         <meta
           httpEquiv="Content-Security-Policy"
-          content={`default-src 'self' http://localhost:* https://*.cloudinary.com data: blob:;
+          content={`default-src 'self' http://localhost:* https://*.cloudinary.com https://techpharma-backend.onrender.com data: blob:;
             script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.cloudinary.com https://upload-widget.cloudinary.com;
             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://upload-widget.cloudinary.com;
             font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:;
