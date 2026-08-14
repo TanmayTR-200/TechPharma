@@ -84,10 +84,6 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       if (response.success) {
         setCart(response.cart);
-        toast({
-          title: 'Success',
-          description: 'Item added to cart',
-        });
       }
     } catch (error: any) {
       console.error('Error adding to cart:', error);
@@ -153,9 +149,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const checkout = async (paymentMethod: string, shippingAddress: any) => {
     try {
       setIsLoading(true);
+      // Generate idempotency key to prevent duplicate orders from double-clicks
+      const idempotencyKey = `checkout_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const response = await fetcher(`${API_ENDPOINTS.cart.base}/checkout`, {
         method: 'POST',
-        body: JSON.stringify({ paymentMethod, shippingAddress }),
+        body: JSON.stringify({ paymentMethod, shippingAddress, idempotencyKey }),
       });
 
       if (response.success) {

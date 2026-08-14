@@ -63,6 +63,8 @@ router.get('/conversations', authenticate, async (req, res) => {
       }))
       .sort((a, b) => new Date(b.lastMessageTime || 0).getTime() - new Date(a.lastMessageTime || 0).getTime());
 
+    console.log(`[messages] user=${req.user._id} totalMsgs=${messages.length} conversations=${conversations.length}`);
+
     res.json({ success: true, conversations });
   } catch (error) {
     console.error('Error fetching conversations:', error);
@@ -101,7 +103,7 @@ router.get('/:userId', authenticate, async (req, res) => {
   }
 });
 
-// Send a new message
+// Send a new message (with lock for concurrent send safety)
 router.post('/send', authenticate, async (req, res) => {
   try {
     const { content, receiverId } = req.body;
@@ -114,21 +116,29 @@ router.post('/send', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: 'receiverId is required' });
     }
 
-    const messages = readJsonFile(getMessagesFilePath());
+    const { withLock } = require('../inventory/lock');
 
-    const newMessage = {
-      _id: Date.now().toString(),
-      senderId: req.user._id,
-      receiverId: receiverId,
-      content: content.trim(),
-      timestamp: new Date().toISOString(),
-      read: false,
-    };
+    const result = await withLock(() => {
+      const messages = readJsonFile(getMessagesFilePath());
 
-    messages.push(newMessage);
-    writeJsonFile(getMessagesFilePath(), messages);
+      // Use collision-safe ID + server timestamp for ordering
+      const now = Date.now();
+      const newMessage = {
+        _id: now.toString() + Math.random().toString(36).slice(2, 6),
+        senderId: req.user._id,
+        receiverId: receiverId,
+        content: content.trim(),
+        timestamp: new Date(now).toISOString(),
+        serverTimestamp: now,
+        read: false,
+      };
 
-    res.json({ success: true, message: newMessage });
+      messages.push(newMessage);
+      writeJsonFile(getMessagesFilePath(), messages);
+      return { message: newMessage };
+    });
+
+    res.json({ success: true, message: result.message });
   } catch (error) {
     console.error('Error sending message:', error);
     res.status(500).json({ success: false, message: 'Failed to send message' });

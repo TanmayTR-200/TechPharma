@@ -53,7 +53,7 @@ export default function SupplierSupportPage() {
       <main className="flex-1 bg-secondary/30">
         <div className="container-app py-12">
           <div className="mx-auto max-w-3xl">
-            <h1 className="text-2xl font-bold text-foreground">Supplier support</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Supplier support</h1>
             <p className="mt-1 text-muted-foreground">We're here to help you succeed on TechPharma</p>
 
             {/* Support options */}

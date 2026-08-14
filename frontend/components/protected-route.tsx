@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { SkeletonLoader } from "@/components/skeleton-loader"
 import { useAuth } from '@/contexts/auth';
 
 interface ProtectedRouteProps {
@@ -14,25 +15,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     if (!isLoading && !user) {
-      // If we're not loading and there's no user, redirect to login
       router.push('/auth?mode=login&message=auth_required');
     }
   }, [user, isLoading, router]);
 
-  // Show loading state while checking authentication
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className="pt-14 min-h-screen">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <SkeletonLoader type="dashboard" />
+        </div>
       </div>
     );
   }
 
-  // If not loading and no user, render nothing (redirect will happen)
   if (!user) {
     return null;
   }
 
-  // User is authenticated, show protected content
   return <>{children}</>;
 }

@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { LoginForm } from "@/components/auth/login-form"
 import { SignupForm } from "@/components/auth/signup-form"
+import { SkeletonLoader } from "@/components/skeleton-loader"
 
 const points = [
   { icon: Package, text: "List products with photos and pricing" },
@@ -28,28 +29,25 @@ function AuthContent() {
   return (
     <div className="min-h-screen flex items-stretch relative z-10">
       {/* Left — brand showcase */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-16 bg-secondary">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-16 bg-foreground text-background">
         <Link href="/" className="inline-flex items-center gap-2.5 mb-12">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-            <span className="text-primary-foreground font-bold text-sm">T</span>
-          </div>
-          <span className="text-lg font-bold text-foreground">TechPharma</span>
+          <span className="font-display text-lg font-bold tracking-[0.2em] uppercase text-background">TechPharma</span>
         </Link>
 
-        <h2 className="text-3xl font-bold text-foreground mb-3 leading-tight">
+        <h2 className="font-display text-3xl font-bold text-background mb-3 leading-tight">
           List products. Get orders.
         </h2>
-        <p className="text-sm text-muted-foreground mb-10 max-w-sm leading-relaxed">
+        <p className="text-sm text-background/60 mb-10 max-w-sm leading-relaxed">
           A marketplace for B2B suppliers and buyers.
         </p>
 
         <div className="space-y-3 max-w-sm">
           {points.map((p) => (
             <div key={p.text} className="flex items-center gap-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 flex-shrink-0">
-                <p.icon className="h-4 w-4 text-primary" />
+              <div className="flex h-8 w-8 items-center justify-center border border-background/20 flex-shrink-0">
+                <p.icon className="h-4 w-4 text-background" />
               </div>
-              <span className="text-sm text-foreground">{p.text}</span>
+              <span className="text-sm text-background/80">{p.text}</span>
             </div>
           ))}
         </div>
@@ -60,12 +58,7 @@ function AuthContent() {
         <div className="w-full max-w-sm mx-auto">
           {/* Mobile logo */}
           <div className="lg:hidden mb-8 text-center">
-            <Link href="/" className="inline-flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <span className="text-primary-foreground font-bold text-sm">T</span>
-              </div>
-              <span className="text-lg font-bold text-foreground">TechPharma</span>
-            </Link>
+            <Link href="/" className="font-display text-lg font-bold tracking-[0.2em] uppercase text-foreground">TechPharma</Link>
           </div>
 
           <Tabs defaultValue={searchParams.get('mode') || 'login'} className="w-full">
@@ -90,7 +83,7 @@ function AuthContent() {
 
 export default function AuthPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div></div>}>
+    <Suspense fallback={<SkeletonLoader type="default" />}>
       <AuthContent />
     </Suspense>
   )

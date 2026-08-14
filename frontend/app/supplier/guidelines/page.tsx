@@ -1,6 +1,6 @@
 'use client'
 
-import { Package, DollarSign, Truck, Shield, FileText, AlertCircle } from 'lucide-react'
+import { Package, IndianRupee, Truck, Shield, FileText, AlertCircle } from 'lucide-react'
 import { Footer } from '@/components/footer'
 
 const sections = [
@@ -15,7 +15,7 @@ const sections = [
     ],
   },
   {
-    icon: DollarSign,
+    icon: IndianRupee,
     title: 'Pricing guidelines',
     items: [
       'Prices must be inclusive of all taxes (GST)',
@@ -52,7 +52,7 @@ export default function SupplierGuidelinesPage() {
       <main className="flex-1 bg-secondary/30">
         <div className="container-app py-12">
           <div className="mx-auto max-w-3xl">
-            <h1 className="text-2xl font-bold text-foreground">Supplier guidelines</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Supplier guidelines</h1>
             <p className="mt-1 text-muted-foreground">Rules and best practices for selling on TechPharma</p>
 
             {/* Important notice */}

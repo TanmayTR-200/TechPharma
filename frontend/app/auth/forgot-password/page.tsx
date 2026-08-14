@@ -49,7 +49,7 @@ export default function ForgotPasswordPage() {
           <span className="font-semibold text-sm tracking-tight text-foreground">TechPharma</span>
         </Link>
 
-        <div className="glass-card p-6">
+        <div className="bg-card border border-border p-6">
           <h1 className="text-xl font-semibold text-foreground mb-1">Reset your password</h1>
           <p className="text-sm text-muted-foreground mb-6">Enter your email and we'll send you instructions to reset it.</p>
 

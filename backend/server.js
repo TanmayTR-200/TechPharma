@@ -9,9 +9,24 @@ const path = require('path');
 const fs = require('fs');
 require('dotenv').config();
 
+// Inventory reservation system
+const inventory = require('./src/inventory/reservation');
+const inventoryRoutes = require('./src/routes/inventory');
+const { withLock } = require('./src/inventory/lock');
+const rateLimit = require('express-rate-limit');
+
 const app = express();
-const PORT = process.env.PORT || 5000; // Use port from env or default to 5000
+const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Rate limiter for auth endpoints (prevents brute-force)
+const authLimiter = rateLimit({
+  windowMs: 60 * 1000,  // 1 minute
+  max: 5,                // 5 requests per minute per IP
+  message: { success: false, message: 'Too many attempts. Please try again in a minute.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Helper to read JSON files
 function readJsonFile(filePath) {
@@ -30,7 +45,7 @@ function writeJsonFile(filePath, data) {
 function initStorage() {
   try {
     // Create data directory if it doesn't exist
-    const dataDir = path.join(__dirname, './data');
+    const dataDir = path.join(__dirname, '../data');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
@@ -125,16 +140,20 @@ const authMiddleware = async (req, res, next) => {
 
 
 // Auth Routes
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
-    const { email, password, name, role } = req.body;
+    const { email, password, name } = req.body;
 
-    if (!email || !password || !name || !role) {
+    if (!email || !password || !name) {
       return res.status(400).json({
         success: false,
         message: 'All fields are required'
       });
     }
+
+    // Role is no longer required upfront — everyone can be both buyer & seller.
+    // Default to 'member' (informational only; not used for access control).
+    const role = req.body.role || 'member';
 
     // Read users from file
     const usersFile = path.join(__dirname, './data/users.json');
@@ -185,7 +204,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 const { sendPasswordResetEmail } = require('./src/utils/email');
 
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -297,7 +316,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -387,6 +406,19 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
+// Logout — invalidate token
+app.post('/api/auth/logout', authMiddleware, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (token) {
+      authMiddleware.blacklistToken(token);
+    }
+    res.json({ success: true, message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error during logout' });
+  }
+});
+
 // Category counts
 app.get('/api/products/category-counts', async (req, res) => {
   try {
@@ -420,8 +452,8 @@ app.get('/api/products/featured', async (req, res) => {
 
     const featured = products
       .filter(p => p.status === 'active')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 6)
+      .sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0))
+      .slice(0, 3)
       .map(p => {
         const supplier = userMap.get(p.userId);
         return {
@@ -435,6 +467,40 @@ app.get('/api/products/featured', async (req, res) => {
   } catch (error) {
     console.error('Featured products error:', error);
     res.status(500).json({ success: false, message: 'Error fetching featured products' });
+  }
+});
+
+// All products for carousel (random 5)
+app.get('/api/products/all', async (req, res) => {
+  try {
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+
+    const token = req.headers.authorization?.split(' ')[1];
+    let isAuthed = false;
+    if (token) {
+      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+    }
+
+    const userMap = new Map(users.map(u => [u._id, u]));
+
+    const active = products
+      .filter(p => p.status === 'active')
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 5)
+      .map(p => {
+        const supplier = userMap.get(p.userId);
+        return {
+          ...p,
+          supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller',
+          supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null
+        };
+      });
+
+    res.json({ success: true, products: active });
+  } catch (error) {
+    console.error('All products error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching products' });
   }
 });
 
@@ -579,9 +645,10 @@ app.post('/api/products', authMiddleware, async (req, res) => {
   }
 });
 
-// Update product
+// Update product (with optimistic locking)
 app.put('/api/products/:id', authMiddleware, async (req, res) => {
   try {
+    const { name, description, price, category, stock, images, version } = req.body;
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
     const index = products.findIndex(p => p._id === req.params.id);
 
@@ -593,15 +660,24 @@ app.put('/api/products/:id', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized to update this product' });
     }
 
-    const { name, description, price, category, stock, images } = req.body;
+    // Optimistic locking: check version
+    if (version !== undefined && products[index].version !== undefined && version !== products[index].version) {
+      return res.status(409).json({ success: false, message: 'Product was modified by another user. Please refresh and try again.' });
+    }
+
+    const oldStock = products[index].stock;
+    const newStock = stock !== undefined ? Number(stock) : oldStock;
+
     products[index] = {
       ...products[index],
       name: name?.trim() || products[index].name,
       description: description?.trim() || products[index].description,
       price: price !== undefined ? Number(price) : products[index].price,
       category: category?.trim() || products[index].category,
-      stock: stock !== undefined ? Number(stock) : products[index].stock,
+      stock: newStock,
+      available_stock: newStock,
       images: images || products[index].images,
+      version: (products[index].version || 0) + 1,
       updatedAt: new Date().toISOString()
     };
 
@@ -635,7 +711,7 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
 
     // Remove product
     const [deletedProduct] = products.splice(index, 1);
-    writeJsonFile(path.join(__dirname, '../../data/products.json'), products);
+    writeJsonFile(path.join(__dirname, './data/products.json'), products);
 
     res.json({
       success: true,
@@ -648,6 +724,49 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
       success: false,
       message: 'Error deleting product'
     });
+  }
+});
+
+// Public supplier profile + their products
+app.get('/api/supplier/:id', async (req, res) => {
+  try {
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const user = users.find(u => u._id === req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Supplier not found' });
+    }
+
+    // Get all products listed by this supplier (public)
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const supplierProducts = products
+      .filter(p => p.status === 'active' && (p.userId === user._id || p.supplierId === user._id))
+      .map(p => ({
+        _id: p._id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        category: p.category,
+        stock: p.available_stock !== undefined ? p.available_stock : p.stock,
+        images: p.images,
+      }));
+
+    res.json({
+      success: true,
+      supplier: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        company: user.company || null,
+        createdAt: user.createdAt,
+        products: supplierProducts,
+        productCount: supplierProducts.length,
+      }
+    });
+  } catch (error) {
+    console.error('Supplier fetch error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching supplier' });
   }
 });
 
@@ -683,6 +802,7 @@ const messagesRoutes = require('./src/routes/messages');
 // Use routes
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/messages', messagesRoutes);
+app.use('/api/inventory', inventoryRoutes);
 
 // Notification routes
 app.get('/api/notifications', authMiddleware, async (req, res) => {
@@ -729,22 +849,34 @@ app.post('/api/notifications', authMiddleware, async (req, res) => {
 
 app.post('/api/notifications/:id/read', authMiddleware, async (req, res) => {
   try {
-    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-    const idx = all.findIndex(n => n._id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
-    all[idx].read = true;
-    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
-    res.json({ success: true, notification: all[idx] });
+    const result = await withLock(() => {
+      const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+      const idx = all.findIndex(n => n._id === req.params.id);
+      if (idx === -1) throw { status: 404, message: 'Not found' };
+      all[idx].read = true;
+      writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+      return { notification: all[idx] };
+    });
+    res.json({ success: true, notification: result.notification });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error marking as read' });
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Error marking as read' });
   }
 });
 
 app.post('/api/notifications/mark-all-read', authMiddleware, async (req, res) => {
   try {
-    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-    all.forEach(n => { if (!n.userId || n.userId === req.user._id) n.read = true; });
-    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    await withLock(() => {
+      const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+      let changed = false;
+      all.forEach(n => {
+        if ((!n.userId || n.userId === req.user._id) && !n.read) {
+          n.read = true;
+          changed = true;
+        }
+      });
+      if (changed) writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error marking all as read' });
@@ -788,6 +920,483 @@ app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// Order routes (file-based)
+app.get('/api/orders', authMiddleware, async (req, res) => {
+  try {
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const userOrders = orders.filter(o => o.userId === req.user._id);
+
+    // Resolve product details for each order item
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const productMap = new Map(products.map(p => [p._id, p]));
+
+    // Build user map for supplier names
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const userMap = new Map(users.map(u => [u._id, u]));
+
+    userOrders.forEach(order => {
+      order.items = order.items.map(item => {
+        if (item.product && item.product.name && item.product.name !== 'Product' && item.price > 0) return item;
+        const product = productMap.get(item.product?._id || item.productId);
+        if (product) {
+          const supplier = userMap.get(product.userId);
+          return {
+            ...item,
+            product: { _id: product._id, name: product.name },
+            price: product.price,
+            supplierName: supplier?.name || 'Seller'
+          };
+        }
+        return item;
+      });
+
+      // Also resolve supplierName for items that already had product data
+      order.items.forEach(item => {
+        if (!item.supplierName) {
+          const product = productMap.get(item.product?._id || item.productId);
+          if (product) {
+            const supplier = userMap.get(product.userId);
+            item.supplierName = supplier?.name || 'Seller';
+          }
+        }
+      });
+
+      // Recalculate total if it was 0
+      if (!order.totalAmount || order.totalAmount === 0) {
+        order.totalAmount = order.items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0);
+      }
+    });
+
+    res.json({ success: true, orders: userOrders });
+  } catch (error) {
+    console.error('Orders error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching orders' });
+  }
+});
+
+app.post('/api/orders/:id/archive', authMiddleware, async (req, res) => {
+  try {
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const order = orders.find(o => o._id === req.params.id && o.userId === req.user._id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+    order.archived = true;
+    writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error archiving order' });
+  }
+});
+
+// Helper: build sold-products aggregation for a given sellerId
+function buildSoldProducts(orders, users, products, sellerId) {
+  const userMap = new Map(users.map(u => [u._id, u]));
+  const productMap = new Map(products.map(p => [p._id, p]));
+  const sales = [];
+  orders.forEach(order => {
+    const buyer = userMap.get(order.userId) || {};
+    order.items.forEach(item => {
+      // Resolve missing product data (legacy orders may only have productId)
+      const product = productMap.get(item.product?._id || item.productId);
+      const realItem = {
+        productId: item.product?._id || item.productId || product?._id || null,
+        productName: item.product?.name && item.product?.name !== 'Product' ? item.product.name : (product?.name || 'Product'),
+        quantity: item.quantity,
+        price: item.price > 0 ? item.price : (product?.price ?? 0),
+        sellerId: item.sellerId || product?.userId || product?.supplierId || null,
+      };
+      if (realItem.sellerId === sellerId) {
+        sales.push({
+          orderId: order._id,
+          productId: realItem.productId,
+          productName: realItem.productName,
+          quantity: realItem.quantity,
+          price: realItem.price,
+          revenue: (realItem.price || 0) * (realItem.quantity || 1),
+          soldAt: order.createdAt,
+          buyer: {
+            _id: order.userId,
+            name: order.buyerName || buyer.name || 'Unknown',
+            email: order.buyerEmail || buyer.email || '',
+          },
+          paymentMethod: order.paymentMethod,
+          shippingAddress: order.shippingAddress || {},
+        });
+      }
+    });
+  });
+  const perProduct = {};
+  sales.forEach(s => {
+    const key = s.productId || s.productName;
+    if (!perProduct[key]) {
+      perProduct[key] = { _id: s.productId, name: s.productName, quantitySold: 0, revenue: 0, lastSoldAt: s.soldAt, buyers: [] };
+    }
+    perProduct[key].quantitySold += s.quantity;
+    perProduct[key].revenue += s.revenue;
+    if (new Date(s.soldAt) > new Date(perProduct[key].lastSoldAt)) perProduct[key].lastSoldAt = s.soldAt;
+    perProduct[key].buyers.push({ name: s.buyer.name, email: s.buyer.email, quantity: s.quantity, date: s.soldAt, orderId: s.orderId });
+  });
+  const resultProducts = Object.values(perProduct).sort((a, b) => b.revenue - a.revenue);
+  return { products: resultProducts, sales };
+}
+
+// Sold products for the current user (the seller)
+app.get('/api/sold-products', authMiddleware, async (req, res) => {
+  try {
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const { products: sold, sales } = buildSoldProducts(orders, users, products, req.user._id);
+    res.json({ success: true, products: sold, sales });
+  } catch (error) {
+    console.error('Sold products error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching sold products' });
+  }
+});
+
+// Sold products for a specific seller
+app.get('/api/sold-products/:sellerId', authMiddleware, async (req, res) => {
+  try {
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const { products: pp, sales } = buildSoldProducts(orders, users, products, req.params.sellerId);
+    res.json({ success: true, products: pp, sales });
+  } catch (error) {
+    console.error('Sold products error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching sold products' });
+  }
+});
+
+app.get('/api/orders/stats', authMiddleware, async (req, res) => {
+  try {
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const userOrders = orders.filter(o => o.userId === req.user._id);
+    res.json({
+      success: true,
+      stats: {
+        total: userOrders.length,
+        pending: userOrders.filter(o => o.status === 'pending').length,
+        completed: userOrders.filter(o => o.status === 'completed').length,
+        revenue: userOrders.filter(o => o.status === 'completed').reduce((sum, o) => sum + (o.totalAmount || 0), 0)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching order stats' });
+  }
+});
+
+// Cart routes (file-based)
+const getCartFilePath = () => path.join(__dirname, './data/carts.json');
+
+app.get('/api/cart', authMiddleware, async (req, res) => {
+  try {
+    const carts = readJsonFile(getCartFilePath());
+    let cart = carts.find(c => c.userId === req.user._id);
+    if (!cart) {
+      return res.json({ success: true, cart: { items: [], total: 0 } });
+    }
+
+    // Resolve product details for each cart item
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const userMap = new Map(readJsonFile(path.join(__dirname, './data/users.json')).map(u => [u._id, u]));
+
+    cart.items = cart.items.map(item => {
+      if (item.product && item.product.name) return item; // already has product data
+      const product = products.find(p => p._id === item.productId);
+      if (product) {
+        const supplier = userMap.get(product.userId);
+        return {
+          ...item,
+          product: {
+            _id: product._id,
+            name: product.name,
+            price: product.price,
+            images: product.images,
+            stock: product.stock
+          }
+        };
+      }
+      return item;
+    });
+
+    cart.total = cart.items.reduce((sum, item) => {
+      const price = item.product?.price || 0;
+      return sum + (price * (item.quantity || 1));
+    }, 0);
+
+    res.json({ success: true, cart });
+  } catch (error) {
+    console.error('Get cart error:', error);
+    res.status(500).json({ success: false, message: 'Error fetching cart' });
+  }
+});
+
+app.post('/api/cart/add', authMiddleware, async (req, res) => {
+  try {
+    const { productId, quantity } = req.body;
+    const qty = parseInt(quantity) || 1;
+
+    const result = await withLock(() => {
+      const carts = readJsonFile(getCartFilePath());
+      const products = readJsonFile(path.join(__dirname, './data/products.json'));
+      const product = products.find(p => p._id === productId);
+
+      if (!product) {
+        throw { status: 404, message: 'Product not found' };
+      }
+
+      // Check stock availability
+      const available = product.available_stock !== undefined ? product.available_stock : product.stock || 0;
+      if (available < qty) {
+        throw { status: 409, message: `Only ${available} units available` };
+      }
+
+      let cart = carts.find(c => c.userId === req.user._id);
+      if (!cart) {
+        cart = { _id: Date.now().toString() + Math.random().toString(36).slice(2, 6), userId: req.user._id, items: [], total: 0, version: 0 };
+        carts.push(cart);
+      }
+
+      const existingItem = cart.items.find(item => item.productId === productId);
+      if (existingItem) {
+        const newQty = existingItem.quantity + qty;
+        if (newQty > available) {
+          throw { status: 409, message: `Cannot add ${qty} more. Only ${available - existingItem.quantity} additional units available.` };
+        }
+        existingItem.quantity = newQty;
+        // Update price snapshot to current price
+        existingItem.product.price = product.price;
+      } else {
+        cart.items.push({
+          productId,
+          quantity: qty,
+          addedAt: new Date().toISOString(),
+          product: {
+            _id: product._id,
+            name: product.name,
+            price: product.price,
+            images: product.images,
+            stock: product.stock
+          }
+        });
+      }
+
+      cart.version = (cart.version || 0) + 1;
+      cart.total = cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0);
+
+      writeJsonFile(getCartFilePath(), carts);
+      return { cart };
+    });
+
+    res.json({ success: true, cart: result.cart });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Error adding to cart' });
+  }
+});
+
+app.put('/api/cart/update/:productId', authMiddleware, async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { quantity, cartVersion } = req.body;
+
+    const result = await withLock(() => {
+      const carts = readJsonFile(getCartFilePath());
+      const cart = carts.find(c => c.userId === req.user._id);
+
+      if (!cart) {
+        throw { status: 404, message: 'Cart not found' };
+      }
+
+      // Optimistic concurrency: check cart version
+      if (cartVersion !== undefined && cart.version !== undefined && cartVersion !== cart.version) {
+        throw { status: 409, message: 'Cart has been modified by another session. Please refresh.' };
+      }
+
+      const item = cart.items.find(item => item.productId === productId);
+      if (!item) {
+        throw { status: 404, message: 'Item not found in cart' };
+      }
+
+      if (quantity <= 0) {
+        cart.items = cart.items.filter(item => item.productId !== productId);
+      } else {
+        // Validate against stock
+        const products = readJsonFile(path.join(__dirname, './data/products.json'));
+        const product = products.find(p => p._id === productId);
+        const available = product ? (product.available_stock !== undefined ? product.available_stock : product.stock || 0) : 0;
+        if (quantity > available) {
+          throw { status: 409, message: `Only ${available} units available` };
+        }
+        item.quantity = quantity;
+      }
+
+      cart.version = (cart.version || 0) + 1;
+      cart.total = cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0);
+
+      writeJsonFile(getCartFilePath(), carts);
+      return { cart };
+    });
+
+    res.json({ success: true, cart: result.cart });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Error updating cart' });
+  }
+});
+
+app.delete('/api/cart/remove/:productId', authMiddleware, async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    const result = await withLock(() => {
+      const carts = readJsonFile(getCartFilePath());
+      const cart = carts.find(c => c.userId === req.user._id);
+
+      if (!cart) {
+        throw { status: 404, message: 'Cart not found' };
+      }
+
+      cart.items = cart.items.filter(item => item.productId !== productId);
+      cart.version = (cart.version || 0) + 1;
+      cart.total = cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0);
+
+      writeJsonFile(getCartFilePath(), carts);
+      return { cart };
+    });
+
+    res.json({ success: true, cart: result.cart });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Error removing from cart' });
+  }
+});
+
+app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
+  try {
+    const { paymentMethod, shippingAddress, idempotencyKey } = req.body;
+
+    const result = await withLock(() => {
+      const carts = readJsonFile(getCartFilePath());
+      const cart = carts.find(c => c.userId === req.user._id);
+
+      if (!cart || cart.items.length === 0) {
+        throw { status: 400, message: 'Cart is empty' };
+      }
+
+      // Idempotency: check if this checkout was already processed
+      const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+      if (idempotencyKey) {
+        const existing = orders.find(o => o.idempotency_key === idempotencyKey);
+        if (existing) {
+          return { order: existing, idempotent: true };
+        }
+      }
+
+      // Validate all products are still active and have sufficient stock
+      const products = readJsonFile(path.join(__dirname, './data/products.json'));
+      for (const item of cart.items) {
+        const product = products.find(p => p._id === item.productId);
+        if (!product) {
+          throw { status: 400, message: `Product no longer exists: ${item.product?.name || item.productId}` };
+        }
+        if (product.status && product.status !== 'active') {
+          throw { status: 400, message: `Product is no longer available: ${product.name}` };
+        }
+        const available = product.available_stock !== undefined ? product.available_stock : product.stock || 0;
+        if (available < item.quantity) {
+          throw { status: 409, message: `Insufficient stock for ${product.name}. Available: ${available}, Requested: ${item.quantity}` };
+        }
+        // Use current product price (fixes stale pricing)
+        if (item.product) {
+          item.product.price = product.price;
+        }
+      }
+
+      // Decrement product stock + increment salesCount + track sellers per item
+      const mySellerId = req.user._id
+      cart.items.forEach(item => {
+        const product = products.find(p => p._id === item.productId);
+        if (product) {
+          const stockVal = product.available_stock !== undefined ? product.available_stock : product.stock;
+          const newStock = Math.max(0, stockVal - item.quantity);
+          if (product.available_stock !== undefined) {
+            product.available_stock = newStock;
+          }
+          product.stock = newStock;
+          // Track total units sold per product (used for 'featured = top sold')
+          product.salesCount = (product.salesCount || 0) + item.quantity;
+        }
+      });
+      writeJsonFile(path.join(__dirname, './data/products.json'), products);
+
+      // Build order items with sellerId and resolved buyer info
+      const orderItems = cart.items.map(item => {
+        const product = products.find(p => p._id === item.productId);
+        return {
+          product: { _id: item.product?._id || item.productId, name: item.product?.name || 'Product' },
+          quantity: item.quantity,
+          price: item.product?.price || 0,
+          sellerId: product?.userId || product?.supplierId || null,
+        };
+      });
+
+      // Create order with collision-safe ID
+      const buyerUser = readJsonFile(path.join(__dirname, './data/users.json')).find(u => u._id === req.user._id) || {};
+      const order = {
+        _id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
+        userId: req.user._id,  // the BUYER
+        buyerName: buyerUser.name || '',
+        buyerEmail: buyerUser.email || '',
+        items: orderItems,
+        totalAmount: cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0),
+        status: 'pending',
+        paymentMethod: paymentMethod || 'cod',
+        shippingAddress: shippingAddress || {},
+        createdAt: new Date().toISOString(),
+        idempotency_key: idempotencyKey || null
+      };
+
+      orders.push(order);
+      writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
+
+      // Notify sellers that they have a new order
+      const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
+      const notified = new Set();
+      orderItems.forEach(item => {
+        if (item.sellerId && !notified.has(item.sellerId)) {
+          notified.add(item.sellerId);
+          notifications.push({
+            _id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+            userId: item.sellerId,
+            title: 'New order received',
+            message: `You have a new order from ${buyerUser.name || 'a buyer'} for ${item.product.name}.`,
+            type: 'order_placed',
+            read: false,
+            archived: false,
+            createdAt: new Date().toISOString(),
+            metadata: { orderId: order._id, productId: item.product._id, buyerId: req.user._id, buyerName: req.user.name || '' },
+          });
+        }
+      });
+      if (notified.size > 0) writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
+
+      // Clear cart
+      cart.items = [];
+      cart.total = 0;
+      cart.version = (cart.version || 0) + 1;
+      writeJsonFile(getCartFilePath(), carts);
+
+      return { order, idempotent: false };
+    });
+
+    res.json({ success: true, order: result.order, idempotent: result.idempotent || false });
+  } catch (error) {
+    const status = error.status || 500;
+    res.status(status).json({ success: false, message: error.message || 'Error during checkout' });
+  }
+});
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
@@ -802,7 +1411,15 @@ const startServer = async () => {
   try {
     // Initialize storage
     initStorage();
-    
+
+    // Migrate product schema to inventory model (total_stock, available_stock, reserved_stock, sold)
+    inventory.migrateProducts();
+    console.log('[inventory] Product schema migrated');
+
+    // Start background reservation expiration job (runs every 60s)
+    inventory.startExpirationJob(60000);
+    console.log('[inventory] Expiration job started (60s interval)');
+
     // Start Express server
     console.log('Starting Express server...');
     const server = await new Promise((resolve, reject) => {

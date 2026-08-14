@@ -53,6 +53,7 @@ export default function ChatPage() {
   const [seller, setSeller] = useState<Seller | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const messagesRef = useRef<Message[]>([])
   const productParam = searchParams.get('product');
   const [previewProductId, setPreviewProductId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -106,7 +107,15 @@ export default function ChatPage() {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.success && response.messages) {
-        setMessages(response.messages);
+        // Only update state if the message list actually changed (avoids re-render flash on every 5s poll)
+        const next = response.messages;
+        const changed =
+          next.length !== messagesRef.current.length ||
+          next.some((m: any, i: number) => m._id !== (messagesRef.current[i]?._id));
+        if (changed) {
+          messagesRef.current = next;
+          setMessages(next);
+        }
       }
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -198,7 +207,11 @@ export default function ChatPage() {
             console.error('Error attaching product info to message:', error);
           }
         }
-        setMessages(prev => [...prev, updatedMessage]);
+        setMessages(prev => {
+          const next = [...prev, updatedMessage];
+          messagesRef.current = next;
+          return next;
+        });
         // Update local recent conversations so the sidebar at /messages shows this chat
         try {
           const raw = localStorage.getItem('recentConversations')
@@ -253,7 +266,13 @@ export default function ChatPage() {
       <div className="flex flex-col bg-card overflow-hidden rounded-lg border border-border" style={{ height: 'calc(100vh - 220px)' }}>
         {/* Chat header */}
         <div className="p-4 border-b border-border">
-          <h2 className="text-lg font-medium text-foreground">{seller?.name || 'Unknown Seller'}</h2>
+          <button
+            onClick={() => router.push('/supplier/' + params.id)}
+            className="text-lg font-medium text-foreground hover:text-primary transition-colors text-left"
+            title="View seller profile"
+          >
+            {seller?.name || 'Unknown Seller'}
+          </button>
         </div>
         {/* Messages area */}
         <div ref={scrollRef} className="flex-1 p-4 overflow-y-auto">
@@ -311,7 +330,7 @@ export default function ChatPage() {
                                     alert(`Product "${productName}" not found. It may have been removed.`);
                                   }
                                 }}
-                                className="text-primary-foreground underline cursor-pointer bg-transparent border-0"
+                                className="text-background underline cursor-pointer bg-transparent border-0"
                               >
                                 {msg.productInfo?.name || msg.content.split("getting more details about the product: ")[1]}
                               </button>
@@ -350,7 +369,7 @@ export default function ChatPage() {
             />
             <button
               onClick={handleSend}
-              className="bg-primary text-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors h-fit"
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors h-fit"
             >
               Send
             </button>

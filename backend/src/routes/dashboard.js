@@ -87,4 +87,70 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Analytics for the current user
+router.get('/analytics', authenticate, async (req, res) => {
+  try {
+    const userId = String(req.user._id || req.user.userId);
+    const products = readJsonFile(path.join(__dirname, '../../data/products.json'));
+    const orders = readJsonFile(path.join(__dirname, '../../data/orders.json'));
+    const productMap = new Map(products.map(p => [p._id, p]));
+
+    const userProducts = products.filter(p =>
+      String(p.userId || p.supplierId || '') === userId && (!p.status || p.status === 'active')
+    );
+
+    // Sales: all orders where this user is the seller of an item (sellerId, or product owner)
+    let totalSales = 0;
+    let sellerOrders = 0;
+    const topSales = new Map();
+
+    orders.forEach(order => {
+      let orderHasSale = false;
+      order.items.forEach(item => {
+        const product = productMap.get(item.product?._id || item.productId);
+        const sellerId = String(item.sellerId || product?.userId || product?.supplierId || '');
+        if (sellerId === userId) {
+          const amount = (item.price > 0 ? item.price : (product?.price || 0)) * (item.quantity || 1);
+          const name = item.product?.name && item.product?.name !== 'Product' ? item.product.name : (product?.name || 'Product');
+          totalSales += amount;
+          orderHasSale = true;
+          topSales.set(name, (topSales.get(name) || 0) + amount);
+        }
+      });
+      if (orderHasSale) sellerOrders++;
+    });
+
+    const topProducts = Array.from(topSales.entries()).map(([name, sales]) => ({ name, sales }));
+
+    res.json({
+      success: true,
+      data: {
+        stats: {
+          totalProducts: userProducts.length,
+          recentOrders: sellerOrders,
+          revenue: totalSales,
+        },
+        orders: orders.filter(o => o.items.some(item =>
+          String(item.sellerId || productMap.get(item.product?._id || item.productId)?.userId || '') === userId
+        )).slice(0, 10).map(o => ({
+          _id: o._id,
+          items: o.items || [],
+          totalAmount: o.totalAmount || 0,
+          status: o.status,
+          createdAt: o.createdAt,
+        })),
+        analytics: {
+          totalSales,
+          totalOrders: sellerOrders,
+          averageOrderValue: sellerOrders ? (totalSales / sellerOrders) : 0,
+          topProducts,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Analytics error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
+  }
+});
+
 module.exports = router;

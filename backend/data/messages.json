@@ -102,5 +102,23 @@
     "content": "I am interested in getting more details about the product: Arduino set",
     "timestamp": "2026-01-05T18:43:51.893Z",
     "read": true
+  },
+  {
+    "_id": "1786700417830g35i",
+    "senderId": "1760360335467",
+    "receiverId": "1760257427529",
+    "content": "I am interested in getting more details about the product: Drilling Machin",
+    "timestamp": "2026-08-14T09:40:17.830Z",
+    "serverTimestamp": 1786700417830,
+    "read": false
+  },
+  {
+    "_id": "1786700438565sh1v",
+    "senderId": "1760360335467",
+    "receiverId": "1760257427529",
+    "content": "I am interested in getting more details about the product: Drilling Mach",
+    "timestamp": "2026-08-14T09:40:38.565Z",
+    "serverTimestamp": 1786700438565,
+    "read": false
   }
 ]

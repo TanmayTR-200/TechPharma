@@ -22,7 +22,7 @@ export default function SupplierVerificationPage() {
       <main className="flex-1 bg-secondary/30">
         <div className="container-app py-12">
           <div className="mx-auto max-w-3xl">
-            <h1 className="text-2xl font-bold text-foreground">Account verification</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Account verification</h1>
             <p className="mt-1 text-muted-foreground">Track the status of your submitted documents</p>
 
             {/* Status banner */}

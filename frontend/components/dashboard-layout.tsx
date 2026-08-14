@@ -10,16 +10,14 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { motion } from "framer-motion"
 
-interface SidebarItem { icon: ElementType; label: string; href: string; roles?: string[] }
+interface SidebarItem { icon: ElementType; label: string; href: string }
 
 const sidebarItems: SidebarItem[] = [
   { icon: BarChart3, label: "Dashboard", href: "/dashboard" },
   { icon: Package, label: "Products", href: "/products" },
   { icon: ShoppingCart, label: "Orders", href: "/orders" },
-  { icon: TrendingUp, label: "Sales", href: "/sales", roles: ["supplier"] },
-  { icon: Package, label: "Sold Products", href: "/sold-products", roles: ["supplier"] },
+  { icon: TrendingUp, label: "Sales", href: "/sales" },
   { icon: Mail, label: "Messages", href: "/messages" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ]
@@ -32,7 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-screen relative z-10">
       <button
-        className="fixed top-16 left-3 z-50 lg:hidden flex items-center justify-center h-9 w-9 glass-card"
+        className="fixed top-16 left-3 z-50 lg:hidden flex items-center justify-center h-9 w-9 bg-card border border-border"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
@@ -42,20 +40,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <aside className={"fixed inset-y-0 left-0 z-40 w-56 bg-card border-r border-border transition-transform duration-200 lg:translate-x-0 " + (mobileOpen ? 'translate-x-0' : '-translate-x-full') + " pt-14"}>
         <nav className="px-3 py-4 space-y-0.5">
-          {sidebarItems.map((item, idx) => {
-            if (item.roles && (!user || !item.roles.includes(user.role))) return null
+          {sidebarItems.map((item) => {
             const isActive = pathname === item.href
             return (
-              <motion.div key={item.label} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.04 }}>
-                <Link
-                  href={item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={"flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all " + (isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground")}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                </Link>
-              </motion.div>
+              <Link
+                key={item.label}
+                href={item.href}
+                onClick={() => setMobileOpen(false)}
+                className={"flex items-center gap-2.5 px-3 py-2 text-sm transition-colors " + (isActive ? "bg-secondary text-foreground font-medium" : "text-muted-foreground hover:text-foreground hover:bg-secondary/50")}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </Link>
             )
           })}
         </nav>
@@ -64,7 +60,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="flex items-center gap-2 px-2 py-2 mb-1">
             <Avatar className="w-8 h-8">
               <AvatarImage src="/placeholder-user.jpg" />
-              <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+              <AvatarFallback className="bg-secondary text-foreground text-xs font-medium">
                 {user ? (() => {
                   const { firstName, lastName } = splitName(user.name)
                   return (firstName[0] + (lastName[0] || '')).toUpperCase()
@@ -76,7 +72,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {user && user.company && user.company.name ? <p className="text-xs text-muted-foreground truncate">{user.company.name}</p> : null}
             </div>
           </div>
-          <button onClick={() => logout()} className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors">
+          <button onClick={() => logout()} className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors">
             <LogOut className="w-4 h-4" />
             Logout
           </button>

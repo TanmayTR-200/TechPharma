@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
+import { SkeletonLoader } from "@/components/skeleton-loader";
 import { useRouter } from 'next/navigation';
 import { User } from '@/types/user';
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config';
@@ -265,8 +266,10 @@ function AuthProviderComponent({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{ user, setUser, isLoading, login, register, logout, refreshUserData }}>
       {isLoading ? (
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="h-16 w-16 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <div className="pt-14 min-h-screen">
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            <SkeletonLoader type="dashboard" />
+          </div>
         </div>
       ) : (
         children

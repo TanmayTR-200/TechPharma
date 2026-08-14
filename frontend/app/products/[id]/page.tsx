@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, Package, MapPin, ShoppingCart, MessageSquare } from "lucide-react"
 import { useAuth } from "@/contexts/auth"
+import { SkeletonLoader } from "@/components/skeleton-loader"
 import { useToast } from "@/hooks/use-toast"
 
 interface ProductDetail {
@@ -36,13 +37,11 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/products/' + params.id)
+        const res = await fetch("http://localhost:5000/api/products/" + params.id)
         const data = await res.json()
-        if (data.success && data.product) {
-          setProduct(data.product)
-        }
+        if (data.success && data.product) setProduct(data.product)
       } catch (e) {
-        console.error('Error fetching product:', e)
+        console.error("Error fetching product:", e)
       } finally {
         setLoading(false)
       }
@@ -50,12 +49,12 @@ export default function ProductDetailPage() {
     if (params.id) fetchProduct()
   }, [params.id])
 
-  const fmt = (p) => '\u20B9' + p.toLocaleString('en-IN')
+  const fmt = (p) => "\u20B9" + p.toLocaleString("en-IN")
 
   if (loading) {
     return (
       <div className="h-[calc(100vh-56px)] flex items-center justify-center relative z-10">
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <SkeletonLoader type="product-detail" />
       </div>
     )
   }
@@ -73,47 +72,46 @@ export default function ProductDetailPage() {
   }
 
   const isOwner = user && (product.userId === user._id || product.supplier?._id === user._id)
-  const validImages = (product.images || []).filter(img => typeof img === 'string' && img.startsWith('http'))
+  const validImages = (product.images || []).filter(img => typeof img === "string" && img.startsWith("http"))
 
   const handleContactSeller = () => {
     if (!user) {
-      toast({ title: 'Login required', description: 'Please sign in to contact the seller.', variant: 'destructive' })
-      router.push('/auth?mode=login')
+      toast({ title: "Login required", description: "Please sign in to contact the seller.", variant: "destructive" })
       return
     }
     if (product.supplierId || product.supplier?._id) {
       const productInfo = encodeURIComponent(JSON.stringify({ id: product._id, name: product.name, price: product.price }))
-      router.push('/messages/' + (product.supplierId || product.supplier._id) + '?product=' + productInfo)
+      router.push("/messages/" + (product.supplierId || product.supplier._id) + "?product=" + productInfo)
     }
   }
 
   const handleAddToCart = async () => {
     if (!user) {
-      toast({ title: 'Login required', description: 'Please sign in to add to cart.', variant: 'destructive' })
-      router.push('/auth?mode=login')
+      toast({ title: "Login required", description: "Please sign in to add to cart.", variant: "destructive" })
       return
     }
     try {
-      const token = localStorage.getItem('token')
-      await fetch('http://localhost:5000/api/cart/add', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      const token = localStorage.getItem("token")
+      await fetch("http://localhost:5000/api/cart/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
         body: JSON.stringify({ productId: product._id, quantity: 1 })
       })
-      toast({ title: 'Added to cart', description: product.name + ' has been added.' })
+      toast({ title: "Added to cart", description: product.name + " has been added." })
     } catch (e) {
-      toast({ title: 'Error', description: 'Failed to add to cart.', variant: 'destructive' })
+      toast({ title: "Error", description: "Failed to add to cart.", variant: "destructive" })
     }
   }
 
   return (
-    <div className="h-[calc(100vh-56px)] overflow-hidden z-10 flex items-center justify-center">
-      <div className="w-full max-w-3xl mx-auto px-4 flex flex-col items-center">
-        <button onClick={() => router.back()} className="self-start flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-4">
+    <div className="fixed inset-y-0 right-0 left-0 lg:left-56 top-0 z-10 overflow-hidden bg-background">
+      <div className="h-full w-full max-w-4xl mx-auto px-4 flex flex-col items-center justify-center">
+        {/* Back button */}
+        <button onClick={() => router.back()} className="self-start flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3">
           <ArrowLeft className="h-3 w-3" /> Back
         </button>
 
-        <div className="grid md:grid-cols-2 gap-6 items-center w-full">
+        <div className="grid w-full gap-4 md:grid-cols-2 items-center overflow-hidden">
           {/* Images */}
           <div className="flex flex-col items-center">
             <div className="relative w-full max-w-[280px] aspect-square rounded-lg border border-border bg-secondary overflow-hidden">
@@ -141,7 +139,7 @@ export default function ProductDetailPage() {
                       <button
                         key={idx}
                         onClick={() => setCurrentImage(idx)}
-                        className={'h-1 rounded-full transition-all ' + (currentImage === idx ? 'w-3 bg-primary' : 'w-1 bg-muted-foreground/40')}
+                        className={"h-1 rounded-full transition-all " + (currentImage === idx ? "w-3 bg-primary" : "w-1 bg-muted-foreground/40")}
                       />
                     ))}
                   </div>
@@ -154,9 +152,9 @@ export default function ProductDetailPage() {
                   <button
                     key={idx}
                     onClick={() => setCurrentImage(idx)}
-                    className={'w-12 h-12 rounded border overflow-hidden ' + (currentImage === idx ? 'border-primary' : 'border-border')}
+                    className={"w-12 h-12 rounded border overflow-hidden " + (currentImage === idx ? "border-primary" : "border-border")}
                   >
-                    <img src={img} alt={'Thumbnail ' + (idx + 1)} className="w-full h-full object-cover" />
+                    <img src={img} alt={"Thumbnail " + (idx + 1)} className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>

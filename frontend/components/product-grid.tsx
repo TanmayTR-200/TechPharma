@@ -13,7 +13,7 @@ export function ProductGrid({ products, loading }: ProductGridProps) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
         {Array(8).fill(0).map((_, i) => (
-          <div key={i} className="glass-card overflow-hidden animate-fade-up">
+          <div key={i} className="border border-border overflow-hidden animate-fade-up">
             <div className="aspect-square shimmer" />
             <div className="p-4 space-y-2">
               <div className="shimmer h-4 w-3/4" />
@@ -37,7 +37,7 @@ export function ProductGrid({ products, loading }: ProductGridProps) {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5 auto-rows-min">
         {!Array.isArray(filteredProducts) || filteredProducts.length === 0 ? (
           <div className="col-span-full flex flex-col items-center justify-center p-8 text-center min-h-[400px]">
-            <div className="glass-card flex flex-col items-center p-8">
+            <div className="bg-card border border-border flex flex-col items-center p-8">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary mb-4">
                 <ShoppingCart className="h-8 w-8 text-muted-foreground" />
               </div>

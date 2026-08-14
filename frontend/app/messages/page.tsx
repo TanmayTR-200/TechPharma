@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { MessageSquare, Search } from 'lucide-react'
 import DashboardLayout from '@/components/dashboard-layout'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
+import { useAuth } from '@/contexts/auth'
 
 interface Conversation {
   _id: string
@@ -18,23 +19,34 @@ interface Conversation {
 }
 
 export default function MessagesPage() {
+  const { user } = useAuth()
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function fetchConversations() {
-      try {
-        const data = await fetcher(API_ENDPOINTS.messages.conversations)
-        setConversations(data.conversations || [])
-      } catch (err) {
-        // Use empty state
-      } finally {
-        setLoading(false)
-      }
+  const fetchConversations = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+      const data = await fetcher(API_ENDPOINTS.messages.conversations)
+      setConversations(data.conversations || [])
+    } catch (err) {
+      // Use empty state
+    } finally {
+      setLoading(false)
     }
-    fetchConversations()
   }, [])
+
+  // Refetch whenever the authenticated user changes (handles stale/expired tokens)
+  useEffect(() => {
+    if (user) {
+      setLoading(true)
+      fetchConversations()
+    } else {
+      setConversations([])
+      setLoading(false)
+    }
+  }, [user, fetchConversations])
 
   const filtered = conversations.filter((c) => {
     const name = c.senderName || c.receiverName || c.participant?.name || ''
@@ -45,7 +57,7 @@ export default function MessagesPage() {
     <DashboardLayout>
       <div className="w-full space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Messages</h1>
+          <h1 className="font-display text-2xl font-bold text-foreground">Messages</h1>
           <p className="mt-1 text-muted-foreground">Chat with buyers and suppliers</p>
         </div>
 

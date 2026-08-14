@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAuth } from '@/contexts/auth';
+import { SkeletonLoader } from "@/components/skeleton-loader";
 import { useRouter } from 'next/navigation';
 
 export default function withAuth<P extends object>(
@@ -18,7 +19,7 @@ export default function withAuth<P extends object>(
     }, [user, isLoading, router]);
 
     if (isLoading) {
-      return <div>Loading...</div>;
+      return <div className="pt-14 min-h-screen"><div className="max-w-7xl mx-auto px-6 py-8"><SkeletonLoader type="dashboard" /></div></div>;
     }
 
     if (!user) {

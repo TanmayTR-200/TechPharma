@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { ProvidersWrapper } from '@/components/providers-wrapper'
 import { ConditionalHeader } from '@/components/conditional-header'
@@ -12,6 +12,15 @@ const inter = Inter({
   display: 'swap',
   adjustFontFallback: true,
   preload: true,
+  variable: '--font-sans',
+})
+
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
+  preload: true,
+  variable: '--font-display',
 })
 
 export const metadata: Metadata = {
@@ -28,20 +37,20 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.className} suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} ${playfair.variable}`} suppressHydrationWarning>
       <head>
         <meta
           httpEquiv="Content-Security-Policy"
-          content={`default-src 'self' http://localhost:* https://*.cloudinary.com https://techpharma-backend.onrender.com data: blob:;
+          content={`default-src 'self' http://localhost:* https://*.cloudinary.com https://techpharma-backend.onrender.com https://images.unsplash.com https://images.pexels.com data: blob:;
             script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.cloudinary.com https://upload-widget.cloudinary.com;
             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://upload-widget.cloudinary.com;
             font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:;
-            img-src 'self' data: blob: https://*.cloudinary.com https://res.cloudinary.com;
+            img-src 'self' data: blob: https://*.cloudinary.com https://res.cloudinary.com https://images.unsplash.com https://images.pexels.com;
             connect-src 'self' http://localhost:* https://*.cloudinary.com https://api.cloudinary.com https://fonts.googleapis.com https://fonts.gstatic.com https://techpharma-backend.onrender.com;
             worker-src 'self' blob:;`.replace(/\s+/g, ' ').trim()}
         />
       </head>
-      <body className={inter.className}>
+      <body className="font-sans">
         <ProvidersWrapper>
           <div className="relative min-h-screen flex flex-col app-bg">
             <Suspense>

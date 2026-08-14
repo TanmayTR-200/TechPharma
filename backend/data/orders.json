@@ -1,1 +1,25 @@
-[]
+[{
+    "_id":  "1786468117287",
+    "userId":  "1760257427529",
+    "items":  [
+                  {
+                      "product":  {
+                                      "_id":  "1761573298298",
+                                      "name":  "Arduino set"
+                                  },
+                      "quantity":  4,
+                      "price":  1000
+                  }
+              ],
+    "status":  "completed",
+    "paymentMethod":  "online",
+    "shippingAddress":  {
+                            "name":  "Tanmay",
+                            "phone":  "123456789",
+                            "line1":  "Basavangudi",
+                            "city":  "Bengaluru",
+                            "state":  "Karnataka",
+                            "pincode":  "560019"
+                        },
+    "createdAt":  "2026-08-11T17:08:37.287Z"
+}]

@@ -1,6 +1,7 @@
 "use client"
 
 import { useAuth } from "@/contexts/auth"
+import { SkeletonLoader } from "@/components/skeleton-loader"
 import DashboardLayout from "@/components/dashboard-layout"
 
 export default function ProductsLayout({
@@ -12,8 +13,10 @@ export default function ProductsLayout({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-[3px] border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className="pt-14 min-h-screen">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <SkeletonLoader type="products" />
+        </div>
       </div>
     )
   }
@@ -22,5 +25,5 @@ export default function ProductsLayout({
     return <DashboardLayout>{children}</DashboardLayout>
   }
 
-  return <div className="pt-[88px]">{children}</div>
+  return <div className="pt-[88px] px-6 sm:px-8 max-w-7xl mx-auto">{children}</div>
 }

@@ -6,12 +6,10 @@ import { useAuth } from "@/contexts/auth";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import dynamic from 'next/dynamic';
-import { Search, Moon, Sun } from "lucide-react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from './theme-toggle';
 
-// Code-split the heavy interactive components so they only load when needed,
-// keeping the initial bundle smaller.
 const UserMenu = dynamic(() => import('./user-menu').then(m => m.UserMenu), { ssr: false });
 const CartDialog = dynamic(() => import('./cart-dialog').then(m => m.CartDialog), { ssr: false });
 const NotificationBell = dynamic(() => import('./notification-bell').then(m => m.NotificationBell), { ssr: false });
@@ -42,23 +40,20 @@ export function AppHeader() {
   };
 
   return (
-    <header className="fixed top-0 z-50 w-full h-14 bg-card border-b border-border">
-      <div className="w-full px-4 sm:px-5 h-full flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary shadow-md shadow-primary/25">
-              <span className="text-primary-foreground font-bold text-xs">T</span>
-            </div>
-            <span className="font-semibold text-sm tracking-tight hidden sm:block">TechPharma</span>
+    <header className="fixed top-0 z-50 w-full h-14 bg-background border-b border-border">
+      <div className="w-full px-6 sm:px-8 h-full flex items-center justify-between gap-6">
+        <div className="flex items-center gap-8">
+          <Link href="/" className="font-display text-sm font-bold tracking-[0.2em] uppercase text-foreground">
+            TechPharma
           </Link>
-          <nav className="hidden md:flex items-center gap-1 ml-4">
+          <nav className="hidden md:flex items-center gap-6">
             {navLinks.map((link) => {
               const isActive = pathname === link.href;
               return (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={'px-2.5 py-1 rounded-md text-[13px] font-medium transition-colors ' + (isActive ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50')}
+                  className={'text-[11px] uppercase tracking-[0.15em] transition-colors ' + (isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground')}
                 >
                   {link.label}
                 </Link>
@@ -69,21 +64,21 @@ export function AppHeader() {
 
         <div className="flex-1 max-w-xs hidden md:block">
           <form onSubmit={handleSearch} className="relative w-full">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
             <Input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search products..."
-              className="h-8 pl-9 pr-3 text-[13px] rounded-md bg-secondary/50 border-border text-foreground placeholder:text-muted-foreground focus:border-primary/50"
+              placeholder="Search..."
+              className="h-8 pl-8 pr-3 text-xs rounded-none bg-transparent border-border text-foreground placeholder:text-muted-foreground focus:border-foreground"
             />
           </form>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-3">
           <ThemeToggle />
           <button
-            className="md:hidden flex items-center justify-center h-8 w-8 rounded-md hover:bg-secondary text-muted-foreground"
+            className="md:hidden flex items-center justify-center h-8 w-8 hover:bg-secondary text-muted-foreground"
             onClick={() => setMobileSearch(!mobileSearch)}
           >
             <Search className="h-4 w-4" />
@@ -97,10 +92,10 @@ export function AppHeader() {
             </>
           ) : (
             <>
-              <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground text-[13px]">
+              <Button asChild variant="ghost" size="sm" className="text-[11px] uppercase tracking-wider text-muted-foreground hover:bg-secondary hover:text-foreground">
                 <Link href="/auth?mode=login">Sign in</Link>
               </Button>
-              <Button asChild size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground text-[13px] shadow-md shadow-primary/20">
+              <Button asChild size="sm" variant="outline" className="text-[11px] uppercase tracking-wider border-foreground text-foreground hover:bg-foreground hover:text-background rounded-none">
                 <Link href="/auth?mode=signup">Get started</Link>
               </Button>
             </>
@@ -109,16 +104,16 @@ export function AppHeader() {
       </div>
 
       {mobileSearch && (
-        <div className="md:hidden border-t border-border p-3 bg-card">
+        <div className="md:hidden border-t border-border p-3 bg-background">
           <form onSubmit={handleSearch} className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search products..."
+              placeholder="Search..."
               autoFocus
-              className="h-10 pl-10 pr-4 rounded-md bg-secondary border-border text-foreground"
+              className="h-10 pl-10 pr-4 rounded-none bg-transparent border-border text-foreground"
             />
           </form>
         </div>

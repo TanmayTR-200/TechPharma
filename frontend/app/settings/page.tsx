@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { User, Store, Bell, Shield } from 'lucide-react'
-import DashboardLayout from '@/components/dashboard-layout'
 import { EditProfileDialog } from '@/components/edit-profile-dialog'
 import { useAuth } from '@/contexts/auth'
 
@@ -19,14 +18,14 @@ export default function SettingsPage() {
   const [editOpen, setEditOpen] = useState(false)
 
   return (
-    <DashboardLayout>
-      <div className="w-full flex flex-col" style={{ height: 'calc(100vh - 152px)' }}>
-        <div className="mb-4">
-          <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+    <>
+      <div className="w-full space-y-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-foreground">Settings</h1>
           <p className="mt-1 text-muted-foreground">Manage your account and preferences</p>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[200px_1fr] flex-1 min-h-0">
+        <div className="grid gap-6 lg:grid-cols-[200px_1fr]">
           {/* Tabs */}
           <aside>
             <nav className="space-y-1">
@@ -51,7 +50,7 @@ export default function SettingsPage() {
           </aside>
 
           {/* Content */}
-          <div className="rounded-lg border border-border bg-card p-6 overflow-y-auto min-h-0">
+          <div className="rounded-lg border border-border bg-card p-6">
             {activeTab === 'profile' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -86,10 +85,6 @@ export default function SettingsPage() {
                   <div>
                     <dt className="text-xs text-muted-foreground">Phone</dt>
                     <dd className="mt-1 text-sm font-medium text-foreground">{user?.phone || '-'}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Role</dt>
-                    <dd className="mt-1 text-sm font-medium text-foreground capitalize">{user?.role || '-'}</dd>
                   </div>
                 </dl>
               </div>
@@ -189,6 +184,6 @@ export default function SettingsPage() {
       </div>
 
       <EditProfileDialog />
-    </DashboardLayout>
+    </>
   )
 }

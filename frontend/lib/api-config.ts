@@ -110,8 +110,8 @@ export const API_ENDPOINTS: ApiEndpoints = {
     update: (id: string): string => buildApiUrl(`products/${id}`),
     create: buildApiUrl('products'),
     sold: {
-      list: buildApiUrl('products/sold'),
-      archiveSale: (id: string): string => buildApiUrl(`products/sold/${id}/archive`)
+      list: buildApiUrl('sold-products'),
+      archiveSale: (id: string): string => buildApiUrl(`sold-products/${id}/archive`)
     }
   },
   categories: {

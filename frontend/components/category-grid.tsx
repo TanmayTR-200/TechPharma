@@ -1,27 +1,21 @@
 "use client"
 
-import Smartphone from "lucide-react/dist/esm/icons/smartphone"
-import Cog from "lucide-react/dist/esm/icons/cog"
-import Briefcase from "lucide-react/dist/esm/icons/briefcase"
-import Shield from "lucide-react/dist/esm/icons/shield"
-import Lightbulb from "lucide-react/dist/esm/icons/lightbulb"
 import { useProductNavigation } from "@/hooks/use-product-navigation"
 import { useEffect, useState } from "react"
-import { ChevronRight, ArrowRight } from "lucide-react"
+import { ChevronRight } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 
 const categories = [
-  { name: "Electronics", icon: Smartphone, key: "electronics" },
-  { name: "Machinery", icon: Cog, key: "machinery" },
-  { name: "Safety", icon: Shield, key: "safety" },
-  { name: "Tools", icon: Briefcase, key: "tools" },
-  { name: "Lighting", icon: Lightbulb, key: "lighting" },
+  { name: "Electronics", key: "electronics" },
+  { name: "Machinery", key: "machinery" },
+  { name: "Safety", key: "safety" },
+  { name: "Tools", key: "tools" },
+  { name: "Lighting", key: "lighting" },
 ]
 
 function CategorySkeleton() {
   return (
-    <div className="glass-card p-4 animate-fade-up">
-      <div className="shimmer h-9 w-9 rounded-lg mb-3" />
+    <div className="border border-border p-4 animate-fade-up">
       <div className="shimmer h-3 w-20 mb-2" />
       <div className="shimmer h-2.5 w-12" />
     </div>
@@ -45,12 +39,12 @@ export function CategoryGrid() {
   const empty = categories.filter(c => (counts[c.key] || 0) === 0)
 
   return (
-    <section className="py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold gradient-text">Categories</h2>
-          <button onClick={() => navigateToProducts({})} className="flex items-center gap-1 text-[13px] text-muted-foreground hover:text-primary transition-colors">
-            View all <ChevronRight className="h-3.5 w-3.5" />
+    <section className="py-16">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="font-display text-2xl font-bold text-foreground">Categories</h2>
+          <button onClick={() => navigateToProducts({})} className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors">
+            View all <ChevronRight className="h-3 w-3" />
           </button>
         </div>
 
@@ -65,20 +59,14 @@ export function CategoryGrid() {
                 {populated.map((cat, idx) => {
                   const count = counts[cat.key] || 0
                   return (
-                    <Reveal key={cat.name} delay={idx * 0.08} y={25}>
-                    <button
-                      onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })}
-                      className="glass-card group flex items-center gap-4 p-4 text-left w-full"
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-                        <cat.icon className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">{cat.name}</p>
+                    <Reveal key={cat.name} delay={idx * 0.08} y={20}>
+                      <button
+                        onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })}
+                        className="group border border-border p-5 text-left w-full hover:border-foreground transition-colors"
+                      >
+                        <p className="font-display text-lg font-semibold text-foreground mb-1">{cat.name}</p>
                         <p className="text-xs text-muted-foreground">{count} product{count !== 1 ? 's' : ''}</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-                    </button>
+                      </button>
                     </Reveal>
                   )
                 })}
@@ -87,10 +75,9 @@ export function CategoryGrid() {
             {empty.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {empty.map((cat) => (
-                  <button key={cat.name} onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })} className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-secondary/30 border border-border/50 text-muted-foreground hover:text-foreground hover:border-border transition-colors">
-                    <cat.icon className="h-3.5 w-3.5 opacity-50" />
+                  <button key={cat.name} onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })} className="border border-border/50 px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground transition-colors">
                     <span className="text-xs">{cat.name}</span>
-                    <span className="text-[10px] text-muted-foreground/60">No listings</span>
+                    <span className="text-[10px] text-muted-foreground/60 ml-1">No listings</span>
                   </button>
                 ))}
               </div>

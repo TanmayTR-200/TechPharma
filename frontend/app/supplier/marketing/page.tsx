@@ -34,7 +34,7 @@ export default function SupplierMarketingPage() {
     <div className="flex min-h-screen flex-col pt-14 relative z-10">
       <main className="flex-1 bg-secondary/30">
         <div className="container-app py-12">
-          <h1 className="text-2xl font-bold text-foreground">Marketing tools</h1>
+          <h1 className="font-display text-2xl font-bold text-foreground">Marketing tools</h1>
           <p className="mt-1 text-muted-foreground">Track your store performance and improve visibility</p>
 
           {/* Stats */}
@@ -49,7 +49,7 @@ export default function SupplierMarketingPage() {
                       <Icon className="h-4 w-4 text-muted-foreground" />
                     </div>
                   </div>
-                  <p className="mt-3 text-2xl font-bold text-foreground">{stat.value}</p>
+                  <p className="mt-3 font-display text-2xl font-bold text-foreground">{stat.value}</p>
                   <p className="mt-1 text-xs text-primary">{stat.change} vs last month</p>
                 </div>
               )

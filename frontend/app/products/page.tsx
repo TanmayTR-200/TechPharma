@@ -113,18 +113,18 @@ export default function ProductsPage() {
   filteredProducts = filteredProducts.filter(p => typeof p.price === 'number' && p.price >= priceMin && p.price <= priceMax)
 
   return (
-    <div className="min-h-screen relative z-10">
-      <div className="w-full px-4 sm:px-6 lg:px-8 pb-6">
-        <div className="flex items-center justify-between mb-4">
+    <>
+    <div className="w-full space-y-6 relative z-10">
+      <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
+            <h1 className="font-display text-2xl font-bold text-foreground">
               {category ? category.charAt(0).toUpperCase() + category.slice(1) : search ? 'Search: ' + search : 'All products'}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {loading ? 'Loading...' : totalCount + ' product' + (totalCount !== 1 ? 's' : '') + ' available'}
+              {loading ? '' : totalCount + ' product' + (totalCount !== 1 ? 's' : '') + ' available'}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="glass-card rounded-md flex items-center gap-2 text-foreground">
+          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} className="bg-card border border-border rounded-md flex items-center gap-2 text-foreground">
             <SlidersHorizontal className="h-4 w-4" /> Filters
             <ChevronDown className={'h-3 w-3 transition-transform ' + (showFilters ? 'rotate-180' : '')} />
           </Button>
@@ -160,6 +160,6 @@ export default function ProductsPage() {
         )}
       </div>
       <Footer />
-    </div>
+    </>
   )
 }

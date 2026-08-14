@@ -18,7 +18,7 @@ export default function SupplierOnboardingPage() {
       <main className="flex-1 bg-secondary/30">
         <div className="container-app py-8">
           <div className="mx-auto max-w-2xl">
-            <h1 className="text-2xl font-bold text-foreground">Become a supplier</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Become a supplier</h1>
             <p className="mt-1 text-muted-foreground">List your products and start selling to buyers across India</p>
 
             {/* Steps */}

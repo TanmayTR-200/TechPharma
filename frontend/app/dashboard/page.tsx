@@ -11,14 +11,15 @@ import { EditProfileDialog } from "@/components/edit-profile-dialog"
 import { AnalyticsDialog } from "@/components/analytics-dialog"
 import { useAuth } from "@/contexts/auth"
 import { splitName } from "@/types/user"
+import { SkeletonLoader } from "@/components/skeleton-loader"
 import DashboardLayout from '@/components/dashboard-layout'
 import { formatDateShort } from '@/lib/formatDate'
-import { Package, Eye, ShoppingCart, DollarSign, ArrowUpRight } from "lucide-react"
+import { Package, Eye, ShoppingCart, IndianRupee, ArrowUpRight } from "lucide-react"
 import { motion } from "framer-motion"
 
 function StatSkeleton() {
   return (
-    <div className="glass-card p-5 animate-fade-up">
+    <div className="border border-border p-5 animate-fade-up">
       <div className="shimmer h-3 w-16 mb-2" />
       <div className="shimmer h-8 w-24 mb-1" />
       <div className="shimmer h-2 w-20" />
@@ -44,13 +45,13 @@ export default function DashboardPage() {
             {[1, 2, 3, 4].map(i => <StatSkeleton key={i} />)}
           </div>
           <div className="grid lg:grid-cols-3 gap-5">
-            <div className="lg:col-span-2 glass-card p-5">
+            <div className="lg:col-span-2 border border-border p-5">
               <div className="shimmer h-4 w-32 mb-4" />
               <div className="space-y-3">
                 {[1, 2, 3].map(i => <div key={i} className="flex gap-3"><div className="shimmer h-8 w-8 rounded-md" /><div className="flex-1 space-y-2"><div className="shimmer h-3 w-1/2" /><div className="shimmer h-2 w-1/3" /></div></div>)}
               </div>
             </div>
-            <div className="glass-card p-5"><div className="shimmer h-4 w-20 mb-4" /><div className="shimmer h-8 w-8 rounded-full mb-3" /><div className="shimmer h-3 w-24 mb-2" /><div className="shimmer h-3 w-16" /></div>
+            <div className="border border-border p-5"><div className="shimmer h-4 w-20 mb-4" /><div className="shimmer h-8 w-8 rounded-full mb-3" /><div className="shimmer h-3 w-24 mb-2" /><div className="shimmer h-3 w-16" /></div>
           </div>
         </div>
       </DashboardLayout>
@@ -58,17 +59,17 @@ export default function DashboardPage() {
   }
 
   const tiles = [
-    { icon: Package, label: 'Products', value: stats.totalProducts, variant: 'stat-primary', text: 'text-white' },
-    { icon: Eye, label: 'Views', value: stats.productViews, variant: 'stat-teal', text: 'text-white' },
-    { icon: ShoppingCart, label: 'Orders', value: orders.length, variant: 'stat-amber', text: 'text-white' },
-    { icon: DollarSign, label: 'Revenue', value: stats.revenue > 0 ? '\u20B9' + stats.revenue.toLocaleString('en-IN') : '\u20B90', variant: 'stat-emerald', text: 'text-white' },
+    { icon: Package, label: 'Products', value: stats.totalProducts, variant: 'bg-foreground text-background', text: 'text-background' },
+    { icon: Eye, label: 'Views', value: stats.productViews, variant: 'bg-foreground text-background', text: 'text-background' },
+    { icon: ShoppingCart, label: 'Orders', value: orders.length, variant: 'bg-foreground text-background', text: 'text-background' },
+    { icon: IndianRupee, label: 'Revenue', value: stats.revenue > 0 ? '\u20B9' + stats.revenue.toLocaleString('en-IN') : '\u20B90', variant: 'bg-foreground text-background', text: 'text-background' },
   ]
 
   return (
     <DashboardLayout>
       <div className="w-full space-y-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="font-display text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Welcome back, {user?.name?.split(' ')[0] || 'User'}</p>
         </motion.div>
 
@@ -80,15 +81,15 @@ export default function DashboardPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.05 }}
-              className={t.variant + ' rounded-xl p-5 transition-all hover:translate-y-[-3px]'}
+              className={t.variant + ' p-5 transition-colors'}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-white/80 mb-1">{t.label}</p>
-                  <p className="text-4xl font-bold text-white">{t.value}</p>
+                  <p className="text-sm text-background/70 mb-1">{t.label}</p>
+                  <p className="font-display text-4xl font-bold text-background">{t.value}</p>
                 </div>
-                <div className="bg-white/20 p-3 rounded-xl">
-                  <t.icon className="h-6 w-6 text-white" />
+                <div className="bg-background/20 p-3">
+                  <t.icon className="h-6 w-6 text-background" />
                 </div>
               </div>
             </motion.div>
@@ -98,7 +99,7 @@ export default function DashboardPage() {
         <div className="grid lg:grid-cols-3 gap-5">
           {/* Left */}
           <div className="lg:col-span-2 space-y-5">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="glass-card p-5">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="border border-border p-5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick actions</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <AddProductDialog />
@@ -108,7 +109,7 @@ export default function DashboardPage() {
             </motion.div>
 
             {orders.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="glass-card p-5">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-medium text-foreground">Recent orders</h3>
                   <Button variant="ghost" size="sm" onClick={() => router.push('/orders')} className="text-primary text-xs h-7">View all <ArrowUpRight className="ml-1 h-3 w-3" /></Button>
@@ -133,7 +134,7 @@ export default function DashboardPage() {
 
           {/* Right */}
           <div className="space-y-5">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="glass-card p-5">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="border border-border p-5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Profile</p>
               <div className="flex items-center gap-3 mb-4">
                 <Avatar className="h-9 w-9"><AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">{user ? (() => { const { firstName, lastName } = splitName(user.name); return (firstName[0] + (lastName[0] || '')).toUpperCase() })() : 'U'}</AvatarFallback></Avatar>
@@ -142,9 +143,9 @@ export default function DashboardPage() {
               <Button asChild variant="outline" size="sm" className="w-full rounded-md text-xs"><a href="/settings">Manage profile</a></Button>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="glass-card p-5">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="border border-border p-5">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Revenue</p>
-              <p className="text-2xl font-bold gradient-text">{'\u20B9' + stats.revenue.toLocaleString('en-IN')}</p>
+              <p className="text-2xl font-bold text-foreground font-display">{'\u20B9' + stats.revenue.toLocaleString('en-IN')}</p>
               <p className="text-xs text-muted-foreground mt-0.5">{stats.revenue > 0 ? 'From completed orders' : 'No revenue yet'}</p>
               <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <div className="flex justify-between text-xs"><span className="text-muted-foreground">Active products</span><span className="font-medium text-foreground">{stats.totalProducts}</span></div>

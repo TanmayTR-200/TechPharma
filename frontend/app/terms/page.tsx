@@ -10,7 +10,7 @@ export default function TermsPage() {
   return (
     <div className="min-h-screen relative z-10 pt-16">
       <main className="max-w-2xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-bold text-foreground mb-1">Terms and Conditions</h1>
+        <h1 className="font-display text-2xl font-bold text-foreground mb-1">Terms and Conditions</h1>
         <p className="text-xs text-muted-foreground mb-8">Last updated: August 2026</p>
 
         <div className="space-y-6">
