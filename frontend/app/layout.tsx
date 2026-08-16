@@ -41,12 +41,12 @@ export default function RootLayout({
       <head>
         <meta
           httpEquiv="Content-Security-Policy"
-          content={`default-src 'self' http://localhost:* https://*.cloudinary.com https://techpharma-backend.onrender.com https://images.unsplash.com https://images.pexels.com data: blob:;
+          content={`default-src 'self' http://localhost:* https://*.cloudinary.com https://techpharma-5ml5.onrender.com https://images.unsplash.com https://images.pexels.com data: blob:;
             script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.cloudinary.com https://upload-widget.cloudinary.com;
             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://upload-widget.cloudinary.com;
             font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com data:;
             img-src 'self' data: blob: https://*.cloudinary.com https://res.cloudinary.com https://images.unsplash.com https://images.pexels.com;
-            connect-src 'self' http://localhost:* https://*.cloudinary.com https://api.cloudinary.com https://fonts.googleapis.com https://fonts.gstatic.com https://techpharma-backend.onrender.com;
+            connect-src 'self' http://localhost:* https://*.cloudinary.com https://api.cloudinary.com https://fonts.googleapis.com https://fonts.gstatic.com https://techpharma-5ml5.onrender.com;
             worker-src 'self' blob:;`.replace(/\s+/g, ' ').trim()}
         />
       </head>
