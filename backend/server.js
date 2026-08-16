@@ -219,12 +219,42 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 // In-memory OTP store (survives because Render is a persistent process)
 const signupOtpStore = new Map();
 
+// Check if email is already registered
+app.post('/api/auth/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const exists = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+    if (exists) {
+      return res.status(400).json({ success: false, message: 'Email already registered', exists: true });
+    }
+
+    res.json({ success: true, message: 'Email available', exists: false });
+  } catch (error) {
+    console.error('Check email error:', error);
+    res.status(500).json({ success: false, message: 'Failed to check email' });
+  }
+});
+
 // Send OTP for signup verification
 app.post('/api/auth/send-otp', authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    // Check if email is already registered
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+      return res.status(400).json({ success: false, message: 'Email already registered' });
     }
 
     // Generate 6-digit OTP

@@ -23,73 +23,39 @@ export function useAuthForm() {
     try {
       setSignupData(data);
 
-      // Check if user already exists
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const checkResponse = await fetch(`${API_URL}/api/auth/register`, {
-        signal: controller.signal,
+      // Step 1: Send OTP FIRST (before creating user)
+      // Backend checks if email already exists before sending OTP
+      const otpResponse = await fetch(`${API_URL}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.name,
-          email: data.email,
-          password: data.password,
-          companyName: data.companyName
-        })
+        body: JSON.stringify({ email: data.email })
       });
 
-      const checkResult = await checkResponse.json();
-      clearTimeout(timeoutId);
+      const otpResult = await otpResponse.json();
 
-      // If user already exists
-      if (!checkResponse.ok && (checkResult.message?.toLowerCase().includes('already') || checkResponse.status === 400)) {
-        toast({
-          title: 'Account Exists',
-          description: 'This email is already registered. Please login instead.',
-          variant: 'default'
-        });
-        setTimeout(() => {
-          window.location.href = '/auth?mode=login&message=existing_user';
-        }, 1500);
-        return;
-      }
-
-      // If registration succeeded (user was created), we still send OTP
-      // Delete the user we just created so they can re-register after OTP verification
-      if (checkResult.success && checkResult.token) {
-        // User created — now send OTP for email verification
-        const otpResponse = await fetch(`${API_URL}/api/auth/send-otp`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: data.email })
-        });
-
-        const otpResult = await otpResponse.json();
-
-        if (otpResult.success) {
-          // Store token temporarily — user is created but needs to verify email
-          localStorage.setItem('token', checkResult.token);
-          setOtpSent(true);
+      if (!otpResponse.ok) {
+        // Email already registered or error
+        if (otpResult.message?.toLowerCase().includes('already')) {
           toast({
-            title: 'OTP Sent',
-            description: 'Please check your email for the verification code.',
-          });
-        } else {
-          // OTP failed but user is created — just log them in
-          localStorage.setItem('token', checkResult.token);
-          toast({
-            title: 'Welcome!',
-            description: 'Your account has been created successfully.',
+            title: 'Account Exists',
+            description: 'This email is already registered. Please login instead.',
+            variant: 'default'
           });
           setTimeout(() => {
-            window.location.href = '/dashboard';
+            window.location.href = '/auth?mode=login&message=existing_user';
           }, 1500);
+          return;
         }
-        return;
+        throw new Error(otpResult.message || 'Failed to send OTP');
       }
 
-      throw new Error(checkResult.message || 'Registration failed');
+      if (otpResult.success) {
+        setOtpSent(true);
+        toast({
+          title: 'OTP Sent',
+          description: 'Please check your email for the verification code.',
+        });
+      }
     } catch (error: any) {
       if (error.name === 'AbortError') {
         toast({
@@ -101,7 +67,7 @@ export function useAuthForm() {
       } else {
         toast({
           title: 'Error',
-          description: error.message || 'Failed to sign up',
+          description: error.message || 'Failed to send verification code',
           variant: 'destructive',
           duration: 5000
         });
@@ -115,6 +81,7 @@ export function useAuthForm() {
     try {
       setIsVerifying(true);
 
+      // Step 2: Verify OTP
       const verifyResponse = await fetch(`${API_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -126,20 +93,41 @@ export function useAuthForm() {
 
       const verifyResult = await verifyResponse.json();
 
-      if (verifyResult.success) {
-        toast({
-          title: 'Success',
-          description: 'Email verified successfully!',
-        });
+      if (!verifyResult.success) {
+        throw new Error(verifyResult.message);
+      }
 
-        // User already registered — token already stored
+      // Step 3: OTP verified — NOW create the user
+      toast({
+        title: 'Verified!',
+        description: 'Creating your account...',
+      });
+
+      const registerResponse = await fetch(`${API_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: signupData.name,
+          email: signupData.email,
+          password: signupData.password,
+          companyName: signupData.companyName
+        })
+      });
+
+      const registerResult = await registerResponse.json();
+
+      if (registerResult.success && registerResult.token) {
+        localStorage.setItem('token', registerResult.token);
+        toast({
+          title: 'Welcome!',
+          description: 'Your account has been created successfully.',
+        });
         setTimeout(() => {
           window.location.href = '/dashboard';
         }, 1500);
-
         return true;
       } else {
-        throw new Error(verifyResult.message);
+        throw new Error(registerResult.message || 'Registration failed');
       }
     } catch (error: any) {
       toast({
