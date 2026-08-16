@@ -215,6 +215,80 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   }
 });
 
+// ===== OTP for Signup =====
+// In-memory OTP store (survives because Render is a persistent process)
+const signupOtpStore = new Map();
+
+// Send OTP for signup verification
+app.post('/api/auth/send-otp', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+    signupOtpStore.set(email, { otp, expiresAt });
+
+    // Send email via nodemailer
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_APP_PASSWORD
+      }
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Your TechPharma Verification Code',
+      text: `Your verification code is ${otp}. It expires in 5 minutes.`,
+      html: `<p>Your verification code is <b>${otp}</b>. It expires in 5 minutes.</p>`
+    });
+
+    res.json({ success: true, message: 'OTP sent successfully' });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send OTP' });
+  }
+});
+
+// Verify OTP for signup
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+    }
+
+    const entry = signupOtpStore.get(email);
+    if (!entry) {
+      return res.status(400).json({ success: false, message: 'No OTP requested for this email' });
+    }
+
+    if (Date.now() > entry.expiresAt) {
+      signupOtpStore.delete(email);
+      return res.status(400).json({ success: false, message: 'OTP expired' });
+    }
+
+    if (entry.otp !== otp) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    signupOtpStore.delete(email);
+    res.json({ success: true, message: 'OTP verified' });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ success: false, message: 'Verification failed' });
+  }
+});
+
 const { sendPasswordResetEmail } = require('./src/utils/email');
 
 app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {

@@ -21,11 +21,13 @@ export function useAuthForm() {
     try {
       setSignupData(data);
       
-      // First check if user exists
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
       
-      const checkResponse = await fetch('/api/auth/register', {
+      // First check if user exists by calling register
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const checkResponse = await fetch(`${API_URL}/api/auth/register`, {
         signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,41 +41,54 @@ export function useAuthForm() {
 
       const checkResult = await checkResponse.json();
 
-      if (checkResult.redirectTo) {
-        // User already exists, show message and redirect
+      // If user already exists, redirect to login
+      if (!checkResponse.ok && (checkResult.message?.includes('already') || checkResponse.status === 400)) {
         toast({
           title: 'Account Exists',
-          description: checkResult.message || 'Please login with your existing account.',
+          description: 'This email is already registered. Please login instead.',
           variant: 'default'
         });
         
         setTimeout(() => {
-          window.location.href = checkResult.redirectTo;
+          window.location.href = '/auth?mode=login&message=existing_user';
         }, 1500);
         
         return;
       }
 
-      // If user doesn't exist, proceed with OTP
-      const response = await fetch('/api/auth/otp', {
+      // If registration succeeded, we still need OTP verification
+      // Store the token for later, but don't log in yet
+      if (checkResult.success && checkResult.token) {
+        // Registration succeeded without OTP requirement on backend
+        // Store token and redirect
+        localStorage.setItem('token', checkResult.token);
+        toast({
+          title: 'Welcome!',
+          description: 'Your account has been created successfully.',
+        });
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 1500);
+        return;
+      }
+
+      // If we reach here, send OTP via backend
+      const otpResponse = await fetch(`${API_URL}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: data.email,
-          action: 'send'
-        })
+        body: JSON.stringify({ email: data.email })
       });
 
-      const result = await response.json();
+      const otpResult = await otpResponse.json();
       
-      if (result.success) {
+      if (otpResult.success) {
         setOtpSent(true);
         toast({
           title: 'OTP Sent',
           description: 'Please check your email for the verification code.',
         });
       } else {
-        throw new Error(result.message);
+        throw new Error(otpResult.message);
       }
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -107,14 +122,15 @@ export function useAuthForm() {
     try {
       setIsVerifying(true);
       
-      // First verify OTP
-      const verifyResponse = await fetch('/api/auth/otp', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      
+      // Verify OTP via backend
+      const verifyResponse = await fetch(`${API_URL}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: signupData.email,
-          otp,
-          action: 'verify'
+          otp
         })
       });
 
@@ -126,8 +142,8 @@ export function useAuthForm() {
           description: 'Email verified successfully. Creating your account...',
         });
 
-        // Now complete the registration
-        const registerResponse = await fetch('/api/auth/register', {
+        // Now complete the registration via backend
+        const registerResponse = await fetch(`${API_URL}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -143,7 +159,6 @@ export function useAuthForm() {
         const registerResult = await registerResponse.json();
 
         if (registerResult.success) {
-          // Store the token
           localStorage.setItem('token', registerResult.token);
           
           toast({
@@ -151,30 +166,11 @@ export function useAuthForm() {
             description: 'Your account has been created successfully.',
           });
 
-          // Redirect to dashboard after a short delay
           setTimeout(() => {
             window.location.href = '/dashboard';
           }, 1500);
           
           return true;
-        } else if (registerResult.redirectTo) {
-          // If user already exists, show message and redirect to login
-          toast({
-            title: 'Account Exists',
-            description: registerResult.message || 'Please login with your existing account.',
-            variant: 'default'
-          });
-          
-          // Reset the form state
-          setSignupData(null);
-          setOtpSent(false);
-          
-          // Redirect to login page
-          setTimeout(() => {
-            window.location.href = registerResult.redirectTo;
-          }, 1500);
-          
-          return false;
         } else {
           throw new Error(registerResult.message || 'Registration failed');
         }
@@ -197,13 +193,11 @@ export function useAuthForm() {
     if (!signupData) return;
     
     try {
-      const response = await fetch('/api/auth/otp', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${API_URL}/api/auth/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: signupData.email,
-          action: 'send'
-        })
+        body: JSON.stringify({ email: signupData.email })
       });
 
       const result = await response.json();
