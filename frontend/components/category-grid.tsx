@@ -28,7 +28,7 @@ export function CategoryGrid() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/products/category-counts')
+    fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + '/api/products/category-counts')
       .then(r => r.json())
       .then(d => { if (d.success) setCounts(d.counts) })
       .catch(() => {})

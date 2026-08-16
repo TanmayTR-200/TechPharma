@@ -18,7 +18,7 @@ export function ProductCarousel3D() {
   const [products, setProducts] = useState<Product[]>([])
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/products/all')
+    fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + '/api/products/all')
       .then(r => r.json())
       .then(data => {
         if (data.success && data.products) setProducts(data.products)

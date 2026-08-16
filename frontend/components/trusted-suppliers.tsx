@@ -11,7 +11,7 @@ export function TrustedSuppliers() {
   useEffect(() => {
     const fetchCounts = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/products/category-counts')
+        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + '/api/products/category-counts')
         const data = await res.json()
         if (data.success && data.counts) {
           const total = Object.values(data.counts).reduce((a: number, b: any) => a + Number(b), 0)

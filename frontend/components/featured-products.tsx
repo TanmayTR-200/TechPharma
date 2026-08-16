@@ -37,7 +37,7 @@ export function FeaturedProducts() {
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/products/featured')
+        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + '/api/products/featured')
         const data = await res.json()
         if (data.success && data.products) setProducts(data.products)
       } catch (e) { console.error(e) }

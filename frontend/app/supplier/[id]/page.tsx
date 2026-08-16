@@ -33,7 +33,7 @@ export default function SupplierProfilePage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('http://localhost:5000/api/supplier/' + params.id)
+    fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + '/api/supplier/' + params.id)
       .then(r => r.json())
       .then(data => {
         if (data.success && data.supplier) setSupplier(data.supplier)

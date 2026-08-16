@@ -46,7 +46,7 @@ export default function CheckoutPage() {
         const quantity = item.quantity || 1
         const idempotencyKey = `key_${userId}_${productId}_${Date.now()}`
 
-        const res = await fetch('http://localhost:5000/api/inventory/reserve', {
+        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + '/api/inventory/reserve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({ productId, quantity, idempotencyKey })
@@ -66,7 +66,7 @@ export default function CheckoutPage() {
 
       // Step 3: Confirm all reservations (move reserved → sold)
       await Promise.all(reservations.map(rid =>
-        fetch('http://localhost:5000/api/inventory/confirm', {
+        fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + '/api/inventory/confirm', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
           body: JSON.stringify({ reservationId: rid })

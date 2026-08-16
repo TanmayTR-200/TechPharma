@@ -37,7 +37,7 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/products/" + params.id)
+        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + "/api/products/" + params.id)
         const data = await res.json()
         if (data.success && data.product) setProduct(data.product)
       } catch (e) {
@@ -92,7 +92,7 @@ export default function ProductDetailPage() {
     }
     try {
       const token = localStorage.getItem("token")
-      await fetch("http://localhost:5000/api/cart/add", {
+      await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + "/api/cart/add", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
         body: JSON.stringify({ productId: product._id, quantity: 1 })
