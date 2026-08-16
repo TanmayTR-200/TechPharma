@@ -1,28 +1,11 @@
 [
   {
-    "_id": "1",
-    "title": "Welcome to TechPharma!",
-    "message": "Thank you for joining our platform.",
-    "read": true,
-    "archived": false,
-    "createdAt": "2026-01-05T18:14:51.661Z"
-  },
-  {
-    "_id": "1760360335467-welcome-1767640542655",
-    "userId": "1760360335467",
-    "title": "Welcome to TechPharma!",
-    "message": "Thank you for joining our platform.",
-    "read": true,
-    "archived": false,
-    "createdAt": "2026-01-05T19:15:42.655Z"
-  },
-  {
     "_id": "1760257427529-welcome-1785183285805",
     "userId": "1760257427529",
     "title": "Welcome to TechPharma!",
     "message": "Thank you for joining our platform.",
     "read": true,
     "archived": false,
-    "createdAt": "2026-07-27T20:14:45.805Z"
+    "createdAt": "2026-08-16T18:00:00.000Z"
   }
 ]

@@ -194,6 +194,20 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     users.push(user);
     writeJsonFile(usersFile, users);
 
+    // Create welcome notification
+    const notifFile = path.join(__dirname, './data/notifications.json');
+    const allNotifs = readJsonFile(notifFile);
+    allNotifs.push({
+      _id: user._id + '-welcome',
+      userId: user._id,
+      title: 'Welcome to TechPharma!',
+      message: 'Thank you for joining our platform.',
+      read: false,
+      archived: false,
+      createdAt: new Date().toISOString()
+    });
+    writeJsonFile(notifFile, allNotifs);
+
     const token = jwt.sign({ userId: user._id }, JWT_SECRET);
 
     res.status(201).json({
@@ -316,6 +330,97 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   } catch (error) {
     console.error('Verify OTP error:', error);
     res.status(500).json({ success: false, message: 'Verification failed' });
+  }
+});
+
+// ===== Delete Account with OTP =====
+const deleteOtpStore = new Map();
+
+// Send OTP for account deletion
+app.post('/api/auth/send-delete-otp', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'No account found with this email' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000;
+    deleteOtpStore.set(email, { otp, expiresAt });
+
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_APP_PASSWORD
+      }
+    });
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Confirm Account Deletion - TechPharma',
+      text: `Your account deletion confirmation code is ${otp}. If you did not request this, please ignore this email.`,
+      html: `<p>Your account deletion confirmation code is <b>${otp}</b>. If you did not request this, please ignore this email.</p>`
+    });
+
+    res.json({ success: true, message: 'OTP sent successfully' });
+  } catch (error) {
+    console.error('Send delete OTP error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send OTP' });
+  }
+});
+
+// Delete account after OTP verification
+app.post('/api/auth/delete-account', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, message: 'Email and OTP are required' });
+    }
+
+    const entry = deleteOtpStore.get(email);
+    if (!entry) {
+      return res.status(400).json({ success: false, message: 'No OTP requested for this email' });
+    }
+
+    if (Date.now() > entry.expiresAt) {
+      deleteOtpStore.delete(email);
+      return res.status(400).json({ success: false, message: 'OTP expired' });
+    }
+
+    if (entry.otp !== otp) {
+      return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    }
+
+    deleteOtpStore.delete(email);
+
+    // Delete user
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const filteredUsers = users.filter(u => u.email.toLowerCase() !== email.toLowerCase());
+    writeJsonFile(usersFile, filteredUsers);
+
+    // Delete user's notifications
+    const notifFile = path.join(__dirname, './data/notifications.json');
+    const allNotifs = readJsonFile(notifFile);
+    const filteredNotifs = allNotifs.filter(n => n.userId !== filteredUsers.find(u => u.email === email)?._id);
+    writeJsonFile(notifFile, filteredNotifs);
+
+    res.json({ success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete account' });
   }
 });
 

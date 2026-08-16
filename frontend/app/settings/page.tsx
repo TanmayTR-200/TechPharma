@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { User, Store, Bell, Shield } from 'lucide-react'
+import { User, Store, Bell, Shield, Trash2, AlertTriangle, Loader2 } from 'lucide-react'
 import { EditProfileDialog } from '@/components/edit-profile-dialog'
 import { useAuth } from '@/contexts/auth'
+import { useToast } from '@/hooks/use-toast'
 
 const tabs = [
   { id: 'profile', label: 'Profile', icon: User },
@@ -14,8 +15,65 @@ const tabs = [
 
 export default function SettingsPage() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState('profile')
   const [editOpen, setEditOpen] = useState(false)
+
+  // Delete account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteOtpSent, setDeleteOtpSent] = useState(false)
+  const [deleteOtp, setDeleteOtp] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [sendingOtp, setSendingOtp] = useState(false)
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
+  const handleSendDeleteOtp = async () => {
+    if (!user?.email) return
+    setSendingOtp(true)
+    try {
+      const res = await fetch(`${API_URL}/api/auth/send-delete-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setDeleteOtpSent(true)
+        toast({ title: 'OTP Sent', description: 'Check your email for the deletion code.' })
+      } else {
+        throw new Error(data.message)
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' })
+    } finally {
+      setSendingOtp(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!user?.email || !deleteOtp) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`${API_URL}/api/auth/delete-account`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: user.email, otp: deleteOtp })
+      })
+      const data = await res.json()
+      if (data.success) {
+        localStorage.removeItem('token')
+        toast({ title: 'Account Deleted', description: 'Your account has been permanently deleted.' })
+        setTimeout(() => { window.location.href = '/' }, 1500)
+      } else {
+        throw new Error(data.message)
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' })
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <>
@@ -176,6 +234,74 @@ export default function SettingsPage() {
                   <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">
                     Update password
                   </button>
+                </div>
+
+                {/* Delete Account */}
+                <div className="mt-8 border-t border-border pt-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="h-4 w-4 text-destructive" />
+                    <h3 className="text-sm font-semibold text-destructive">Danger Zone</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Permanently delete your account and all associated data. This action cannot be undone.
+                  </p>
+
+                  {!showDeleteConfirm ? (
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/5"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete Profile
+                    </button>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border border-destructive/30 p-4 bg-destructive/5">
+                      <p className="text-sm font-medium text-foreground">
+                        Confirm deletion for <span className="text-destructive">{user?.email}</span>
+                      </p>
+
+                      {!deleteOtpSent ? (
+                        <button
+                          onClick={handleSendDeleteOtp}
+                          disabled={sendingOtp}
+                          className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90 disabled:opacity-50"
+                        >
+                          {sendingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                          Send OTP to {user?.email}
+                        </button>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium text-foreground">Enter OTP</label>
+                            <input
+                              type="text"
+                              value={deleteOtp}
+                              onChange={(e) => setDeleteOtp(e.target.value)}
+                              placeholder="6-digit code"
+                              maxLength={6}
+                              className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleDeleteAccount}
+                              disabled={deleting || !deleteOtp}
+                              className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90 disabled:opacity-50"
+                            >
+                              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                              Confirm Delete
+                            </button>
+                            <button
+                              onClick={() => { setShowDeleteConfirm(false); setDeleteOtpSent(false); setDeleteOtp('') }}
+                              className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-secondary"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

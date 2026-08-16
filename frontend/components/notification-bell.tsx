@@ -51,9 +51,9 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] border border-border overflow-hidden rounded-xl">
+        <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-2rem)] border border-border overflow-hidden rounded-xl bg-background shadow-2xl">
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-background">
             <div className="flex items-center gap-2">
               {showArchived ? (
                 <button
