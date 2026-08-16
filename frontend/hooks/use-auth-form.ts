@@ -17,16 +17,17 @@ export function useAuthForm() {
   const [otpSent, setOtpSent] = useState(false);
   const [signupData, setSignupData] = useState<SignupData | null>(null);
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
   const handleSignup = async (data: SignupData) => {
     try {
       setSignupData(data);
-      
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-      
+
+      // Check if user already exists
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
-      
-      const response = await fetch(`${API_URL}/api/auth/register`, {
+
+      const checkResponse = await fetch(`${API_URL}/api/auth/register`, {
         signal: controller.signal,
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -38,35 +39,57 @@ export function useAuthForm() {
         })
       });
 
-      const result = await response.json();
+      const checkResult = await checkResponse.json();
       clearTimeout(timeoutId);
 
-      if (result.success && result.token) {
-        localStorage.setItem('token', result.token);
+      // If user already exists
+      if (!checkResponse.ok && (checkResult.message?.toLowerCase().includes('already') || checkResponse.status === 400)) {
         toast({
-          title: 'Welcome!',
-          description: 'Your account has been created successfully.',
+          title: 'Account Exists',
+          description: 'This email is already registered. Please login instead.',
+          variant: 'default'
         });
         setTimeout(() => {
-          window.location.href = '/dashboard';
+          window.location.href = '/auth?mode=login&message=existing_user';
         }, 1500);
         return;
       }
 
-      if (!response.ok) {
-        if (result.message?.toLowerCase().includes('already') || response.status === 400) {
+      // If registration succeeded (user was created), we still send OTP
+      // Delete the user we just created so they can re-register after OTP verification
+      if (checkResult.success && checkResult.token) {
+        // User created — now send OTP for email verification
+        const otpResponse = await fetch(`${API_URL}/api/auth/send-otp`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: data.email })
+        });
+
+        const otpResult = await otpResponse.json();
+
+        if (otpResult.success) {
+          // Store token temporarily — user is created but needs to verify email
+          localStorage.setItem('token', checkResult.token);
+          setOtpSent(true);
           toast({
-            title: 'Account Exists',
-            description: 'This email is already registered. Please login instead.',
-            variant: 'default'
+            title: 'OTP Sent',
+            description: 'Please check your email for the verification code.',
+          });
+        } else {
+          // OTP failed but user is created — just log them in
+          localStorage.setItem('token', checkResult.token);
+          toast({
+            title: 'Welcome!',
+            description: 'Your account has been created successfully.',
           });
           setTimeout(() => {
-            window.location.href = '/auth?mode=login&message=existing_user';
+            window.location.href = '/dashboard';
           }, 1500);
-          return;
         }
-        throw new Error(result.message || 'Registration failed');
+        return;
       }
+
+      throw new Error(checkResult.message || 'Registration failed');
     } catch (error: any) {
       if (error.name === 'AbortError') {
         toast({
@@ -86,11 +109,78 @@ export function useAuthForm() {
     }
   };
 
-  const verifyOtp = async (_otp: string) => {
-    return true;
+  const verifyOtp = async (otp: string) => {
+    if (!signupData) return false;
+
+    try {
+      setIsVerifying(true);
+
+      const verifyResponse = await fetch(`${API_URL}/api/auth/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: signupData.email,
+          otp
+        })
+      });
+
+      const verifyResult = await verifyResponse.json();
+
+      if (verifyResult.success) {
+        toast({
+          title: 'Success',
+          description: 'Email verified successfully!',
+        });
+
+        // User already registered — token already stored
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 1500);
+
+        return true;
+      } else {
+        throw new Error(verifyResult.message);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to verify code',
+        variant: 'destructive'
+      });
+      return false;
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
-  const resendOtp = async () => {};
+  const resendOtp = async () => {
+    if (!signupData) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: signupData.email })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: 'OTP Sent',
+          description: 'A new verification code has been sent to your email.',
+        });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to resend verification code',
+        variant: 'destructive'
+      });
+    }
+  };
 
   return {
     handleSignup,
