@@ -38,3 +38,12 @@ Thumbs.db
 # Root data (unused - backend uses backend/data)
 /data/
 
+# Backend data files (managed at runtime, not tracked to avoid overwriting on deploy)
+backend/data/carts.json
+backend/data/conversations.json
+backend/data/messages.json
+backend/data/notifications.json
+backend/data/orders.json
+backend/data/reservations.json
+backend/data/users.json
+
