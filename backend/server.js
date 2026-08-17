@@ -530,17 +530,20 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
     signupOtpStore.set(email, { otp, expiresAt });
 
-    // Send email using cached transporter
+    // Respond immediately — send email in background (don't block the request)
+    res.json({ success: true, message: 'OTP sent successfully' });
+
+    // Send email in background (fire-and-forget)
     const transporter = getEmailTransporter();
-    await transporter.sendMail({
+    transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
       subject: 'Your TechPharma Verification Code',
       text: `Your verification code is ${otp}. It expires in 5 minutes.`,
       html: `<p>Your verification code is <b>${otp}</b>. It expires in 5 minutes.</p>`
+    }).catch(err => {
+      console.error('[OTP] Email send failed for', email + ':', err.message);
     });
-
-    res.json({ success: true, message: 'OTP sent successfully' });
   } catch (error) {
     console.error('Send OTP error:', error);
     res.status(500).json({ success: false, message: 'Failed to send OTP' });
@@ -599,17 +602,19 @@ app.post('/api/auth/send-delete-otp', async (req, res) => {
     const expiresAt = Date.now() + 5 * 60 * 1000;
     deleteOtpStore.set(email, { otp, expiresAt });
 
-    const transporter = getEmailTransporter();
+    // Respond immediately — send email in background
+    res.json({ success: true, message: 'OTP sent successfully' });
 
-    await transporter.sendMail({
+    const transporter = getEmailTransporter();
+    transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
       subject: 'Confirm Account Deletion - TechPharma',
       text: `Your account deletion confirmation code is ${otp}. If you did not request this, please ignore this email.`,
       html: `<p>Your account deletion confirmation code is <b>${otp}</b>. If you did not request this, please ignore this email.</p>`
+    }).catch(err => {
+      console.error('[Delete OTP] Email send failed for', email + ':', err.message);
     });
-
-    res.json({ success: true, message: 'OTP sent successfully' });
   } catch (error) {
     console.error('Send delete OTP error:', error);
     res.status(500).json({ success: false, message: 'Failed to send OTP' });
