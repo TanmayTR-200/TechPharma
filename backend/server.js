@@ -70,6 +70,31 @@ async function connectMongoDB() {
             console.log(`  🌱 ${col}: seeded ${fileData.length} records from file`);
           }
           dataCache[col] = fileData;
+        } else if (col === 'users') {
+          // Seed default users if no file exists
+          const defaultUsers = [
+            {
+              _id: '1760257427529',
+              email: 'tanmaytr05@gmail.com',
+              password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
+              name: 'Tanmay',
+              role: 'admin',
+              createdAt: new Date().toISOString(),
+              company: { name: 'ABC' }
+            },
+            {
+              _id: '1760360335467',
+              email: 'tanmaytalanki.cs23@bmsce.ac.in',
+              password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De',
+              name: 'Tanmay T',
+              company: { name: 'BCD' },
+              role: 'buyer',
+              createdAt: new Date().toISOString()
+            }
+          ];
+          await mongoDb.collection('users').insertMany(defaultUsers);
+          dataCache['users'] = defaultUsers;
+          console.log(`  🌱 users: seeded ${defaultUsers.length} default users`);
         } else {
           dataCache[col] = [];
         }
@@ -95,6 +120,27 @@ async function connectMongoDB() {
           if (docs.length > 0) {
             dataCache[col] = docs;
             console.log(`  📂 ${col}: ${docs.length} records loaded from MongoDB`);
+          } else {
+            // Seed from file or defaults
+            const filePath = path.join(__dirname, './data', `${col}.json`);
+            if (fs.existsSync(filePath)) {
+              const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+              if (fileData.length > 0) {
+                await mongoDb.collection(col).insertMany(fileData);
+                console.log(`  🌱 ${col}: seeded ${fileData.length} records from file`);
+              }
+              dataCache[col] = fileData;
+            } else if (col === 'users') {
+              const defaultUsers = [
+                { _id: '1760257427529', email: 'tanmaytr05@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'Tanmay', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' } },
+                { _id: '1760360335467', email: 'tanmaytalanki.cs23@bmsce.ac.in', password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De', name: 'Tanmay T', company: { name: 'BCD' }, role: 'buyer', createdAt: new Date().toISOString() }
+              ];
+              await mongoDb.collection('users').insertMany(defaultUsers);
+              dataCache['users'] = defaultUsers;
+              console.log(`  🌱 users: seeded ${defaultUsers.length} default users`);
+            } else {
+              dataCache[col] = [];
+            }
           }
         }
         console.log('✅ Data loaded into memory cache');
