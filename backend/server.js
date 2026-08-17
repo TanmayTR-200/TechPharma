@@ -592,18 +592,19 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
     signupOtpStore.set(email, { otp, expiresAt });
 
-    // Respond immediately — send email in background (don't block the request)
-    res.json({ success: true, message: 'OTP sent successfully' });
-
-    // Send email in background (fire-and-forget)
-    sendEmail(
-      email,
-      'Your TechPharma Verification Code',
-      `Your verification code is ${otp}. It expires in 5 minutes.`,
-      `<p>Your verification code is <b>${otp}</b>. It expires in 5 minutes.</p>`
-    ).catch(err => {
-      console.error('[OTP] Email send failed for', email + ':', err.message);
-    });
+    // Wait for email to actually send (temporary — to see errors)
+    try {
+      await sendEmail(
+        email,
+        'Your TechPharma Verification Code',
+        `Your verification code is ${otp}. It expires in 5 minutes.`,
+        `<p>Your verification code is <b>${otp}</b>. It expires in 5 minutes.</p>`
+      );
+      res.json({ success: true, message: 'OTP sent successfully' });
+    } catch (emailErr) {
+      console.error('[OTP] Email send failed for', email + ':', emailErr.message);
+      res.json({ success: true, message: 'OTP sent successfully', emailError: emailErr.message });
+    }
   } catch (error) {
     console.error('Send OTP error:', error);
     res.status(500).json({ success: false, message: 'Failed to send OTP' });
