@@ -7,6 +7,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
+const { MongoClient } = require('mongodb');
 require('dotenv').config();
 
 // Inventory reservation system
@@ -28,17 +29,105 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Helper to read JSON files
+// ===== MongoDB + In-Memory Cache Storage =====
+let mongoClient = null;
+let mongoDb = null;
+const dataCache = {};
+const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'messages', 'conversations', 'reservations'];
+
+async function connectMongoDB() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.log('⚠️ MONGODB_URI not set, using file storage fallback');
+    return false;
+  }
+  try {
+    mongoClient = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+    await mongoClient.connect();
+    mongoDb = mongoClient.db('techpharma');
+    console.log('✅ Connected to MongoDB Atlas');
+
+    // Load each collection into cache
+    for (const col of COLLECTIONS) {
+      const docs = await mongoDb.collection(col).find({}).toArray();
+      if (docs.length > 0) {
+        dataCache[col] = docs;
+        console.log(`  📂 ${col}: ${docs.length} records loaded from MongoDB`);
+      } else {
+        // Seed from JSON file if MongoDB is empty
+        const filePath = path.join(__dirname, './data', `${col}.json`);
+        if (fs.existsSync(filePath)) {
+          const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          if (fileData.length > 0) {
+            await mongoDb.collection(col).insertMany(fileData);
+            console.log(`  🌱 ${col}: seeded ${fileData.length} records from file`);
+          }
+          dataCache[col] = fileData;
+        } else {
+          dataCache[col] = [];
+        }
+      }
+    }
+    console.log('✅ Data loaded into memory cache');
+    return true;
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+    console.log('⚠️ Falling back to file storage');
+    return false;
+  }
+}
+
+// Get collection name from file path
+function getCollectionName(filePath) {
+  const basename = path.basename(filePath, '.json');
+  return basename;
+}
+
+// Helper to read data (from in-memory cache, fast & sync)
 function readJsonFile(filePath) {
+  const colName = getCollectionName(filePath);
+  if (dataCache[colName] !== undefined) {
+    return dataCache[colName];
+  }
+  // Fallback to file if not in cache
   if (!fs.existsSync(filePath)) {
     return [];
   }
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
-// Helper to write JSON files
+// Helper to write data (update cache immediately + persist to MongoDB in background)
 function writeJsonFile(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  const colName = getCollectionName(filePath);
+  // Update cache immediately (sync, so reads see the change)
+  dataCache[colName] = data;
+  // Persist to MongoDB in background (fire-and-forget)
+  if (mongoDb) {
+    persistToMongo(colName, data).catch(err => {
+      console.error(`MongoDB write error (${colName}):`, err.message);
+    });
+  }
+}
+
+// Persist data to MongoDB (upsert all docs, delete removed ones)
+async function persistToMongo(colName, data) {
+  const col = mongoDb.collection(colName);
+  if (data.length === 0) {
+    await col.deleteMany({});
+    return;
+  }
+  // Upsert each document by _id
+  const ops = data.map(doc => ({
+    replaceOne: {
+      filter: { _id: doc._id },
+      replacement: doc,
+      upsert: true
+    }
+  }));
+  await col.bulkWrite(ops);
+  // Delete documents that are no longer present
+  const ids = data.map(d => d._id);
+  await col.deleteMany({ _id: { $nin: ids } });
 }
 
 // Initialize storage
@@ -1631,7 +1720,10 @@ app.use((err, req, res, next) => {
 // Start server
 const startServer = async () => {
   try {
-    // Initialize storage
+    // Connect to MongoDB and load data into cache
+    const mongoConnected = await connectMongoDB();
+
+    // Initialize storage (creates data dir + seeds files for fallback)
     initStorage();
 
     // Migrate product schema to inventory model (total_stock, available_stock, reserved_stock, sold)
@@ -1674,7 +1766,7 @@ You can use these commands to find and stop the process:
 -----------------------------------------
 • Port: ${PORT}
 • URL: http://localhost:${PORT}
-• Storage: File-based
+• Storage: ${mongoDb ? 'MongoDB Atlas' : 'File-based (fallback)'}
 =========================================`);
 
     // Graceful shutdown
