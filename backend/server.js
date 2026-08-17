@@ -211,7 +211,8 @@ app.get('/api/health', async (req, res) => {
       status: 'ok', 
       timestamp: new Date().toISOString(),
       storage: mongoDb ? 'mongodb-atlas' : 'file-based',
-      mongoConnected: !!mongoDb
+      mongoConnected: !!mongoDb,
+      nodeVersion: process.version
     });
   } catch (error) {
     console.error('Health check failed:', error);
