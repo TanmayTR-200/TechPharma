@@ -4,8 +4,14 @@ const fs = require('fs');
 const { authenticate } = require('../../middleware/auth');
 const router = express.Router();
 
-// Helper to read JSON files
+// Use the global data cache (MongoDB-backed) from server.js if available
 function readJsonFile(filePath) {
+  const colName = path.basename(filePath, '.json');
+  // Check global cache first (set by server.js MongoDB integration)
+  if (global.dataCache && global.dataCache[colName] !== undefined) {
+    return global.dataCache[colName];
+  }
+  // Fallback to filesystem
   if (!fs.existsSync(filePath)) {
     return [];
   }

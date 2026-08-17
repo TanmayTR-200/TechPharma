@@ -7,14 +7,21 @@ const PRODUCTS_FILE = path.join(__dirname, '../../data/products.json');
 const RESERVATION_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 function readJson(filePath) {
+  const colName = path.basename(filePath, '.json');
+  if (global.dataCache && global.dataCache[colName] !== undefined) {
+    return global.dataCache[colName];
+  }
   if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, '[]');
     return [];
   }
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
 function writeJson(filePath, data) {
+  const colName = path.basename(filePath, '.json');
+  if (global.dataCache) {
+    global.dataCache[colName] = data;
+  }
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 

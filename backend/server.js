@@ -38,6 +38,7 @@ const authLimiter = rateLimit({
 let mongoClient = null;
 let mongoDb = null;
 const dataCache = {};
+global.dataCache = dataCache; // Expose cache for route modules (dashboard.js etc)
 const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'messages', 'conversations', 'reservations'];
 
 async function connectMongoDB() {

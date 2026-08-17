@@ -7,8 +7,11 @@ const router = express.Router();
 // Path to JSON file
 const dataFilePath = path.join(__dirname, "../../data/products.json");
 
-// Helper to read products
+// Helper to read products (uses MongoDB cache from server.js if available)
 function readProducts() {
+  if (global.dataCache && global.dataCache.products !== undefined) {
+    return global.dataCache.products;
+  }
   if (!fs.existsSync(dataFilePath)) {
     return [];
   }
@@ -16,8 +19,11 @@ function readProducts() {
   return JSON.parse(data);
 }
 
-// Helper to save products
+// Helper to save products (updates cache + filesystem)
 function saveProducts(products) {
+  if (global.dataCache) {
+    global.dataCache.products = products;
+  }
   fs.writeFileSync(dataFilePath, JSON.stringify(products, null, 2));
 }
 

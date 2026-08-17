@@ -7,14 +7,21 @@ const authenticate = require('../middleware/auth');
 const getMessagesFilePath = () => path.join(__dirname, '../../data/messages.json');
 
 function readJsonFile(filePath) {
+  const colName = path.basename(filePath, '.json');
+  if (global.dataCache && global.dataCache[colName] !== undefined) {
+    return global.dataCache[colName];
+  }
   if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, '[]');
     return [];
   }
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
 function writeJsonFile(filePath, data) {
+  const colName = path.basename(filePath, '.json');
+  if (global.dataCache) {
+    global.dataCache[colName] = data;
+  }
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
