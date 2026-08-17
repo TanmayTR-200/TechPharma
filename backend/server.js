@@ -852,6 +852,36 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
+// Change password (when logged in)
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: 'Current and new passwords are required' });
+    }
+
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u._id === req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const isValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isValid) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    writeJsonFile(usersFile, users);
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update password' });
+  }
+});
+
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;

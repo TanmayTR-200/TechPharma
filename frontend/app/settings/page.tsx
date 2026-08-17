@@ -26,7 +26,51 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false)
   const [sendingOtp, setSendingOtp] = useState(false)
 
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [updatingPassword, setUpdatingPassword] = useState(false)
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast({ title: 'Error', description: 'Please fill in all password fields.', variant: 'destructive' })
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: 'Error', description: 'New passwords do not match.', variant: 'destructive' })
+      return
+    }
+    if (newPassword.length < 8) {
+      toast({ title: 'Error', description: 'New password must be at least 8 characters.', variant: 'destructive' })
+      return
+    }
+
+    setUpdatingPassword(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL}/api/auth/change-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ currentPassword, newPassword })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast({ title: 'Success', description: 'Password updated successfully.' })
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+      } else {
+        throw new Error(data.message)
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update password.', variant: 'destructive' })
+    } finally {
+      setUpdatingPassword(false)
+    }
+  }
 
   const handleSendDeleteOtp = async () => {
     if (!user?.email) return
@@ -212,6 +256,8 @@ export default function SettingsPage() {
                     <input
                       type="password"
                       placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
                       className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
@@ -220,6 +266,8 @@ export default function SettingsPage() {
                     <input
                       type="password"
                       placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
                       className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
@@ -228,11 +276,17 @@ export default function SettingsPage() {
                     <input
                       type="password"
                       placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
                       className="w-full rounded-lg border border-border px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </div>
-                  <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90">
-                    Update password
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={updatingPassword}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {updatingPassword ? 'Updating...' : 'Update password'}
                   </button>
                 </div>
 
