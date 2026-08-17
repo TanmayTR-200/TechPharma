@@ -243,6 +243,70 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Seed endpoint — creates default users + products if MongoDB is empty
+app.get('/api/seed', async (req, res) => {
+  try {
+    if (!mongoDb) {
+      return res.json({ success: false, message: 'MongoDB not connected' });
+    }
+
+    const results = [];
+
+    // Seed users
+    const existingUsers = await mongoDb.collection('users').countDocuments();
+    if (existingUsers === 0) {
+      const defaultUsers = [
+        {
+          _id: '1760257427529',
+          email: 'tanmaytr05@gmail.com',
+          password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
+          name: 'Tanmay',
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+          company: { name: 'ABC' }
+        },
+        {
+          _id: '1760360335467',
+          email: 'tanmaytalanki.cs23@bmsce.ac.in',
+          password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De',
+          name: 'Tanmay T',
+          company: { name: 'BCD' },
+          role: 'buyer',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      await mongoDb.collection('users').insertMany(defaultUsers);
+      dataCache['users'] = defaultUsers;
+      results.push(`Seeded ${defaultUsers.length} users`);
+    } else {
+      results.push(`Users already exist (${existingUsers})`);
+    }
+
+    // Seed products
+    const existingProducts = await mongoDb.collection('products').countDocuments();
+    if (existingProducts === 0) {
+      const productsFile = path.join(__dirname, './data/products.json');
+      if (fs.existsSync(productsFile)) {
+        const products = JSON.parse(fs.readFileSync(productsFile, 'utf8'));
+        if (products.length > 0) {
+          await mongoDb.collection('products').insertMany(products);
+          dataCache['products'] = products;
+          results.push(`Seeded ${products.length} products`);
+        }
+      } else {
+        results.push('No products.json file found');
+      }
+    } else {
+      results.push(`Products already exist (${existingProducts})`);
+    }
+
+    res.json({ success: true, message: 'Seed complete', results });
+  } catch (error) {
+    console.error('Seed error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Auth middleware
 const authMiddleware = async (req, res, next) => {
   try {
