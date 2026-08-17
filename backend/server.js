@@ -55,12 +55,14 @@ async function connectMongoDB() {
     mongoDb = mongoose.connection.db;
     console.log('✅ Connected to MongoDB Atlas via Mongoose');
 
-    // Load each collection into cache
+    // Load each collection into cache (merge with existing cache if present)
     for (const col of COLLECTIONS) {
       const docs = await mongoDb.collection(col).find({}).toArray();
       if (docs.length > 0) {
-        dataCache[col] = docs;
-        console.log(`  📂 ${col}: ${docs.length} records loaded from MongoDB`);
+        const existingIds = new Set((dataCache[col] || []).map(d => d._id));
+        const newDocs = docs.filter(d => !existingIds.has(d._id));
+        dataCache[col] = [...(dataCache[col] || []), ...newDocs];
+        console.log(`  📂 ${col}: ${newDocs.length} new records merged from MongoDB (${dataCache[col].length} total)`);
       } else {
         // Seed from JSON file if MongoDB is empty
         const filePath = path.join(__dirname, './data', `${col}.json`);
@@ -119,10 +121,13 @@ async function connectMongoDB() {
         for (const col of COLLECTIONS) {
           const docs = await mongoDb.collection(col).find({}).toArray();
           if (docs.length > 0) {
-            dataCache[col] = docs;
-            console.log(`  📂 ${col}: ${docs.length} records loaded from MongoDB`);
+            // MERGE: keep existing cache entries + add MongoDB docs (don't overwrite cache)
+            const existingIds = new Set((dataCache[col] || []).map(d => d._id));
+            const newDocs = docs.filter(d => !existingIds.has(d._id));
+            dataCache[col] = [...(dataCache[col] || []), ...newDocs];
+            console.log(`  📂 ${col}: ${newDocs.length} new records merged from MongoDB (${dataCache[col].length} total)`);
           } else {
-            // Seed from file or defaults
+            // MongoDB empty — seed from file or defaults
             const filePath = path.join(__dirname, './data', `${col}.json`);
             if (fs.existsSync(filePath)) {
               const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -131,7 +136,7 @@ async function connectMongoDB() {
                 console.log(`  🌱 ${col}: seeded ${fileData.length} records from file`);
               }
               dataCache[col] = fileData;
-            } else if (col === 'users') {
+            } else if (col === 'users' && (!dataCache['users'] || dataCache['users'].length === 0)) {
               const defaultUsers = [
                 { _id: '1760257427529', email: 'tanmaytr05@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'Tanmay', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' } },
                 { _id: '1760360335467', email: 'tanmaytalanki.cs23@bmsce.ac.in', password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De', name: 'Tanmay T', company: { name: 'BCD' }, role: 'buyer', createdAt: new Date().toISOString() }
@@ -140,7 +145,7 @@ async function connectMongoDB() {
               dataCache['users'] = defaultUsers;
               console.log(`  🌱 users: seeded ${defaultUsers.length} default users`);
             } else {
-              dataCache[col] = [];
+              if (!dataCache[col]) dataCache[col] = [];
             }
           }
         }
