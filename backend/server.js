@@ -79,20 +79,17 @@ async function connectMongoDB() {
     return true;
   } catch (err) {
     console.error('❌ MongoDB connection error:', err.message);
-    console.log('⚠️ Falling back to file storage, will retry in 10s...');
+    console.log('⚠️ Falling back to file storage, will retry every 30s...');
     
-    // Retry connection after 10 seconds
-    setTimeout(async () => {
-      console.log('🔄 Retrying MongoDB connection...');
+    // Retry connection every 30 seconds until success
+    const retryInterval = setInterval(async () => {
       try {
-        // Clean disconnect first to avoid mongoose state issues
         try { await mongoose.disconnect(); } catch(e) {}
         
-        await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
+        await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
         mongoDb = mongoose.connection.db;
         console.log('✅ Connected to MongoDB Atlas on retry!');
         
-        // Load collections into cache
         for (const col of COLLECTIONS) {
           const docs = await mongoDb.collection(col).find({}).toArray();
           if (docs.length > 0) {
@@ -100,11 +97,12 @@ async function connectMongoDB() {
             console.log(`  📂 ${col}: ${docs.length} records loaded from MongoDB`);
           }
         }
-        console.log('✅ Data loaded into memory cache on retry');
+        console.log('✅ Data loaded into memory cache');
+        clearInterval(retryInterval);
       } catch (retryErr) {
-        console.error('❌ MongoDB retry failed:', retryErr.message);
+        console.log('⏳ MongoDB retry failed, will try again in 30s...');
       }
-    }, 10000);
+    }, 30000);
     
     return false;
   }
