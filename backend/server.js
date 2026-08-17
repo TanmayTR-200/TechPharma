@@ -17,6 +17,7 @@ const { withLock } = require('./src/inventory/lock');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -43,7 +44,10 @@ async function connectMongoDB() {
   }
   console.log('🔌 Connecting to MongoDB URI:', uri.substring(0, 25) + '...');
   try {
-    mongoClient = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
+    mongoClient = new MongoClient(uri, { 
+      serverSelectionTimeoutMS: 10000,
+      tlsAllowInvalidCertificates: true
+    });
     await mongoClient.connect();
     mongoDb = mongoClient.db('techpharma');
     console.log('✅ Connected to MongoDB Atlas');
