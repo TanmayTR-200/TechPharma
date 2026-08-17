@@ -79,7 +79,30 @@ async function connectMongoDB() {
     return true;
   } catch (err) {
     console.error('❌ MongoDB connection error:', err.message);
-    console.log('⚠️ Falling back to file storage');
+    console.log('⚠️ Falling back to file storage, will retry in 10s...');
+    
+    // Retry connection after 10 seconds
+    setTimeout(async () => {
+      console.log('🔄 Retrying MongoDB connection...');
+      try {
+        await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
+        mongoDb = mongoose.connection.db;
+        console.log('✅ Connected to MongoDB Atlas on retry!');
+        
+        // Load collections into cache
+        for (const col of COLLECTIONS) {
+          const docs = await mongoDb.collection(col).find({}).toArray();
+          if (docs.length > 0) {
+            dataCache[col] = docs;
+            console.log(`  📂 ${col}: ${docs.length} records loaded from MongoDB`);
+          }
+        }
+        console.log('✅ Data loaded into memory cache on retry');
+      } catch (retryErr) {
+        console.error('❌ MongoDB retry failed:', retryErr.message);
+      }
+    }, 10000);
+    
     return false;
   }
 }
