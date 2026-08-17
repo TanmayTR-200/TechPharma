@@ -466,6 +466,27 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 // In-memory OTP store (survives because Render is a persistent process)
 const signupOtpStore = new Map();
 
+// Cached nodemailer transporter (avoid creating new TCP/TLS connection every OTP send)
+let emailTransporter = null;
+function getEmailTransporter() {
+  if (!emailTransporter) {
+    const nodemailer = require('nodemailer');
+    emailTransporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_APP_PASSWORD
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000
+    });
+  }
+  return emailTransporter;
+}
+
 // Check if email is already registered
 app.post('/api/auth/check-email', async (req, res) => {
   try {
@@ -490,7 +511,7 @@ app.post('/api/auth/check-email', async (req, res) => {
 });
 
 // Send OTP for signup verification
-app.post('/api/auth/send-otp', authLimiter, async (req, res) => {
+app.post('/api/auth/send-otp', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -509,18 +530,8 @@ app.post('/api/auth/send-otp', authLimiter, async (req, res) => {
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
     signupOtpStore.set(email, { otp, expiresAt });
 
-    // Send email via nodemailer
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD
-      }
-    });
-
+    // Send email using cached transporter
+    const transporter = getEmailTransporter();
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
@@ -570,7 +581,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 const deleteOtpStore = new Map();
 
 // Send OTP for account deletion
-app.post('/api/auth/send-delete-otp', authLimiter, async (req, res) => {
+app.post('/api/auth/send-delete-otp', async (req, res) => {
   try {
     const { email } = req.body;
     if (!email) {
@@ -588,16 +599,7 @@ app.post('/api/auth/send-delete-otp', authLimiter, async (req, res) => {
     const expiresAt = Date.now() + 5 * 60 * 1000;
     deleteOtpStore.set(email, { otp, expiresAt });
 
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD
-      }
-    });
+    const transporter = getEmailTransporter();
 
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
