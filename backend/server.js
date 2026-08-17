@@ -46,16 +46,33 @@ async function connectMongoDB() {
     console.log('⚠️ MONGODB_URI not set, using file storage fallback');
     return false;
   }
-  console.log('🔌 Connecting to MongoDB URI:', uri.substring(0, 25) + '...');
+
+  // Ensure the URI has the database name and retryWrites
+  let finalUri = uri;
+  if (!finalUri.includes('retryWrites')) {
+    finalUri = finalUri.replace('?', '?retryWrites=true&w=majority&');
+    if (finalUri.includes('&&')) finalUri = finalUri.replace('&&', '&');
+  }
+  if (!finalUri.includes('/techpharma') && !finalUri.includes('/?')) {
+    finalUri = finalUri.replace('/?', '/techpharma?');
+  } else if (finalUri.includes('/?')) {
+    finalUri = finalUri.replace('/?', '/techpharma?');
+  }
+  // Add ssl=true if not present
+  if (!finalUri.includes('ssl=')) {
+    finalUri += (finalUri.includes('?') ? '&' : '?') + 'ssl=true';
+  }
+
+  console.log('🔌 Connecting to MongoDB URI:', finalUri.substring(0, 35) + '...');
   try {
-    // Use mongoose for connection (handles TLS/SSL better than raw driver)
     const mongooseOpts = {
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 15000,
+      ssl: true,
       tlsAllowInvalidCertificates: true,
       retryWrites: true,
       w: 'majority'
     };
-    await mongoose.connect(uri, mongooseOpts);
+    await mongoose.connect(finalUri, mongooseOpts);
     mongoDb = mongoose.connection.db;
     console.log('✅ Connected to MongoDB Atlas via Mongoose');
 
