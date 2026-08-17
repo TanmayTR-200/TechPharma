@@ -530,14 +530,19 @@ async function sendEmail(to, subject, text, html) {
   if (process.env.RESEND_API_KEY) {
     try {
       const resend = getResend();
-      await resend.emails.send({
+      const result = await resend.emails.send({
         from: process.env.EMAIL_FROM || 'TechPharma <onboarding@resend.dev>',
         to: to,
         subject: subject,
         text: text,
         html: html
       });
-      console.log('[Email] Sent via Resend to', to);
+      console.log('[Email] Resend result:', JSON.stringify(result));
+      if (result.error) {
+        console.error('[Email] Resend API error:', result.error.message);
+      } else {
+        console.log('[Email] Sent via Resend to', to, 'ID:', result.data?.id);
+      }
       return;
     } catch (err) {
       console.error('[Email] Resend failed:', err.message);
