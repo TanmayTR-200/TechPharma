@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
 const { MongoClient } = require('mongodb');
+const mongoose = require('mongoose');
 require('dotenv').config();
 
 // Inventory reservation system
@@ -44,13 +45,16 @@ async function connectMongoDB() {
   }
   console.log('🔌 Connecting to MongoDB URI:', uri.substring(0, 25) + '...');
   try {
-    mongoClient = new MongoClient(uri, { 
+    // Use mongoose for connection (handles TLS/SSL better than raw driver)
+    const mongooseOpts = {
       serverSelectionTimeoutMS: 10000,
-      tlsAllowInvalidCertificates: true
-    });
-    await mongoClient.connect();
-    mongoDb = mongoClient.db('techpharma');
-    console.log('✅ Connected to MongoDB Atlas');
+      tlsAllowInvalidCertificates: true,
+      retryWrites: true,
+      w: 'majority'
+    };
+    await mongoose.connect(uri, mongooseOpts);
+    mongoDb = mongoose.connection.db;
+    console.log('✅ Connected to MongoDB Atlas via Mongoose');
 
     // Load each collection into cache
     for (const col of COLLECTIONS) {
