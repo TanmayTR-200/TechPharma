@@ -354,6 +354,20 @@ app.get('/api/seed', async (req, res) => {
   }
 });
 
+// Debug endpoint — list all users (emails only, no passwords)
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    res.json({
+      success: true,
+      count: users.length,
+      users: users.map(u => ({ _id: u._id, email: u.email, name: u.name, company: u.company, hasPassword: !!u.password }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Auth middleware
 const authMiddleware = async (req, res, next) => {
   try {
