@@ -470,19 +470,20 @@ const signupOtpStore = new Map();
 const { google } = require('googleapis');
 
 let gmailClient = null;
+let gmailOauth2Client = null;
 function getGmailClient() {
   if (!gmailClient) {
-    const oauth2Client = new google.auth.OAuth2(
+    gmailOauth2Client = new google.auth.OAuth2(
       process.env.GMAIL_CLIENT_ID,
       process.env.GMAIL_CLIENT_SECRET,
       'https://developers.google.com/oauthplayground'
     );
-    oauth2Client.setCredentials({
+    gmailOauth2Client.setCredentials({
       refresh_token: process.env.GMAIL_REFRESH_TOKEN
     });
-    gmailClient = google.gmail({ version: 'v1', auth: oauth2Client });
+    gmailClient = google.gmail({ version: 'v1', auth: gmailOauth2Client });
   }
-  return gmailClient;
+  return { gmail: gmailClient, oauth2Client: gmailOauth2Client };
 }
 
 const { Resend } = require('resend');
@@ -498,7 +499,12 @@ async function sendEmail(to, subject, text, html) {
   // 1. Try Gmail API first (sends from techpharma10@gmail.com, uses HTTPS port 443)
   if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_REFRESH_TOKEN) {
     try {
-      const gmail = getGmailClient();
+      const { gmail, oauth2Client } = getGmailClient();
+      
+      // Force refresh the access token
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      console.log('[Email] Gmail token refreshed, scope:', credentials.scope || 'unknown');
+      
       const message = [
         `From: ${process.env.EMAIL_USER}`,
         `To: ${to}`,
@@ -515,7 +521,8 @@ async function sendEmail(to, subject, text, html) {
       console.log('[Email] Sent via Gmail API to', to);
       return;
     } catch (err) {
-      console.error('[Email] Gmail API failed:', err.message);
+      console.error('[Email] Gmail API failed:', err.code || '', err.message);
+      if (err.errors) console.error('[Email] Gmail API error details:', JSON.stringify(err.errors));
     }
   }
 
