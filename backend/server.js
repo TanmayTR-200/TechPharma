@@ -466,7 +466,25 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 // In-memory OTP store (survives because Render is a persistent process)
 const signupOtpStore = new Map();
 
-// Email sender — uses Resend HTTP API (works on Render free tier where SMTP is blocked)
+// Email sender — tries Gmail API (HTTPS, port 443) → Resend → nodemailer fallback
+const { google } = require('googleapis');
+
+let gmailClient = null;
+function getGmailClient() {
+  if (!gmailClient) {
+    const oauth2Client = new google.auth.OAuth2(
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
+      'https://developers.google.com/oauthplayground'
+    );
+    oauth2Client.setCredentials({
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN
+    });
+    gmailClient = google.gmail({ version: 'v1', auth: oauth2Client });
+  }
+  return gmailClient;
+}
+
 const { Resend } = require('resend');
 let resendClient = null;
 function getResend() {
@@ -477,18 +495,49 @@ function getResend() {
 }
 
 async function sendEmail(to, subject, text, html) {
-  if (process.env.RESEND_API_KEY) {
-    const resend = getResend();
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'TechPharma <onboarding@resend.dev>',
-      to: to,
-      subject: subject,
-      text: text,
-      html: html
-    });
-    return;
+  // 1. Try Gmail API first (sends from techpharma10@gmail.com, uses HTTPS port 443)
+  if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_REFRESH_TOKEN) {
+    try {
+      const gmail = getGmailClient();
+      const message = [
+        `From: ${process.env.EMAIL_USER}`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        'Content-Type: text/html; charset=utf-8',
+        '',
+        html || text
+      ].join('\r\n');
+      const encodedMessage = Buffer.from(message).toString('base64url');
+      await gmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw: encodedMessage }
+      });
+      console.log('[Email] Sent via Gmail API to', to);
+      return;
+    } catch (err) {
+      console.error('[Email] Gmail API failed:', err.message);
+    }
   }
-  // Fallback: nodemailer (works locally, NOT on Render free tier)
+
+  // 2. Try Resend (HTTPS API, works on Render)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const resend = getResend();
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || 'TechPharma <onboarding@resend.dev>',
+        to: to,
+        subject: subject,
+        text: text,
+        html: html
+      });
+      console.log('[Email] Sent via Resend to', to);
+      return;
+    } catch (err) {
+      console.error('[Email] Resend failed:', err.message);
+    }
+  }
+
+  // 3. Fallback: nodemailer SMTP (works locally only, blocked on Render free tier)
   const nodemailer = require('nodemailer');
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
