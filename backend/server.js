@@ -234,7 +234,20 @@ function initStorage() {
       writeJsonFile(usersFile, []);
     }
     
-    console.log('✅ File storage initialized');
+    // Pre-load ALL data files into cache immediately (synchronous, before MongoDB connects)
+    // This ensures products/users are available from second 0, even before MongoDB connects
+    for (const col of COLLECTIONS) {
+      const filePath = path.join(__dirname, './data', `${col}.json`);
+      if (fs.existsSync(filePath)) {
+        const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        dataCache[col] = fileData;
+        console.log(`  📄 ${col}: ${fileData.length} records pre-loaded from file`);
+      } else {
+        dataCache[col] = [];
+      }
+    }
+    
+    console.log('✅ File storage initialized (cache pre-loaded)');
     return true;
   } catch (err) {
     console.error('Storage initialization error:', err);
@@ -1996,11 +2009,14 @@ app.use((err, req, res, next) => {
 // Start server
 const startServer = async () => {
   try {
-    // Connect to MongoDB and load data into cache
-    const mongoConnected = await connectMongoDB();
-
-    // Initialize storage (creates data dir + seeds files for fallback)
+    // Initialize storage FIRST — pre-loads products.json into cache synchronously
+    // This ensures products are available from second 0, even before MongoDB connects
     initStorage();
+
+    // Connect to MongoDB (don't block server start — data is already in cache from files)
+    connectMongoDB().then(connected => {
+      if (connected) console.log('📦 MongoDB connected in background');
+    });
 
     // Migrate product schema to inventory model (total_stock, available_stock, reserved_stock, sold)
     inventory.migrateProducts();
@@ -2042,7 +2058,8 @@ You can use these commands to find and stop the process:
 -----------------------------------------
 • Port: ${PORT}
 • URL: http://localhost:${PORT}
-• Storage: ${mongoDb ? 'MongoDB Atlas' : 'File-based (fallback)'}
+• Cache: Pre-loaded from files (instant)
+• MongoDB: ${mongoDb ? 'Connected' : 'Connecting in background...'}
 =========================================`);
 
     // Graceful shutdown
