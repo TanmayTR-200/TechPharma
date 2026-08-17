@@ -41,8 +41,9 @@ async function connectMongoDB() {
     console.log('⚠️ MONGODB_URI not set, using file storage fallback');
     return false;
   }
+  console.log('🔌 Connecting to MongoDB URI:', uri.substring(0, 25) + '...');
   try {
-    mongoClient = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+    mongoClient = new MongoClient(uri, { serverSelectionTimeoutMS: 10000 });
     await mongoClient.connect();
     mongoDb = mongoClient.db('techpharma');
     console.log('✅ Connected to MongoDB Atlas');
@@ -198,7 +199,8 @@ app.get('/api/health', async (req, res) => {
     res.json({ 
       status: 'ok', 
       timestamp: new Date().toISOString(),
-      storage: 'file-based'
+      storage: mongoDb ? 'mongodb-atlas' : 'file-based',
+      mongoConnected: !!mongoDb
     });
   } catch (error) {
     console.error('Health check failed:', error);
