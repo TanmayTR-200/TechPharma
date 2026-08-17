@@ -466,26 +466,38 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 // In-memory OTP store (survives because Render is a persistent process)
 const signupOtpStore = new Map();
 
-// Cached nodemailer transporter (avoid creating new TCP/TLS connection every OTP send)
-let emailTransporter = null;
-function getEmailTransporter() {
-  if (!emailTransporter) {
-    const nodemailer = require('nodemailer');
-    emailTransporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_APP_PASSWORD
-      },
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
-      socketTimeout: 15000
-    });
+// Email sender — uses Resend HTTP API (works on Render free tier where SMTP is blocked)
+const { Resend } = require('resend');
+let resendClient = null;
+function getResend() {
+  if (!resendClient) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
   }
-  return emailTransporter;
+  return resendClient;
+}
+
+async function sendEmail(to, subject, text, html) {
+  if (process.env.RESEND_API_KEY) {
+    const resend = getResend();
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM || 'TechPharma <onboarding@resend.dev>',
+      to: to,
+      subject: subject,
+      text: text,
+      html: html
+    });
+    return;
+  }
+  // Fallback: nodemailer (works locally, NOT on Render free tier)
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    requireTLS: true,
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_APP_PASSWORD }
+  });
+  await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text, html });
 }
 
 // Check if email is already registered
@@ -535,14 +547,12 @@ app.post('/api/auth/send-otp', async (req, res) => {
     res.json({ success: true, message: 'OTP sent successfully' });
 
     // Send email in background (fire-and-forget)
-    const transporter = getEmailTransporter();
-    transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Your TechPharma Verification Code',
-      text: `Your verification code is ${otp}. It expires in 5 minutes.`,
-      html: `<p>Your verification code is <b>${otp}</b>. It expires in 5 minutes.</p>`
-    }).catch(err => {
+    sendEmail(
+      email,
+      'Your TechPharma Verification Code',
+      `Your verification code is ${otp}. It expires in 5 minutes.`,
+      `<p>Your verification code is <b>${otp}</b>. It expires in 5 minutes.</p>`
+    ).catch(err => {
       console.error('[OTP] Email send failed for', email + ':', err.message);
     });
   } catch (error) {
@@ -606,14 +616,12 @@ app.post('/api/auth/send-delete-otp', async (req, res) => {
     // Respond immediately — send email in background
     res.json({ success: true, message: 'OTP sent successfully' });
 
-    const transporter = getEmailTransporter();
-    transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Confirm Account Deletion - TechPharma',
-      text: `Your account deletion confirmation code is ${otp}. If you did not request this, please ignore this email.`,
-      html: `<p>Your account deletion confirmation code is <b>${otp}</b>. If you did not request this, please ignore this email.</p>`
-    }).catch(err => {
+    sendEmail(
+      email,
+      'Confirm Account Deletion - TechPharma',
+      `Your account deletion confirmation code is ${otp}. If you did not request this, please ignore this email.`,
+      `<p>Your account deletion confirmation code is <b>${otp}</b>. If you did not request this, please ignore this email.</p>`
+    ).catch(err => {
       console.error('[Delete OTP] Email send failed for', email + ':', err.message);
     });
   } catch (error) {
