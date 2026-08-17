@@ -420,6 +420,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       password: hashedPassword,
       name,
       role,
+      company: req.body.companyName ? { name: req.body.companyName } : (req.body.company || {}),
+      phone: req.body.phone || '',
       createdAt: new Date().toISOString()
     };
 
@@ -449,7 +451,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
         _id: user._id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        company: user.company || null,
+        phone: user.phone || ''
       },
       token
     });
@@ -881,7 +885,9 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
         _id: user._id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        company: user.company || null,
+        phone: user.phone || ''
       },
       token
     });
