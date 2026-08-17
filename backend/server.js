@@ -85,6 +85,9 @@ async function connectMongoDB() {
     setTimeout(async () => {
       console.log('🔄 Retrying MongoDB connection...');
       try {
+        // Clean disconnect first to avoid mongoose state issues
+        try { await mongoose.disconnect(); } catch(e) {}
+        
         await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
         mongoDb = mongoose.connection.db;
         console.log('✅ Connected to MongoDB Atlas on retry!');
