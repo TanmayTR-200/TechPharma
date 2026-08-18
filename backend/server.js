@@ -1686,7 +1686,17 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
       }
     });
 
-    res.json({ success: true, orders: userOrders });
+    res.json({ success: true, orders: userOrders.map(o => ({
+      _id: o._id,
+      orderNumber: o.orderNumber || o._id.slice(-6),
+      trackingId: o.trackingId || null,
+      items: o.items,
+      totalAmount: o.totalAmount || 0,
+      status: o.status || 'pending',
+      paymentMethod: o.paymentMethod || 'cod',
+      shippingAddress: o.shippingAddress || {},
+      createdAt: o.createdAt
+    })) });
   } catch (error) {
     console.error('Orders error:', error);
     res.status(500).json({ success: false, message: 'Error fetching orders' });
@@ -1703,6 +1713,130 @@ app.post('/api/orders/:id/archive', authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error archiving order' });
+  }
+});
+
+// Update order status (seller updates: pending → processing → shipped → delivered)
+app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const order = orders.find(o => o._id === req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    // Check if user is the seller of any item in this order
+    const isSeller = order.items.some(item => String(item.sellerId) === String(req.user._id));
+    const isBuyer = String(order.userId) === String(req.user._id);
+    if (!isSeller && !isBuyer) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    order.status = status;
+    if (status === 'shipped' && !order.shippedAt) {
+      order.shippedAt = new Date().toISOString();
+    }
+    if (status === 'delivered' && !order.deliveredAt) {
+      order.deliveredAt = new Date().toISOString();
+    }
+    writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
+
+    res.json({ success: true, message: 'Order status updated', order });
+  } catch (error) {
+    console.error('Update order status error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update order status' });
+  }
+});
+
+// Track order by tracking ID (public — no auth required)
+app.get('/api/orders/track/:trackingId', async (req, res) => {
+  try {
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const order = orders.find(o => o.trackingId === req.params.trackingId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found. Check your tracking ID.' });
+    }
+
+    res.json({
+      success: true,
+      order: {
+        trackingId: order.trackingId,
+        status: order.status || 'pending',
+        items: (order.items || []).map(item => ({
+          name: item.product?.name || 'Product',
+          quantity: item.quantity,
+          price: item.price
+        })),
+        totalAmount: order.totalAmount || 0,
+        paymentMethod: order.paymentMethod || 'cod',
+        createdAt: order.createdAt,
+        shippedAt: order.shippedAt || null,
+        deliveredAt: order.deliveredAt || null,
+        shippingAddress: {
+          name: order.shippingAddress?.name || '',
+          city: order.shippingAddress?.city || '',
+          state: order.shippingAddress?.state || '',
+          pincode: order.shippingAddress?.pincode || ''
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Track order error:', error);
+    res.status(500).json({ success: false, message: 'Failed to track order' });
+  }
+});
+
+// Get invoice data for an order
+app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
+  try {
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const order = orders.find(o => o._id === req.params.id);
+    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    // Buyer can view their own invoice; seller can view for their items
+    const isBuyer = String(order.userId) === String(req.user._id);
+    const isSeller = (order.items || []).some(item => String(item.sellerId) === String(req.user._id));
+    if (!isBuyer && !isSeller) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const buyer = users.find(u => u._id === order.userId) || {};
+
+    res.json({
+      success: true,
+      invoice: {
+        invoiceNumber: 'INV-' + (order.trackingId || order._id.slice(-8)),
+        orderId: order._id,
+        trackingId: order.trackingId || null,
+        date: order.createdAt,
+        status: order.status || 'pending',
+        paymentMethod: order.paymentMethod || 'cod',
+        buyer: {
+          name: order.buyerName || buyer.name || '',
+          email: order.buyerEmail || buyer.email || ''
+        },
+        seller: {
+          name: 'TechPharma Marketplace',
+          email: 'techpharma10@gmail.com'
+        },
+        items: (order.items || []).map(item => ({
+          name: item.product?.name || 'Product',
+          quantity: item.quantity,
+          price: item.price || 0,
+          total: (item.price || 0) * (item.quantity || 1)
+        })),
+        totalAmount: order.totalAmount || 0,
+        shippingAddress: order.shippingAddress || {}
+      }
+    });
+  } catch (error) {
+    console.error('Invoice error:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate invoice' });
   }
 });
 
@@ -2064,6 +2198,7 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
       const buyerUser = readJsonFile(path.join(__dirname, './data/users.json')).find(u => u._id === req.user._id) || {};
       const order = {
         _id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
+        trackingId: 'TP' + Date.now().toString().slice(-8) + Math.random().toString(36).slice(2, 5).toUpperCase(),
         userId: req.user._id,  // the BUYER
         buyerName: buyerUser.name || '',
         buyerEmail: buyerUser.email || '',

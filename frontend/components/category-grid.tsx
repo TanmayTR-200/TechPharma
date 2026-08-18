@@ -11,6 +11,16 @@ const categories = [
   { name: "Safety", key: "safety" },
   { name: "Tools", key: "tools" },
   { name: "Lighting", key: "lighting" },
+  { name: "Chemicals", key: "chemicals" },
+  { name: "Medical", key: "medical" },
+  { name: "Packaging", key: "packaging" },
+  { name: "Construction", key: "construction" },
+  { name: "Automotive", key: "automotive" },
+  { name: "Textiles", key: "textiles" },
+  { name: "Agriculture", key: "agriculture" },
+  { name: "Industrial", key: "industrial-supplies" },
+  { name: "Power & Energy", key: "power-energy" },
+  { name: "Lab Equipment", key: "lab-equipment" },
 ]
 
 function CategorySkeleton() {
