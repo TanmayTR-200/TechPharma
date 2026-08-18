@@ -509,7 +509,6 @@ app.get('/api/debug/migrate-phones', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-});
 
 // Auth middleware
 const authMiddleware = async (req, res, next) => {
