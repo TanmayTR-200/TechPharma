@@ -8,10 +8,15 @@ import { Settings, Loader2 } from 'lucide-react';
 import { createUploadWidget } from '@/lib/cloudinary';
 import { useAuth } from '@/contexts/auth';
 
-export function EditProfileDialog() {
+export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { externalOpen?: boolean; onExternalOpenChange?: (open: boolean) => void }) {
   const { toast } = useToast();
   const { refreshUserData } = useAuth();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = (val: boolean) => {
+    setInternalOpen(val);
+    if (onExternalOpenChange) onExternalOpenChange(val);
+  };
   const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState({
     companyName: '',

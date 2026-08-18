@@ -363,7 +363,7 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <EditProfileDialog />
+      <EditProfileDialog externalOpen={editOpen} onExternalOpenChange={setEditOpen} />
     </>
   )
 }
