@@ -317,7 +317,7 @@ app.get('/api/seed', async (req, res) => {
 
     const results = [];
 
-    // Seed users
+    // Seed users (with phone numbers)
     const existingUsers = await mongoDb.collection('users').countDocuments();
     if (existingUsers === 0) {
       const defaultUsers = [
@@ -327,8 +327,9 @@ app.get('/api/seed', async (req, res) => {
           password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
           name: 'Tanmay',
           role: 'admin',
-          createdAt: new Date().toISOString(),
-          company: { name: 'ABC' }
+          createdAt: '2025-09-15T08:23:47.529Z',
+          company: { name: 'ABC' },
+          phone: '+91 800-123-4567'
         },
         {
           _id: '1760360335467',
@@ -337,13 +338,29 @@ app.get('/api/seed', async (req, res) => {
           name: 'Tanmay T',
           company: { name: 'BCD' },
           role: 'buyer',
-          createdAt: new Date().toISOString()
+          createdAt: '2025-10-13T12:58:55.467Z',
+          phone: '+91 900-123-4567'
         }
       ];
       await mongoDb.collection('users').insertMany(defaultUsers);
       dataCache['users'] = defaultUsers;
       results.push(`Seeded ${defaultUsers.length} users`);
     } else {
+      // Update existing users to add phone if missing
+      const users = readJsonFile(path.join(__dirname, './data/users.json'));
+      let phoneUpdated = 0;
+      for (const u of users) {
+        if (!u.phone) {
+          if (u._id === '1760257427529') u.phone = '+91 800-123-4567';
+          else if (u._id === '1760360335467') u.phone = '+91 900-123-4567';
+          else u.phone = '';
+          phoneUpdated++;
+        }
+      }
+      if (phoneUpdated > 0) {
+        writeJsonFile(path.join(__dirname, './data/users.json'), users);
+        results.push(`Updated ${phoneUpdated} users with phone`);
+      }
       results.push(`Users already exist (${existingUsers})`);
     }
 
@@ -363,6 +380,75 @@ app.get('/api/seed', async (req, res) => {
       }
     } else {
       results.push(`Products already exist (${existingProducts})`);
+    }
+
+    // Seed orders (from local test data)
+    const existingOrders = await mongoDb.collection('orders').countDocuments();
+    if (existingOrders === 0) {
+      const seedOrders = [
+        {
+          _id: '1786468117287',
+          trackingId: 'TP17864681ABC',
+          userId: '1760257427529',
+          buyerName: 'Tanmay',
+          buyerEmail: 'tanmaytr05@gmail.com',
+          items: [{ product: { _id: '1761573298298', name: 'Arduino set' }, quantity: 4, price: 1000, sellerId: '1760360335467' }],
+          totalAmount: 4000,
+          status: 'completed',
+          paymentMethod: 'online',
+          shippingAddress: { name: 'Tanmay', phone: '123456789', line1: 'Basavangudi', city: 'Bengaluru', state: 'Karnataka', pincode: '560019' },
+          createdAt: '2026-08-11T17:08:37.287Z'
+        }
+      ];
+      await mongoDb.collection('orders').insertMany(seedOrders);
+      dataCache['orders'] = seedOrders;
+      results.push(`Seeded ${seedOrders.length} orders`);
+    } else {
+      results.push(`Orders already exist (${existingOrders})`);
+    }
+
+    // Seed messages (from local test data)
+    const existingMessages = await mongoDb.collection('messages').countDocuments();
+    if (existingMessages === 0) {
+      const seedMessages = [
+        { _id: 'msg1', senderId: '1760360335467', receiverId: '1760257427529', content: 'I am interested in getting more details about the product: Drilling Machine', timestamp: '2025-10-24T10:47:23.920Z', read: true },
+        { _id: 'msg2', senderId: '1760257427529', receiverId: '1760360335467', content: 'I am interested in getting more details about the product: Firefighter Suit', timestamp: '2025-10-25T14:00:00.000Z', read: true },
+        { _id: 'msg3', senderId: '1760360335467', receiverId: '1760257427529', content: 'Sure, what would you like to know?', timestamp: '2025-10-25T14:05:00.000Z', read: true },
+        { _id: 'msg4', senderId: '1760257427529', receiverId: '1760360335467', content: 'What is the price and availability?', timestamp: '2025-10-25T14:10:00.000Z', read: true },
+        { _id: 'msg5', senderId: '1760360335467', receiverId: '1760257427529', content: 'The price is ₹2,000 and we have 14 in stock.', timestamp: '2025-10-25T14:15:00.000Z', read: true },
+      ];
+      await mongoDb.collection('messages').insertMany(seedMessages);
+      dataCache['messages'] = seedMessages;
+      results.push(`Seeded ${seedMessages.length} messages`);
+    } else {
+      results.push(`Messages already exist (${existingMessages})`);
+    }
+
+    // Seed conversations
+    const existingConversations = await mongoDb.collection('conversations').countDocuments();
+    if (existingConversations === 0) {
+      const seedConversations = [
+        { _id: 'conv1', participants: ['1760257427529', '1760360335467'], lastMessage: 'The price is ₹2,000 and we have 14 in stock.', lastMessageAt: '2025-10-25T14:15:00.000Z' }
+      ];
+      await mongoDb.collection('conversations').insertMany(seedConversations);
+      dataCache['conversations'] = seedConversations;
+      results.push(`Seeded ${seedConversations.length} conversations`);
+    } else {
+      results.push(`Conversations already exist (${existingConversations})`);
+    }
+
+    // Seed notifications
+    const existingNotifs = await mongoDb.collection('notifications').countDocuments();
+    if (existingNotifs === 0) {
+      const seedNotifs = [
+        { _id: '1760257427529-welcome', userId: '1760257427529', title: 'Welcome to TechPharma!', message: 'Thank you for joining our platform.', read: false, archived: false, createdAt: new Date().toISOString() },
+        { _id: '1760360335467-welcome', userId: '1760360335467', title: 'Welcome to TechPharma!', message: 'Thank you for joining our platform.', read: false, archived: false, createdAt: new Date().toISOString() }
+      ];
+      await mongoDb.collection('notifications').insertMany(seedNotifs);
+      dataCache['notifications'] = seedNotifs;
+      results.push(`Seeded ${seedNotifs.length} notifications`);
+    } else {
+      results.push(`Notifications already exist (${existingNotifs})`);
     }
 
     res.json({ success: true, message: 'Seed complete', results });
