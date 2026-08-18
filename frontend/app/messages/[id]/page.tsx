@@ -52,6 +52,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [seller, setSeller] = useState<Seller | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [productPrefilled, setProductPrefilled] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const messagesRef = useRef<Message[]>([])
   const productParam = searchParams.get('product');
@@ -159,15 +160,16 @@ export default function ChatPage() {
   }, [params.id])
 
   useEffect(() => {
-    if (productParam) {
+    if (productParam && !productPrefilled) {
       try {
         const parsedProduct: ProductInfo = JSON.parse(decodeURIComponent(productParam));
         setMessage(`I am interested in getting more details about the product: ${parsedProduct.name}`);
+        setProductPrefilled(true);
       } catch (error) {
         console.error('Error parsing product info:', error);
       }
     }
-  }, [productParam, params.id]);
+  }, [productParam, productPrefilled]);
 
   const handleSend = async () => {
     if (!message.trim()) return;
