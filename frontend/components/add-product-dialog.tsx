@@ -1,196 +1,222 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { X, Loader2, Upload } from 'lucide-react'
+import { useState } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Label } from './ui/label'
+import { useToast } from './ui/use-toast'
+import { Plus, Loader2 } from 'lucide-react'
+import { createUploadWidget } from '@/lib/cloudinary'
+import { useAuth } from '@/contexts/auth'
 
-interface AddProductDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onProductAdded?: () => void
-}
-
-export function AddProductDialog({ open, onOpenChange, onProductAdded }: AddProductDialogProps) {
+export function AddProductDialog() {
+  const { toast } = useToast()
+  const { refreshUserData } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('')
   const [stock, setStock] = useState('')
   const [category, setCategory] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [images, setImages] = useState<string[]>([])
 
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
+  const handleImageUpload = () => {
+    const widget = createUploadWidget(
+      (url: string) => {
+        setImages(prev => [...prev, url])
+        toast({ title: 'Image uploaded', description: 'Image added successfully.' })
+      },
+      (error: string) => {
+        toast({ title: 'Upload failed', description: error, variant: 'destructive' })
+      }
+    )
+    if (widget) {
+      widget.open()
     } else {
-      document.body.style.overflow = ''
+      toast({ title: 'Error', description: 'Upload widget failed to initialize', variant: 'destructive' })
     }
-    return () => {
-      document.body.style.overflow = ''
-    }
-  }, [open])
-
-  if (!open) return null
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
-    setLoading(true)
+    if (!name || !price || !stock || !category) {
+      toast({ title: 'Missing fields', description: 'Please fill in all required fields.', variant: 'destructive' })
+      return
+    }
 
+    setLoading(true)
     try {
-      const res = await fetch('/api/products', {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL}/api/products`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           name,
           description,
           price: parseFloat(price),
           stock: parseInt(stock),
           category,
-        }),
+          images,
+          status: 'active'
+        })
       })
 
+      const data = await res.json()
+
       if (!res.ok) {
-        const data = await res.json()
         throw new Error(data.message || 'Failed to add product')
       }
 
-      onProductAdded?.()
-      onOpenChange(false)
+      toast({ title: 'Success', description: 'Product added successfully.' })
+      setOpen(false)
       // Reset form
       setName('')
       setDescription('')
       setPrice('')
       setStock('')
       setCategory('')
+      setImages([])
+      // Refresh user data
+      refreshUserData()
     } catch (err: any) {
-      setError(err.message || 'Something went wrong')
+      toast({ title: 'Error', description: err.message || 'Failed to add product.', variant: 'destructive' })
     } finally {
       setLoading(false)
     }
   }
 
+  const allCategories = [
+    'electronics', 'machinery', 'safety', 'tools', 'lighting',
+    'chemicals', 'medical', 'packaging', 'construction', 'automotive',
+    'textiles', 'agriculture', 'industrial-supplies', 'power-energy', 'lab-equipment'
+  ]
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-slate-900/50"
-        onClick={() => onOpenChange(false)}
-      />
-
-      {/* Dialog */}
-      <div className="relative w-full max-w-lg rounded-lg border border-slate-200 bg-white shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Add new product</h2>
-          <button
-            onClick={() => onOpenChange(false)}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="space-y-4 p-5">
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-5 py-2 rounded-lg">
+          <Plus className="w-4 h-4" />
+          Add Product
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px] rounded-2xl border-border max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add new product</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Product name</label>
-            <input
-              type="text"
+            <Label htmlFor="product-name">Product name *</Label>
+            <Input
+              id="product-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
               placeholder="e.g. Drilling Machine"
-              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="rounded-lg mt-1"
             />
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Description</label>
+            <Label htmlFor="product-desc">Description</Label>
             <textarea
-              rows={3}
+              id="product-desc"
+              rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Brief description of the product"
-              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary mt-1"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Price (₹)</label>
-              <input
+              <Label htmlFor="product-price">Price (₹) *</Label>
+              <Input
+                id="product-price"
                 type="number"
                 step="0.01"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 required
                 placeholder="0.00"
-                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="rounded-lg mt-1"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-slate-700">Stock</label>
-              <input
+              <Label htmlFor="product-stock">Stock *</Label>
+              <Input
+                id="product-stock"
                 type="number"
                 value={stock}
                 onChange={(e) => setStock(e.target.value)}
                 required
                 placeholder="0"
-                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="rounded-lg mt-1"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Category</label>
+            <Label htmlFor="product-category">Category *</Label>
             <select
+              id="product-category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              required
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary mt-1"
             >
               <option value="">Select a category</option>
-              <option value="machinery">Machinery</option>
-              <option value="safety">Safety</option>
-              <option value="electronics">Electronics</option>
+              {allCategories.map(cat => (
+                <option key={cat} value={cat} className="capitalize">
+                  {cat.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                </option>
+              ))}
             </select>
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Product image</label>
-            <div className="flex items-center justify-center rounded-lg border border-dashed border-slate-300 p-6">
-              <div className="text-center">
-                <Upload className="mx-auto h-8 w-8 text-slate-400" />
-                <p className="mt-2 text-sm text-slate-600">Click to upload</p>
-                <p className="text-xs text-slate-400">PNG, JPG up to 5MB</p>
-              </div>
+            <Label>Product images</Label>
+            <div className="flex flex-wrap gap-2 mt-1">
+              {images.map((url, idx) => (
+                <div key={idx} className="relative h-20 w-20 overflow-hidden rounded-lg border border-border">
+                  <img src={url} alt={`Product ${idx + 1}`} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}
+                    className="absolute top-0 right-0 bg-destructive text-white rounded-bl-lg px-1.5 py-0.5 text-xs"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={handleImageUpload}
+                className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-border hover:border-primary hover:bg-secondary/30 transition-colors"
+              >
+                <Plus className="h-5 w-5 text-muted-foreground" />
+              </button>
             </div>
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            </Button>
+            <Button type="submit" disabled={loading} className="flex flex-1 items-center justify-center gap-2">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {loading ? 'Adding...' : 'Add product'}
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

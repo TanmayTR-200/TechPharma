@@ -106,6 +106,7 @@ export default function ChatPage() {
       if (!token) return;
       const response = await fetcher(API_ENDPOINTS.messages.list(params.id as string), {
         headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store' as any,
       });
       if (response.success && response.messages) {
         // Only update state if the message list actually changed (avoids re-render flash on every 5s poll)
