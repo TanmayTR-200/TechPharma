@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { useToast } from './ui/use-toast';
-import { Settings, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { createUploadWidget } from '@/lib/cloudinary';
 import { useAuth } from '@/contexts/auth';
 
@@ -193,12 +193,6 @@ export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { exte
       setOpen(isOpen);
       if (isOpen) loadUserProfile();
     }}>
-      <DialogTrigger asChild>
-        <Button className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-5 py-2 rounded-lg">
-          <Settings className="w-4 h-4" />
-          Edit Profile
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] rounded-2xl border-border">
         <DialogHeader>
           <DialogTitle>Edit Profile</DialogTitle>

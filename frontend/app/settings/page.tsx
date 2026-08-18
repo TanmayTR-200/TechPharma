@@ -149,6 +149,12 @@ export default function SettingsPage() {
                 )
               })}
             </nav>
+            <button
+              onClick={() => setEditOpen(true)}
+              className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Edit Profile
+            </button>
           </aside>
 
           {/* Content */}
@@ -164,7 +170,6 @@ export default function SettingsPage() {
                     Edit
                   </button>
                 </div>
-
                 <div className="flex items-center gap-4 border-b border-border pb-4">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-secondary text-xl font-bold text-muted-foreground">
                     {user?.name?.[0]?.toUpperCase() || 'U'}

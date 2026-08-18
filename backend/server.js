@@ -1093,6 +1093,63 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   }
 });
 
+// Profile endpoints (GET + PUT)
+app.get('/api/profile', authMiddleware, async (req, res) => {
+  try {
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const user = users.find(u => u._id === req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    res.json({
+      success: true,
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      company: user.company || { name: '', description: '', website: '', address: '', logo: '' }
+    });
+  } catch (error) {
+    console.error('Profile GET error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch profile' });
+  }
+});
+
+app.put('/api/profile', authMiddleware, async (req, res) => {
+  try {
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u._id === req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const { company, phone } = req.body;
+
+    // Update fields
+    if (company) {
+      if (!user.company) user.company = {};
+      if (company.name !== undefined) user.company.name = company.name;
+      if (company.description !== undefined) user.company.description = company.description;
+      if (company.website !== undefined) user.company.website = company.website;
+      if (company.address !== undefined) user.company.address = company.address;
+      if (company.logo !== undefined) user.company.logo = company.logo;
+    }
+    if (phone !== undefined) user.phone = phone;
+
+    writeJsonFile(usersFile, users);
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      name: user.name,
+      email: user.email,
+      phone: user.phone || '',
+      company: user.company || {}
+    });
+  } catch (error) {
+    console.error('Profile PUT error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update profile' });
+  }
+});
+
 // Protected Routes
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
