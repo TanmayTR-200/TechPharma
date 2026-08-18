@@ -193,6 +193,10 @@ export default function SettingsPage() {
                     <dt className="text-xs text-muted-foreground">Phone</dt>
                     <dd className="mt-1 text-sm font-medium text-foreground">{user?.phone || '-'}</dd>
                   </div>
+                  <div>
+                    <dt className="text-xs text-muted-foreground">State</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">{user?.state || '-'}</dd>
+                  </div>
                 </dl>
               </div>
             )}

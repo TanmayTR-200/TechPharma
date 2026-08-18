@@ -23,6 +23,7 @@ export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { exte
     description: '',
     website: '',
     phone: '',
+    state: '',
     address: '',
     logo: '',
   });
@@ -56,6 +57,7 @@ export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { exte
         description: data.company?.description || '',
         website: data.company?.website || '',
         phone: data.phone || '',
+        state: data.state || '',
         address: data.company?.address || '',
         logo: data.company?.logo || '',
       });
@@ -126,6 +128,7 @@ export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { exte
       if (profile.address) updatedFields.company.address = profile.address;
       if (profile.logo) updatedFields.company.logo = profile.logo;
       if (profile.phone) updatedFields.phone = profile.phone;
+      if (profile.state !== undefined) updatedFields.state = profile.state;
 
       if (Object.keys(updatedFields.company).length === 0 && !updatedFields.phone) {
         toast({
@@ -245,6 +248,54 @@ export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { exte
               placeholder="+91 1234567890"
               className="rounded-lg"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="state">State</Label>
+            <select
+              id="state"
+              value={profile.state}
+              onChange={(e) => setProfile({ ...profile, state: e.target.value })}
+              className="w-full rounded-lg border border-border bg-transparent px-3 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">Select your state</option>
+              <option value="Andhra Pradesh">Andhra Pradesh</option>
+              <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+              <option value="Assam">Assam</option>
+              <option value="Bihar">Bihar</option>
+              <option value="Chhattisgarh">Chhattisgarh</option>
+              <option value="Goa">Goa</option>
+              <option value="Gujarat">Gujarat</option>
+              <option value="Haryana">Haryana</option>
+              <option value="Himachal Pradesh">Himachal Pradesh</option>
+              <option value="Jharkhand">Jharkhand</option>
+              <option value="Karnataka">Karnataka</option>
+              <option value="Kerala">Kerala</option>
+              <option value="Madhya Pradesh">Madhya Pradesh</option>
+              <option value="Maharashtra">Maharashtra</option>
+              <option value="Manipur">Manipur</option>
+              <option value="Meghalaya">Meghalaya</option>
+              <option value="Mizoram">Mizoram</option>
+              <option value="Nagaland">Nagaland</option>
+              <option value="Odisha">Odisha</option>
+              <option value="Punjab">Punjab</option>
+              <option value="Rajasthan">Rajasthan</option>
+              <option value="Sikkim">Sikkim</option>
+              <option value="Tamil Nadu">Tamil Nadu</option>
+              <option value="Telangana">Telangana</option>
+              <option value="Tripura">Tripura</option>
+              <option value="Uttar Pradesh">Uttar Pradesh</option>
+              <option value="Uttarakhand">Uttarakhand</option>
+              <option value="West Bengal">West Bengal</option>
+              <option value="Delhi">Delhi</option>
+              <option value="Jammu and Kashmir">Jammu and Kashmir</option>
+              <option value="Ladakh">Ladakh</option>
+              <option value="Puducherry">Puducherry</option>
+              <option value="Chandigarh">Chandigarh</option>
+              <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+              <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
+              <option value="Lakshadweep">Lakshadweep</option>
+            </select>
           </div>
 
           <div className="space-y-2">

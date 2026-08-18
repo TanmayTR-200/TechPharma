@@ -8,6 +8,7 @@ interface SignupData {
   companyName: string;
   email: string;
   phone: string;
+  state: string;
   password: string;
 }
 
@@ -111,7 +112,8 @@ export function useAuthForm() {
           email: signupData.email,
           password: signupData.password,
           companyName: signupData.companyName,
-          phone: signupData.phone
+          phone: signupData.phone,
+          state: signupData.state
         })
       });
 

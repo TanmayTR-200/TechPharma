@@ -585,6 +585,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       role,
       company: req.body.companyName ? { name: req.body.companyName } : (req.body.company || {}),
       phone: req.body.phone || '',
+      state: req.body.state || '',
       createdAt: new Date().toISOString()
     };
 
@@ -616,7 +617,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
         name: user.name,
         role: user.role,
         company: user.company || null,
-        phone: user.phone || ''
+        phone: user.phone || '',
+        state: user.state || ''
       },
       token
     });
@@ -1080,7 +1082,8 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
         name: user.name,
         role: user.role,
         company: user.company || null,
-        phone: user.phone || ''
+        phone: user.phone || '',
+        state: user.state || ''
       },
       token
     });
@@ -1106,6 +1109,7 @@ app.get('/api/profile', authMiddleware, async (req, res) => {
       name: user.name,
       email: user.email,
       phone: user.phone || '',
+      state: user.state || '',
       company: user.company || { name: '', description: '', website: '', address: '', logo: '' }
     });
   } catch (error) {
@@ -1121,7 +1125,7 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
     const user = users.find(u => u._id === req.user._id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const { company, phone } = req.body;
+    const { company, phone, state } = req.body;
 
     // Update fields
     if (company) {
@@ -1133,6 +1137,7 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
       if (company.logo !== undefined) user.company.logo = company.logo;
     }
     if (phone !== undefined) user.phone = phone;
+    if (state !== undefined) user.state = state;
 
     writeJsonFile(usersFile, users);
 
@@ -1142,6 +1147,7 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
       name: user.name,
       email: user.email,
       phone: user.phone || '',
+      state: user.state || '',
       company: user.company || {}
     });
   } catch (error) {
@@ -1179,6 +1185,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
         role: user.role,
         company: user.company || null,
         phone: user.phone || '',
+        state: user.state || '',
         createdAt: user.createdAt
       },
       data: {

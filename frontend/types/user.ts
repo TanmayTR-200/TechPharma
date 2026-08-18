@@ -14,6 +14,7 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
+  state?: string;
   role: 'buyer' | 'supplier' | 'admin';
   company?: Company;
   createdAt: string;
