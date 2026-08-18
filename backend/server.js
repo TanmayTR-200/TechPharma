@@ -386,6 +386,23 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
+// Debug endpoint — check cache state
+app.get('/api/debug/cache', (req, res) => {
+  const result = {};
+  for (const col of COLLECTIONS) {
+    const data = dataCache[col] || [];
+    if (col === 'products') {
+      result[col] = data.map(p => ({ _id: p._id, name: p.name, userId: p.userId, status: p.status }));
+    } else if (col === 'users') {
+      result[col] = data.map(u => ({ _id: u._id, email: u.email }));
+    } else {
+      result[col] = data.length;
+    }
+  }
+  result.mongoConnected = !!mongoDb;
+  res.json(result);
+});
+
 // Auth middleware
 const authMiddleware = async (req, res, next) => {
   try {
