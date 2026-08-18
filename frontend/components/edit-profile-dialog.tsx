@@ -166,6 +166,7 @@ export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { exte
         description: responseData.company?.description || '',
         website: responseData.company?.website || '',
         phone: responseData.phone || '',
+        state: responseData.state || '',
         address: responseData.company?.address || '',
         logo: responseData.company?.logo || '',
       });
