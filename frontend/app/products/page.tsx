@@ -25,6 +25,7 @@ export default function ProductsPage() {
 
   const category = searchParams.get('category')
   const search = searchParams.get('search')
+  const stateFilter = searchParams.get('state')
   const page = parseInt(searchParams.get('page') || '1')
   const sort = searchParams.get('sort') || 'featured'
 
@@ -34,6 +35,7 @@ export default function ProductsPage() {
       const filters: Record<string, string> = {}
       if (category) filters.category = category.toLowerCase()
       if (search) filters.search = search
+      if (stateFilter) filters.state = stateFilter
       const params = new URLSearchParams(window.location.search)
       if (params.get('priceMin')) filters.priceMin = params.get('priceMin')!
       if (params.get('priceMax')) filters.priceMax = params.get('priceMax')!
@@ -101,7 +103,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts()
-  }, [category, search, page, sort])
+  }, [category, search, stateFilter, page, sort])
 
   const priceMin = searchParams.get('priceMin') ? parseInt(searchParams.get('priceMin')!) : 0
   const priceMax = searchParams.get('priceMax') ? parseInt(searchParams.get('priceMax')!) : 10000

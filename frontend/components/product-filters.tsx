@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useProductNavigation } from "@/hooks/use-product-navigation"
 import { useProductFilters } from "@/hooks/use-product-filters"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
-import { ChevronDown } from "lucide-react"
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
@@ -28,6 +28,10 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
   const [selectedFilters, setSelectedFilters] = useState<string[]>([])
   const { navigateToProducts } = useProductNavigation()
   const { categoryCounts } = useProductFilters()
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
+  const currentState = searchParams.get('state') || ''
 
   useEffect(() => {
     if (selectedCategory) {
@@ -41,31 +45,36 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
     }
   }, [selectedCategory])
 
+  const updateUrl = (updates: Record<string, string | undefined>) => {
+    const params = new URLSearchParams(searchParams.toString())
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value) params.set(key, value)
+      else params.delete(key)
+    })
+    // Reset to page 1 when filters change
+    params.delete('page')
+    router.push(`/products?${params.toString()}`, { scroll: false })
+  }
+
   const toggleFilter = (filter: string) => {
     const newFilters = selectedFilters.includes(filter)
       ? selectedFilters.filter(f => f !== filter)
       : [...selectedFilters, filter]
     setSelectedFilters(newFilters)
-    navigateToProducts({
-      category: newFilters.map(f => f.toLowerCase()).join(',') || undefined,
-      sortBy: selectedSort
-    })
-  }
-
-  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>, idx: number) => {
-    const val = parseInt(e.target.value) || 0
-    const newRange = [...priceRange]
-    newRange[idx] = val
-    setPriceRange(newRange)
+    updateUrl({ category: newFilters.map(f => f.toLowerCase()).join(',') || undefined })
   }
 
   const applyPriceFilter = () => {
-    navigateToProducts({
+    updateUrl({
       category: selectedFilters.map(f => f.toLowerCase()).join(',') || undefined,
-      sortBy: selectedSort,
       priceMin: priceRange[0].toString(),
       priceMax: priceRange[1].toString()
     })
+  }
+
+  const clearAll = () => {
+    setSelectedFilters([])
+    router.push('/products', { scroll: false })
   }
 
   return (
@@ -78,10 +87,7 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
             value={selectedFilters[0] || ''}
             onChange={(e) => {
               setSelectedFilters(e.target.value ? [e.target.value] : [])
-              navigateToProducts({
-                category: e.target.value || undefined,
-                sortBy: selectedSort
-              })
+              updateUrl({ category: e.target.value || undefined })
             }}
             className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
@@ -98,15 +104,9 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
         <div>
           <label className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2 block">State</label>
           <select
-            value={typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('state') || '' : ''}
+            value={currentState}
             onChange={(e) => {
-              const params = new URLSearchParams(window.location.search)
-              if (e.target.value) {
-                params.set('state', e.target.value)
-              } else {
-                params.delete('state')
-              }
-              window.location.search = params.toString()
+              updateUrl({ state: e.target.value || undefined })
             }}
             className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           >
@@ -126,7 +126,10 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
             <input
               type="number"
               value={priceRange[0]}
-              onChange={(e) => handlePriceChange(e, 0)}
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 0
+                setPriceRange([val, priceRange[1]])
+              }}
               placeholder="Min"
               className="w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
             />
@@ -134,7 +137,10 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
             <input
               type="number"
               value={priceRange[1]}
-              onChange={(e) => handlePriceChange(e, 1)}
+              onChange={(e) => {
+                const val = parseInt(e.target.value) || 0
+                setPriceRange([priceRange[0], val])
+              }}
               placeholder="Max"
               className="w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
             />
@@ -149,7 +155,7 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
       </div>
 
       {/* Active filters */}
-      {(selectedFilters.length > 0 || (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('state'))) && (
+      {(selectedFilters.length > 0 || currentState) && (
         <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
           {selectedFilters.map(f => (
             <button
@@ -160,20 +166,16 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
               {PRODUCT_CATEGORIES.find(c => c.name === f)?.displayName || f} ✕
             </button>
           ))}
-          {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('state') && (
+          {currentState && (
             <button
-              onClick={() => {
-                const params = new URLSearchParams(window.location.search)
-                params.delete('state')
-                window.location.search = params.toString()
-              }}
+              onClick={() => updateUrl({ state: undefined })}
               className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-2.5 py-1 rounded hover:bg-foreground hover:text-background transition-colors"
             >
-              {new URLSearchParams(window.location.search).get('state')} ✕
+              {currentState} ✕
             </button>
           )}
           <button
-            onClick={() => { setSelectedFilters([]); navigateToProducts({}) }}
+            onClick={clearAll}
             className="text-xs text-primary hover:underline ml-2"
           >
             Clear all
