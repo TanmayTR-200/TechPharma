@@ -1315,17 +1315,44 @@ app.get('/api/products', async (req, res) => {
     // Prebuild a userId -> user map ONCE to avoid N+1 lookups inside the loop
     const userMap = new Map(users.map(u => [u._id, u]));
 
-    // Filter active products and sort by createdAt
-    const activeProducts = products
+    // Parse query params for filtering
+    const filterCategory = req.query.category ? String(req.query.category).toLowerCase() : null;
+    const filterState = req.query.state ? String(req.query.state) : null;
+    const filterSearch = req.query.search ? String(req.query.search).toLowerCase() : null;
+    const priceMin = req.query.priceMin ? parseFloat(req.query.priceMin) : 0;
+    const priceMax = req.query.priceMax ? parseFloat(req.query.priceMax) : 100000;
+
+    // Filter active products
+    let activeProducts = products
       .filter(p => p.status === 'active')
+      .filter(p => {
+        // Category filter
+        if (filterCategory) {
+          const cats = filterCategory.split(',').map(c => c.trim());
+          if (!cats.includes(String(p.category).toLowerCase())) return false;
+        }
+        // State filter (join with user)
+        if (filterState) {
+          const seller = userMap.get(p.userId);
+          if (!seller || seller.state !== filterState) return false;
+        }
+        // Search filter
+        if (filterSearch) {
+          const haystack = (p.name + ' ' + (p.description || '')).toLowerCase();
+          if (!haystack.includes(filterSearch)) return false;
+        }
+        // Price filter
+        if (typeof p.price === 'number' && (p.price < priceMin || p.price > priceMax)) return false;
+        return true;
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .map(p => {
-        const supplier = userMap.get(p.userId);   // O(1) lookup
+        const supplier = userMap.get(p.userId);
         const { userId, supplierId, createdAt, updatedAt, ...publicFields } = p;
         return {
           ...publicFields,
           supplierName: isAuthed ? (supplier?.name || 'Supplier') : 'Seller',
-          supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller' } : null
+          supplier: supplier ? { _id: supplier._id, name: isAuthed ? supplier.name : 'Seller', state: supplier.state || '' } : null
         };
       });
 
