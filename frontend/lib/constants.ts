@@ -1,25 +1,37 @@
 export interface Category {
-  name: string;       // internal name (e.g., "machinery")
-  displayName: string; // display name (e.g., "Machinery")
+  name: string;       // internal name (kebab-case)
+  displayName: string; // display name
   count: number;
 }
 
 export const PRODUCT_CATEGORIES: Category[] = [
-  { name: "electronics", displayName: "Electronics", count: 0 },
-  { name: "machinery", displayName: "Machinery", count: 0 },
-  { name: "tools", displayName: "Tools", count: 0 },
-  { name: "safety", displayName: "Safety Equipment", count: 0 },
-  { name: "lighting", displayName: "Lighting", count: 0 },
-  { name: "chemicals", displayName: "Chemicals", count: 0 },
-  { name: "medical", displayName: "Medical Supplies", count: 0 },
-  { name: "packaging", displayName: "Packaging", count: 0 },
-  { name: "construction", displayName: "Construction", count: 0 },
-  { name: "automotive", displayName: "Automotive", count: 0 },
-  { name: "textiles", displayName: "Textiles", count: 0 },
-  { name: "agriculture", displayName: "Agriculture", count: 0 },
-  { name: "industrial-supplies", displayName: "Industrial Supplies", count: 0 },
-  { name: "power-energy", displayName: "Power & Energy", count: 0 },
-  { name: "lab-equipment", displayName: "Lab Equipment", count: 0 },
+  { name: "tech-transfer", displayName: "Tech Transfer", count: 0 },
+  { name: "technical-consultant", displayName: "Technical Consultant", count: 0 },
+  { name: "job-workers", displayName: "Job Workers", count: 0 },
+  { name: "equipment-fabrication", displayName: "Equipment Fabrication", count: 0 },
+  { name: "ahu-hvac", displayName: "AHU/HVAC", count: 0 },
+  { name: "clean-room-fabricator", displayName: "Clean Room Fabricator", count: 0 },
+  { name: "purified-water-system", displayName: "Purified Water System", count: 0 },
+  { name: "pest-control-industrial", displayName: "Pest Control (Industrial)", count: 0 },
+  { name: "pipeline-fabrication", displayName: "Pipeline Fabrication", count: 0 },
+  { name: "electrical", displayName: "Electrical", count: 0 },
+  { name: "civil-work", displayName: "Civil Work", count: 0 },
+  { name: "utility", displayName: "Utility", count: 0 },
+  { name: "etp-equipment", displayName: "ETP Equipment", count: 0 },
+  { name: "plant-instruments", displayName: "Plant Instruments", count: 0 },
+  { name: "lab-instruments", displayName: "Lab Instruments", count: 0 },
+  { name: "approvals-licences", displayName: "Approvals/Licences", count: 0 },
+  { name: "qa-qc-ra-consultant", displayName: "QA/QC/RA Consultant", count: 0 },
+  { name: "consent-environment-consultant", displayName: "Consent/Environment Consultant", count: 0 },
+  { name: "safety-consultant", displayName: "Safety Consultant", count: 0 },
+  { name: "manpower-consultant", displayName: "Manpower Consultant", count: 0 },
+  { name: "labour-contractors", displayName: "Labour Contractors", count: 0 },
+  { name: "it-support", displayName: "IT Support", count: 0 },
+  { name: "external-laboratories", displayName: "External Laboratories for Analysis", count: 0 },
+  { name: "trainings-external-faculties", displayName: "Trainings - External Faculties", count: 0 },
+  { name: "industrial-land", displayName: "Industrial Land", count: 0 },
+  { name: "defect-handling", displayName: "Defect Handling", count: 0 },
+  { name: "documents-and-updates", displayName: "Documents and Updates", count: 0 },
 ];
 
 export function getCategoryDisplayName(name: string): string {

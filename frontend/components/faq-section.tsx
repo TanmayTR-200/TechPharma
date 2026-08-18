@@ -26,7 +26,7 @@ const faqs = [
   },
   {
     question: "What categories are available?",
-    answer: "Currently we support Electronics, Machinery, Safety, Tools, and Lighting categories. New categories can be added as the platform grows - contact us if you need a specific category for your products."
+    answer: "We support 27 categories spanning pharmaceutical manufacturing, infrastructure, consultancy, and industrial services — including Tech Transfer, Equipment Fabrication, HVAC, Pipeline Fabrication, QA/QC, Safety, and more."
   },
 ]
 

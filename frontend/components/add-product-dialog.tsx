@@ -9,6 +9,7 @@ import { useToast } from './ui/use-toast'
 import { Plus, Loader2 } from 'lucide-react'
 import { createUploadWidget } from '@/lib/cloudinary'
 import { useAuth } from '@/contexts/auth'
+import { PRODUCT_CATEGORIES, getCategoryDisplayName } from '@/lib/constants'
 
 export function AddProductDialog() {
   const { toast } = useToast()
@@ -92,11 +93,7 @@ export function AddProductDialog() {
     }
   }
 
-  const allCategories = [
-    'electronics', 'machinery', 'safety', 'tools', 'lighting',
-    'chemicals', 'medical', 'packaging', 'construction', 'automotive',
-    'textiles', 'agriculture', 'industrial-supplies', 'power-energy', 'lab-equipment'
-  ]
+  const allCategories = PRODUCT_CATEGORIES.map(c => c.name)
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -174,8 +171,8 @@ export function AddProductDialog() {
             >
               <option value="">Select a category</option>
               {allCategories.map(cat => (
-                <option key={cat} value={cat} className="capitalize">
-                  {cat.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                <option key={cat} value={cat}>
+                  {getCategoryDisplayName(cat)}
                 </option>
               ))}
             </select>
