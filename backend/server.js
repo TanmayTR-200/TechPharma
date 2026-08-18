@@ -216,22 +216,10 @@ async function persistToMongo(colName, data) {
 // Initialize storage
 function initStorage() {
   try {
-    // Create data directory if it doesn't exist
-    const dataDir = path.join(__dirname, '../data');
+    // Create data directory if it doesn't exist (same path as reads: ./data)
+    const dataDir = path.join(__dirname, './data');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
-    }
-    
-    // Create products.json if it doesn't exist
-    const productsFile = path.join(dataDir, 'products.json');
-    if (!fs.existsSync(productsFile)) {
-      writeJsonFile(productsFile, []);
-    }
-    
-    // Create users.json if it doesn't exist
-    const usersFile = path.join(dataDir, 'users.json');
-    if (!fs.existsSync(usersFile)) {
-      writeJsonFile(usersFile, []);
     }
     
     // Pre-load ALL data files into cache immediately (synchronous, before MongoDB connects)
@@ -243,6 +231,8 @@ function initStorage() {
         dataCache[col] = fileData;
         console.log(`  📄 ${col}: ${fileData.length} records pre-loaded from file`);
       } else {
+        // Create empty file if it doesn't exist
+        fs.writeFileSync(filePath, '[]');
         dataCache[col] = [];
       }
     }
