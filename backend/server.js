@@ -138,8 +138,8 @@ async function connectMongoDB() {
               dataCache[col] = fileData;
             } else if (col === 'users' && (!dataCache['users'] || dataCache['users'].length === 0)) {
               const defaultUsers = [
-                { _id: '1760257427529', email: 'tanmaytr05@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'Tanmay', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' } },
-                { _id: '1760360335467', email: 'tanmaytalanki.cs23@bmsce.ac.in', password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De', name: 'Tanmay T', company: { name: 'BCD' }, role: 'buyer', createdAt: new Date().toISOString() }
+                { _id: '1760257427529', email: 'tanmaytr05@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'Tanmay', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' }, phone: '+91 800-123-4567' },
+                { _id: '1760360335467', email: 'tanmaytalanki.cs23@bmsce.ac.in', password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De', name: 'Tanmay T', company: { name: 'BCD' }, role: 'buyer', createdAt: new Date().toISOString(), phone: '+91 900-123-4567' }
               ];
               await mongoDb.collection('users').insertMany(defaultUsers);
               dataCache['users'] = defaultUsers;
@@ -394,13 +394,35 @@ app.get('/api/debug/cache', (req, res) => {
     if (col === 'products') {
       result[col] = data.map(p => ({ _id: p._id, name: p.name, userId: p.userId, status: p.status }));
     } else if (col === 'users') {
-      result[col] = data.map(u => ({ _id: u._id, email: u.email }));
+      result[col] = data.map(u => ({ _id: u._id, email: u.email, phone: u.phone || 'NONE' }));
     } else {
       result[col] = data.length;
     }
   }
   result.mongoConnected = !!mongoDb;
   res.json(result);
+});
+
+// One-time migration — add phone to existing users
+app.get('/api/debug/migrate-phones', async (req, res) => {
+  try {
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    let updated = 0;
+    users.forEach(u => {
+      if (!u.phone) {
+        if (u._id === '1760257427529') u.phone = '+91 800-123-4567';
+        else if (u._id === '1760360335467') u.phone = '+91 900-123-4567';
+        else u.phone = '';
+        updated++;
+      }
+    });
+    writeJsonFile(usersFile, users);
+    res.json({ success: true, message: `Updated ${updated} users with phone numbers` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 });
 
 // Auth middleware
