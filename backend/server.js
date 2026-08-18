@@ -407,35 +407,32 @@ app.get('/api/seed', async (req, res) => {
       results.push(`Orders already exist (${existingOrders})`);
     }
 
-    // Seed messages (from local test data)
+    // Messages and conversations are NOT seeded — they should only appear when real users message each other
+    // Clear any previously seeded fake messages
     const existingMessages = await mongoDb.collection('messages').countDocuments();
-    if (existingMessages === 0) {
-      const seedMessages = [
-        { _id: 'msg1', senderId: '1760360335467', receiverId: '1760257427529', content: 'I am interested in getting more details about the product: Drilling Machine', timestamp: '2025-10-24T10:47:23.920Z', read: true },
-        { _id: 'msg2', senderId: '1760257427529', receiverId: '1760360335467', content: 'I am interested in getting more details about the product: Firefighter Suit', timestamp: '2025-10-25T14:00:00.000Z', read: true },
-        { _id: 'msg3', senderId: '1760360335467', receiverId: '1760257427529', content: 'Sure, what would you like to know?', timestamp: '2025-10-25T14:05:00.000Z', read: true },
-        { _id: 'msg4', senderId: '1760257427529', receiverId: '1760360335467', content: 'What is the price and availability?', timestamp: '2025-10-25T14:10:00.000Z', read: true },
-        { _id: 'msg5', senderId: '1760360335467', receiverId: '1760257427529', content: 'The price is ₹2,000 and we have 14 in stock.', timestamp: '2025-10-25T14:15:00.000Z', read: true },
-      ];
-      await mongoDb.collection('messages').insertMany(seedMessages);
-      dataCache['messages'] = seedMessages;
-      results.push(`Seeded ${seedMessages.length} messages`);
-    } else {
-      results.push(`Messages already exist (${existingMessages})`);
+    if (existingMessages > 0) {
+      const fakeMsgs = await mongoDb.collection('messages').find({ _id: { $in: ['msg1', 'msg2', 'msg3', 'msg4', 'msg5'] } }).toArray();
+      if (fakeMsgs.length > 0) {
+        await mongoDb.collection('messages').deleteMany({ _id: { $in: ['msg1', 'msg2', 'msg3', 'msg4', 'msg5'] } });
+        dataCache['messages'] = (dataCache['messages'] || []).filter(m => !['msg1', 'msg2', 'msg3', 'msg4', 'msg5'].includes(m._id));
+        results.push(`Deleted ${fakeMsgs.length} fake messages`);
+      }
     }
+    if (!dataCache['messages']) dataCache['messages'] = [];
+    results.push(`Messages: ${dataCache['messages'].length}`);
 
-    // Seed conversations
+    // Clear fake conversations
     const existingConversations = await mongoDb.collection('conversations').countDocuments();
-    if (existingConversations === 0) {
-      const seedConversations = [
-        { _id: 'conv1', participants: ['1760257427529', '1760360335467'], lastMessage: 'The price is ₹2,000 and we have 14 in stock.', lastMessageAt: '2025-10-25T14:15:00.000Z' }
-      ];
-      await mongoDb.collection('conversations').insertMany(seedConversations);
-      dataCache['conversations'] = seedConversations;
-      results.push(`Seeded ${seedConversations.length} conversations`);
-    } else {
-      results.push(`Conversations already exist (${existingConversations})`);
+    if (existingConversations > 0) {
+      const fakeConvs = await mongoDb.collection('conversations').find({ _id: 'conv1' }).toArray();
+      if (fakeConvs.length > 0) {
+        await mongoDb.collection('conversations').deleteMany({ _id: 'conv1' });
+        dataCache['conversations'] = (dataCache['conversations'] || []).filter(c => c._id !== 'conv1');
+        results.push(`Deleted fake conversation`);
+      }
     }
+    if (!dataCache['conversations']) dataCache['conversations'] = [];
+    results.push(`Conversations: ${dataCache['conversations'].length}`);
 
     // Seed notifications
     const existingNotifs = await mongoDb.collection('notifications').countDocuments();
@@ -508,6 +505,26 @@ app.get('/api/debug/migrate-phones', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+});
+
+// Debug endpoint — inspect orders to see why they don't show
+app.get('/api/debug/orders', (req, res) => {
+  const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+  res.json({
+    success: true,
+    count: orders.length,
+    orders: orders.map(o => ({
+      _id: o._id,
+      userId: o.userId,
+      buyerName: o.buyerName,
+      status: o.status,
+      totalAmount: o.totalAmount,
+      items: o.items?.length || 0,
+      trackingId: o.trackingId || 'NONE',
+      shippingAddress: !!o.shippingAddress,
+      createdAt: o.createdAt
+    }))
+  });
 });
 
 // Auth middleware

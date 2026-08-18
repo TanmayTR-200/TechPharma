@@ -110,7 +110,8 @@ export function useAuthForm() {
           name: signupData.name,
           email: signupData.email,
           password: signupData.password,
-          companyName: signupData.companyName
+          companyName: signupData.companyName,
+          phone: signupData.phone
         })
       });
 
