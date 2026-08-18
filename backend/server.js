@@ -517,6 +517,21 @@ app.get('/api/debug/orders', (req, res) => {
   });
 });
 
+// Debug endpoint — clear old products from MongoDB
+app.get('/api/debug/clear-products', async (req, res) => {
+  try {
+    const productsFile = path.join(__dirname, './data/products.json');
+    writeJsonFile(productsFile, []);
+    if (mongoDb) {
+      await mongoDb.collection('products').deleteMany({});
+    }
+    dataCache['products'] = [];
+    res.json({ success: true, message: 'All products cleared' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Auth middleware
 const authMiddleware = async (req, res, next) => {
   try {
