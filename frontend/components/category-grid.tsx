@@ -59,17 +59,17 @@ export function CategoryGrid() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
-            {[1, 2, 3, 4, 5].map(i => <CategorySkeleton key={i} />)}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <CategorySkeleton key={i} />)}
           </div>
         ) : (
           <>
             {populated.length > 0 && (
-              <div className="grid gap-4 mb-3" style={{ gridTemplateColumns: 'repeat(' + Math.min(populated.length, 5) + ', 1fr)' }}>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-3">
                 {populated.map((cat, idx) => {
                   const count = counts[cat.key] || 0
                   return (
-                    <Reveal key={cat.name} delay={idx * 0.08} y={20}>
+                    <Reveal key={cat.name} delay={idx * 0.05} y={20}>
                       <button
                         onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })}
                         className="group border border-border p-5 text-left w-full hover:border-foreground transition-colors"
@@ -83,11 +83,11 @@ export function CategoryGrid() {
               </div>
             )}
             {empty.length > 0 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-4">
                 {empty.map((cat) => (
-                  <button key={cat.name} onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })} className="border border-border/50 px-3 py-1.5 text-muted-foreground hover:text-foreground hover:border-foreground transition-colors">
-                    <span className="text-xs">{cat.name}</span>
-                    <span className="text-[10px] text-muted-foreground/60 ml-1">No listings</span>
+                  <button key={cat.name} onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })} className="border border-border/50 px-3 py-2 text-muted-foreground hover:text-foreground hover:border-foreground transition-colors text-left">
+                    <span className="text-xs font-medium">{cat.name}</span>
+                    <span className="text-[10px] text-muted-foreground/60 block">No listings</span>
                   </button>
                 ))}
               </div>
