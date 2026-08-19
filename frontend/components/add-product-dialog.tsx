@@ -1,13 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { useToast } from './ui/use-toast'
 import { Plus, Loader2 } from 'lucide-react'
-import { createUploadWidget } from '@/lib/cloudinary'
 import { useAuth } from '@/contexts/auth'
 import { PRODUCT_CATEGORIES, getCategoryDisplayName } from '@/lib/constants'
 
@@ -22,23 +21,40 @@ export function AddProductDialog() {
   const [stock, setStock] = useState('')
   const [category, setCategory] = useState('')
   const [images, setImages] = useState<string[]>([])
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-  const handleImageUpload = () => {
-    const widget = createUploadWidget(
-      (url: string) => {
-        setImages(prev => [...prev, url])
-        toast({ title: 'Image uploaded', description: 'Image added successfully.' })
-      },
-      (error: string) => {
-        toast({ title: 'Upload failed', description: error, variant: 'destructive' })
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setUploadingImage(true)
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('upload_preset', 'techpharma')
+        formData.append('cloud_name', process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'zomkvzsh')
+
+        const res = await fetch(
+          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'zomkvzsh'}/image/upload`,
+          { method: 'POST', body: formData }
+        )
+        const data = await res.json()
+        if (data.secure_url) {
+          setImages(prev => [...prev, data.secure_url])
+        } else {
+          throw new Error(data.error?.message || 'Upload failed')
+        }
       }
-    )
-    if (widget) {
-      widget.open()
-    } else {
-      toast({ title: 'Error', description: 'Upload widget failed to initialize', variant: 'destructive' })
+      toast({ title: 'Image uploaded', description: 'Image added successfully.' })
+    } catch (err: any) {
+      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' })
+    } finally {
+      setUploadingImage(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -193,12 +209,21 @@ export function AddProductDialog() {
                   </button>
                 </div>
               ))}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                multiple
+                onChange={handleImageUpload}
+                className="hidden"
+              />
               <button
                 type="button"
-                onClick={handleImageUpload}
-                className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-border hover:border-primary hover:bg-secondary/30 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImage}
+                className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-border hover:border-primary hover:bg-secondary/30 transition-colors disabled:opacity-50"
               >
-                <Plus className="h-5 w-5 text-muted-foreground" />
+                {uploadingImage ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <Plus className="h-5 w-5 text-muted-foreground" />}
               </button>
             </div>
           </div>
