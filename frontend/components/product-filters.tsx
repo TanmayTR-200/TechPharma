@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useProductNavigation } from "@/hooks/use-product-navigation"
 import { useProductFilters } from "@/hooks/use-product-filters"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
+import { Check, ChevronDown } from "lucide-react"
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
@@ -26,6 +27,8 @@ interface ProductFiltersProps {
 export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: ProductFiltersProps) {
   const [priceRange, setPriceRange] = useState([0, 10000])
   const [selectedFilters, setSelectedFilters] = useState<string[]>([])
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false)
+  const catRef = useRef<HTMLDivElement>(null)
   const { navigateToProducts } = useProductNavigation()
   const { categoryCounts } = useProductFilters()
   const searchParams = useSearchParams()
@@ -44,6 +47,16 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
       setSelectedFilters([])
     }
   }, [selectedCategory])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (catRef.current && !catRef.current.contains(e.target as Node)) {
+        setCatDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const updateUrl = (updates: Record<string, string | undefined>) => {
     const params = new URLSearchParams(searchParams.toString())
@@ -80,24 +93,39 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
   return (
     <div className="border border-border bg-card p-4 rounded-lg">
       <div className="grid md:grid-cols-3 gap-4">
-        {/* Category dropdown */}
-        <div>
+        {/* Category multi-select dropdown */}
+        <div className="relative" ref={catRef}>
           <label className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2 block">Category</label>
-          <select
-            value={selectedFilters[0] || ''}
-            onChange={(e) => {
-              setSelectedFilters(e.target.value ? [e.target.value] : [])
-              updateUrl({ category: e.target.value || undefined })
-            }}
-            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          <button
+            onClick={() => setCatDropdownOpen(!catDropdownOpen)}
+            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-left flex items-center justify-between hover:border-primary transition-colors"
           >
-            <option value="">All categories</option>
-            {PRODUCT_CATEGORIES.map(cat => (
-              <option key={cat.name} value={cat.name}>
-                {cat.displayName} ({categoryCounts.find(c => c.name === cat.name)?.count || 0})
-              </option>
-            ))}
-          </select>
+            <span className="truncate">
+              {selectedFilters.length === 0
+                ? 'All categories'
+                : selectedFilters.length === 1
+                  ? PRODUCT_CATEGORIES.find(c => c.name === selectedFilters[0])?.displayName || selectedFilters[0]
+                  : `${selectedFilters.length} categories selected`}
+            </span>
+            <ChevronDown className={'h-4 w-4 text-muted-foreground transition-transform ' + (catDropdownOpen ? 'rotate-180' : '')} />
+          </button>
+          {catDropdownOpen && (
+            <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+              {PRODUCT_CATEGORIES.map(cat => (
+                <button
+                  key={cat.name}
+                  onClick={() => toggleFilter(cat.name)}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-secondary/50 transition-colors"
+                >
+                  <div className={'flex h-4 w-4 items-center justify-center rounded border ' + (selectedFilters.includes(cat.name) ? 'bg-primary border-primary' : 'border-border')}>
+                    {selectedFilters.includes(cat.name) && <Check className="h-3 w-3 text-primary-foreground" />}
+                  </div>
+                  <span className="flex-1 text-foreground">{cat.displayName}</span>
+                  <span className="text-xs text-muted-foreground">({categoryCounts.find(c => c.name === cat.name)?.count || 0})</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* State dropdown */}
