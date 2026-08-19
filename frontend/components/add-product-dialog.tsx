@@ -43,11 +43,12 @@ export function AddProductDialog() {
           { method: 'POST', body: formData }
         )
         const data = await res.json()
-        if (data.secure_url) {
-          setImages(prev => [...prev, data.secure_url])
-        } else {
-          throw new Error(data.error?.message || 'Upload failed')
+        if (!res.ok || !data.secure_url) {
+          const errMsg = data.error?.message || `Upload failed (HTTP ${res.status})`
+          console.error('[Upload] Cloudinary error:', data)
+          throw new Error(errMsg)
         }
+        setImages(prev => [...prev, data.secure_url])
       }
       toast({ title: 'Image uploaded', description: 'Image added successfully.' })
     } catch (err: any) {
