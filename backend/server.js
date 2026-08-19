@@ -28,11 +28,75 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // Rate limiter for auth endpoints (prevents brute-force)
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,  // 1 minute
-  max: 5,                // 5 requests per minute per IP
+  max: 10,               // 10 requests per minute per IP
   message: { success: false, message: 'Too many attempts. Please try again in a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// ===== Account Lockout System (in-memory) =====
+const loginAttempts = new Map(); // key: email → { count, lockedUntil, lastAttempt }
+
+function checkLockout(email) {
+  const record = loginAttempts.get(email.toLowerCase());
+  if (!record) return { locked: false };
+
+  if (record.lockedUntil && Date.now() < record.lockedUntil) {
+    const remainingMs = record.lockedUntil - Date.now();
+    return { locked: true, remainingMs };
+  }
+
+  // Lockout expired — reset
+  if (record.lockedUntil && Date.now() >= record.lockedUntil) {
+    loginAttempts.delete(email.toLowerCase());
+    return { locked: false };
+  }
+
+  return { locked: false };
+}
+
+function recordFailedAttempt(email) {
+  const key = email.toLowerCase();
+  const record = loginAttempts.get(key) || { count: 0, lockedUntil: null, lastAttempt: 0 };
+  record.count += 1;
+  record.lastAttempt = Date.now();
+
+  if (record.count >= 5) {
+    // Progressive lockout: 5th = 15min, 6th = 30min, etc.
+    const lockoutMultiplier = Math.max(1, record.count - 4);
+    record.lockedUntil = Date.now() + (15 * 60 * 1000 * lockoutMultiplier);
+    console.warn(`[SECURITY] Account locked: ${key} after ${record.count} failed attempts. Locked for ${15 * lockoutMultiplier} min.`);
+  }
+
+  loginAttempts.set(key, record);
+  return record;
+}
+
+function clearAttempts(email) {
+  loginAttempts.delete(email.toLowerCase());
+}
+
+// ===== Input Sanitization =====
+function sanitize(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/<[^>]*>/g, '')     // Strip HTML tags
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Strip script tags
+    .replace(/[<>]/g, '')         // Strip remaining angle brackets
+    .trim();
+}
+
+function validateEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+}
+
+function validatePassword(password) {
+  return typeof password === 'string' && password.length >= 8 && password.length <= 128;
+}
+
+function validateName(name) {
+  return typeof name === 'string' && name.trim().length >= 2 && name.trim().length <= 100;
+}
 
 // ===== MongoDB + In-Memory Cache Storage =====
 let mongoClient = null;
@@ -566,41 +630,45 @@ const authMiddleware = async (req, res, next) => {
 // Auth Routes
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    // Sanitize all inputs
+    const email = sanitize(req.body.email).toLowerCase();
+    const password = req.body.password; // Don't sanitize password (may have special chars)
+    const name = sanitize(req.body.name);
+    const companyName = sanitize(req.body.companyName || '');
+    const phone = sanitize(req.body.phone || '');
+    const state = sanitize(req.body.state || '');
 
-    if (!email || !password || !name) {
+    // Validate inputs
+    if (!validateEmail(email) || !validatePassword(password) || !validateName(name)) {
+      console.warn('[SECURITY] Registration validation failed:', { email: !!email, passwordLen: password?.length, nameLen: name?.length });
       return res.status(400).json({
         success: false,
-        message: 'All fields are required'
+        message: 'Invalid input. Please check your details and try again.'
       });
     }
-
-    // Role is no longer required upfront — everyone can be both buyer & seller.
-    // Default to 'member' (informational only; not used for access control).
-    const role = req.body.role || 'member';
 
     // Read users from file
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
 
-    // Check if user exists
+    // Check if user exists — don't reveal the email is registered
     if (users.find(u => u.email === email)) {
       return res.status(400).json({
         success: false,
-        message: 'Email already registered'
+        message: 'Unable to create account with these details.'
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
     const user = {
       _id: Date.now().toString(),
       email,
       password: hashedPassword,
       name,
-      role,
-      company: req.body.companyName ? { name: req.body.companyName } : (req.body.company || {}),
-      phone: req.body.phone || '',
-      state: req.body.state || '',
+      role: 'member',
+      company: companyName ? { name: companyName } : {},
+      phone: phone,
+      state: state,
       createdAt: new Date().toISOString()
     };
 
@@ -758,7 +826,7 @@ app.post('/api/auth/check-email', async (req, res) => {
     const exists = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
     if (exists) {
-      return res.status(400).json({ success: false, message: 'Email already registered', exists: true });
+      return res.status(400).json({ success: false, message: 'Unable to process this request.' });
     }
 
     res.json({ success: true, message: 'Email available', exists: false });
@@ -780,7 +848,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
     if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      return res.status(400).json({ success: false, message: 'Email already registered' });
+      return res.status(400).json({ success: false, message: 'Unable to process this request.' });
     }
 
     // Generate 6-digit OTP
@@ -851,7 +919,7 @@ app.post('/api/auth/send-delete-otp', async (req, res) => {
     const users = readJsonFile(usersFile);
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (!user) {
-      return res.status(400).json({ success: false, message: 'No account found with this email' });
+      return res.status(400).json({ success: false, message: 'Unable to process this request.' });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -1044,15 +1112,15 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
     const users = readJsonFile(usersFile);
     const user = users.find(u => u._id === req.user._id);
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
     const isValid = await bcrypt.compare(currentPassword, user.password);
     if (!isValid) {
-      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+      return res.status(400).json({ success: false, message: 'Incorrect email or password' });
     }
 
-    user.password = await bcrypt.hash(newPassword, 10);
+    user.password = await bcrypt.hash(newPassword, 12);
     writeJsonFile(usersFile, users);
 
     res.json({ success: true, message: 'Password updated successfully' });
@@ -1064,30 +1132,46 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
 
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const email = sanitize(req.body.email || '').toLowerCase();
+    const password = req.body.password || '';
 
-    // Read users from file
+    // Check account lockout
+    const lockout = checkLockout(email);
+    if (lockout.locked) {
+      console.warn(`[SECURITY] Login blocked for locked account: ${email}`);
+      return res.status(401).json({
+        success: false,
+        message: 'Incorrect email or password'
+      });
+    }
+
+    // Read users
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
 
     // Find user by email
     const user = users.find(u => u.email === email);
     if (!user) {
+      recordFailedAttempt(email);
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Incorrect email or password'
       });
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
+      recordFailedAttempt(email);
       return res.status(401).json({
         success: false,
-        message: 'Invalid credentials'
+        message: 'Incorrect email or password'
       });
     }
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET);
+
+    // Clear failed attempts on successful login
+    clearAttempts(email);
 
     res.json({
       success: true,
@@ -1116,7 +1200,7 @@ app.get('/api/profile', authMiddleware, async (req, res) => {
   try {
     const users = readJsonFile(path.join(__dirname, './data/users.json'));
     const user = users.find(u => u._id === req.user._id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
     res.json({
       success: true,
@@ -1138,7 +1222,7 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
     const user = users.find(u => u._id === req.user._id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
     const { company, phone, state } = req.body;
 
@@ -1182,7 +1266,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: 'Authentication required'
       });
     }
 
@@ -1614,7 +1698,7 @@ app.get('/api/users/:id', authMiddleware, async (req, res) => {
     const user = users.find(u => u._id === req.params.id);
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
     res.json({
