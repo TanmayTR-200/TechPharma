@@ -130,7 +130,7 @@ export function EditProfileDialog({ externalOpen, onExternalOpenChange }: { exte
       if (profile.phone) updatedFields.phone = profile.phone;
       if (profile.state !== undefined) updatedFields.state = profile.state;
 
-      if (Object.keys(updatedFields.company).length === 0 && !updatedFields.phone) {
+      if (Object.keys(updatedFields.company).length === 0 && !updatedFields.phone && updatedFields.state === undefined) {
         toast({
           title: 'No Changes',
           description: 'No changes were made to your profile.',
