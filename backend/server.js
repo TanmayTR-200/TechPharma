@@ -12,6 +12,8 @@ const path = require('path');
 const fs = require('fs');
 const { MongoClient } = require('mongodb');
 const mongoose = require('mongoose');
+const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 
 // Inventory reservation system
@@ -24,6 +26,17 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Cloudinary configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Multer memory storage for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 // Rate limiter for auth endpoints (prevents brute-force)
 const authLimiter = rateLimit({
@@ -1395,6 +1408,37 @@ app.get('/api/products/all', async (req, res) => {
   } catch (error) {
     console.error('All products error:', error);
     res.status(500).json({ success: false, message: 'Error fetching products' });
+  }
+});
+
+// Upload route (proxies to Cloudinary using server-side credentials)
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        { folder: 'techpharma' },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      );
+      stream.end(req.file.buffer);
+    });
+
+    res.json({
+      url: result.secure_url,
+      publicId: result.public_id,
+    });
+  } catch (error) {
+    console.error('Cloudinary upload error:', error);
+    res.status(500).json({
+      message: 'Upload failed',
+      error: error.message || 'Unknown Cloudinary error',
+    });
   }
 });
 

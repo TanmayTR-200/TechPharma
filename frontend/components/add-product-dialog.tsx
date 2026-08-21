@@ -33,12 +33,20 @@ export function AddProductDialog() {
   const handleImageUpload = useCallback(async (files: FileList) => {
     if (!files || files.length === 0) return
 
+    const localUrls = Array.from(files).map(file => URL.createObjectURL(file))
+    setImages(prev => [...prev, ...localUrls])
     setUploadingImage(true)
     try {
+      const cloudUrls: string[] = []
       for (const file of Array.from(files)) {
         const result = await uploadToCloudinary(file)
-        setImages(prev => [...prev, result.url])
+        cloudUrls.push(result.url)
       }
+      setImages(prev => {
+        const withoutLocal = prev.filter(url => !url.startsWith('blob:'))
+        return [...withoutLocal, ...cloudUrls]
+      })
+      localUrls.forEach(url => URL.revokeObjectURL(url))
       toast({ title: 'Image uploaded', description: 'Image added successfully.' })
     } catch (err: any) {
       console.error('[AddProductDialog] Upload error:', err)
@@ -53,11 +61,14 @@ export function AddProductDialog() {
     fileInput.type = 'file'
     fileInput.accept = 'image/png,image/jpeg,image/jpg,image/webp'
     fileInput.multiple = true
+    fileInput.style.display = 'none'
+    document.body.appendChild(fileInput)
     fileInput.onchange = (e) => {
       const target = e.target as HTMLInputElement
       if (target.files && target.files.length > 0) {
         handleImageUpload(target.files)
       }
+      document.body.removeChild(fileInput)
     }
     fileInput.click()
   }, [handleImageUpload])
