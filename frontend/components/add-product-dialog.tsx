@@ -113,6 +113,8 @@ export function AddProductDialog() {
         type: 'success',
       })
 
+      window.dispatchEvent(new Event('product-added'))
+
       setOpen(false)
       setName('')
       setDescription('')

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Footer } from '@/components/footer'
 import { ProductGrid } from '@/components/product-grid'
@@ -22,6 +22,8 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
+  const fetchProductsRef = useRef(fetchProducts)
+  fetchProductsRef.current = fetchProducts
 
   const category = searchParams.get('category')
   const search = searchParams.get('search')
@@ -104,6 +106,14 @@ export default function ProductsPage() {
   useEffect(() => {
     fetchProducts()
   }, [category, search, stateFilter, page, sort])
+
+  useEffect(() => {
+    const handleProductAdded = () => {
+      fetchProductsRef.current?.()
+    }
+    window.addEventListener('product-added', handleProductAdded)
+    return () => window.removeEventListener('product-added', handleProductAdded)
+  }, [])
 
   const priceMin = searchParams.get('priceMin') ? parseInt(searchParams.get('priceMin')!) : 0
   const priceMax = searchParams.get('priceMax') ? parseInt(searchParams.get('priceMax')!) : 10000

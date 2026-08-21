@@ -168,6 +168,7 @@ export function useDashboard() {
   return {
     data,
     error,
-    isLoading
+    isLoading,
+    mutate
   };
 }

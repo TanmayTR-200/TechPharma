@@ -261,6 +261,12 @@ function writeJsonFile(filePath, data) {
   const colName = getCollectionName(filePath);
   // Update cache immediately (sync, so reads see the change)
   dataCache[colName] = data;
+  // Persist to file immediately so data survives restarts
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error(`File write error (${filePath}):`, err.message);
+  }
   // Persist to MongoDB in background (fire-and-forget)
   if (mongoDb) {
     persistToMongo(colName, data).catch(err => {

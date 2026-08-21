@@ -30,11 +30,19 @@ function StatSkeleton() {
 export default function DashboardPage() {
   const { user } = useAuth()
   const router = useRouter()
-  const { data, error, isLoading } = useDashboard()
+  const { data, error, isLoading, mutate } = useDashboard()
   const stats = data?.stats || { totalProducts: 0, productViews: 0, recentOrders: 0, revenue: 0 }
   const orders = (data?.orders || []).slice(0, 5)
 
   useEffect(() => { if (!user) router.push('/auth?mode=login') }, [user, router])
+
+  useEffect(() => {
+    const handleProductAdded = () => {
+      mutate()
+    }
+    window.addEventListener('product-added', handleProductAdded)
+    return () => window.removeEventListener('product-added', handleProductAdded)
+  }, [mutate])
 
   if (isLoading) {
     return (
