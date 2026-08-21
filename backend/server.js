@@ -1730,7 +1730,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
     const userProducts = products.filter(p => 
       String(p.userId || p.supplierId || '') === String(userId) && 
-      (!p.status || p.status === 'active')
+      p.status === 'active'
     );
 
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));

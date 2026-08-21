@@ -28,24 +28,30 @@ declare global {
 
 export async function uploadToCloudinary(file: File) {
   try {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dj92mesew';
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'techpharma';
+
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', 'techpharma');
-    formData.append('cloud_name', process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dj92mesew');
+    formData.append('upload_preset', uploadPreset);
+    formData.append('cloud_name', cloudName);
 
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dj92mesew'}/image/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
       {
         method: 'POST',
         body: formData,
       }
     );
 
+    const data = await response.json();
+
     if (!response.ok) {
-      throw new Error('Failed to upload to Cloudinary');
+      const cloudinaryMsg = data.error?.message || `HTTP ${response.status}`;
+      console.error('[Cloudinary] Upload failed:', cloudinaryMsg, data);
+      throw new Error(`Cloudinary upload failed: ${cloudinaryMsg}`);
     }
 
-    const data = await response.json();
     return {
       url: data.secure_url,
       publicId: data.public_id,

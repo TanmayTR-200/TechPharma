@@ -1,18 +1,23 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
+import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
 import { useToast } from './ui/use-toast'
-import { Plus, Loader2 } from 'lucide-react'
+import { Plus, Loader2, X } from 'lucide-react'
 import { useAuth } from '@/contexts/auth'
+import { useNotifications } from '@/contexts/notification-context'
 import { PRODUCT_CATEGORIES, getCategoryDisplayName } from '@/lib/constants'
+import { uploadToCloudinary } from '@/lib/cloudinary'
 
 export function AddProductDialog() {
   const { toast } = useToast()
   const { refreshUserData } = useAuth()
+  const { addNotification } = useNotifications()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState('')
@@ -22,42 +27,40 @@ export function AddProductDialog() {
   const [category, setCategory] = useState('')
   const [images, setImages] = useState<string[]>([])
   const [uploadingImage, setUploadingImage] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
+  const handleImageUpload = useCallback(async (files: FileList) => {
     if (!files || files.length === 0) return
 
     setUploadingImage(true)
     try {
       for (const file of Array.from(files)) {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('upload_preset', 'techpharma')
-        formData.append('cloud_name', process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'zomkvzsh')
-
-        const res = await fetch(
-          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'zomkvzsh'}/image/upload`,
-          { method: 'POST', body: formData }
-        )
-        const data = await res.json()
-        if (!res.ok || !data.secure_url) {
-          const errMsg = data.error?.message || `Upload failed (HTTP ${res.status})`
-          console.error('[Upload] Cloudinary error:', data)
-          throw new Error(errMsg)
-        }
-        setImages(prev => [...prev, data.secure_url])
+        const result = await uploadToCloudinary(file)
+        setImages(prev => [...prev, result.url])
       }
       toast({ title: 'Image uploaded', description: 'Image added successfully.' })
     } catch (err: any) {
-      toast({ title: 'Upload failed', description: err.message, variant: 'destructive' })
+      console.error('[AddProductDialog] Upload error:', err)
+      toast({ title: 'Upload failed', description: err.message || 'Failed to upload image.', variant: 'destructive' })
     } finally {
       setUploadingImage(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
     }
-  }
+  }, [toast])
+
+  const triggerFileInput = useCallback(() => {
+    const fileInput = document.createElement('input')
+    fileInput.type = 'file'
+    fileInput.accept = 'image/png,image/jpeg,image/jpg,image/webp'
+    fileInput.multiple = true
+    fileInput.onchange = (e) => {
+      const target = e.target as HTMLInputElement
+      if (target.files && target.files.length > 0) {
+        handleImageUpload(target.files)
+      }
+    }
+    fileInput.click()
+  }, [handleImageUpload])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -93,6 +96,13 @@ export function AddProductDialog() {
       }
 
       toast({ title: 'Success', description: 'Product added successfully.' })
+
+      await addNotification({
+        title: 'Product added',
+        message: `"${name}" has been added successfully.`,
+        type: 'success',
+      })
+
       setOpen(false)
       // Reset form
       setName('')
@@ -123,6 +133,7 @@ export function AddProductDialog() {
       <DialogContent className="sm:max-w-[500px] rounded-2xl border-border max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add new product</DialogTitle>
+          <DialogDescription>Fill out the form below to add a new product to your inventory.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -206,21 +217,13 @@ export function AddProductDialog() {
                     onClick={() => setImages(prev => prev.filter((_, i) => i !== idx))}
                     className="absolute top-0 right-0 bg-destructive text-white rounded-bl-lg px-1.5 py-0.5 text-xs"
                   >
-                    ×
+                    <X className="h-3 w-3" />
                   </button>
                 </div>
               ))}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/jpg,image/webp"
-                multiple
-                onChange={handleImageUpload}
-                className="hidden"
-              />
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={triggerFileInput}
                 disabled={uploadingImage}
                 className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-border hover:border-primary hover:bg-secondary/30 transition-colors disabled:opacity-50"
               >
