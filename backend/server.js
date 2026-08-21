@@ -1417,6 +1417,11 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     return res.status(400).json({ message: 'No file uploaded' });
   }
 
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    console.error('[Upload] Cloudinary credentials missing');
+    return res.status(500).json({ message: 'Cloudinary not configured on server' });
+  }
+
   try {
     const result = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(

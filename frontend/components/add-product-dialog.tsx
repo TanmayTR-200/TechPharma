@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -17,7 +16,6 @@ export function AddProductDialog() {
   const { toast } = useToast()
   const { refreshUserData } = useAuth()
   const { addNotification } = useNotifications()
-  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [name, setName] = useState('')
@@ -83,6 +81,7 @@ export function AddProductDialog() {
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
+      const cloudImages = images.filter(url => !url.startsWith('blob:'))
       const res = await fetch(`${API_URL}/api/products`, {
         method: 'POST',
         headers: {
@@ -95,7 +94,7 @@ export function AddProductDialog() {
           price: parseFloat(price),
           stock: parseInt(stock),
           category,
-          images,
+          images: cloudImages,
           status: 'active'
         })
       })
@@ -115,14 +114,12 @@ export function AddProductDialog() {
       })
 
       setOpen(false)
-      // Reset form
       setName('')
       setDescription('')
       setPrice('')
       setStock('')
       setCategory('')
       setImages([])
-      // Refresh user data
       refreshUserData()
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'Failed to add product.', variant: 'destructive' })
