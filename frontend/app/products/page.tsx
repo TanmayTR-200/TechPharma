@@ -22,8 +22,7 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
-  const fetchProductsRef = useRef(fetchProducts)
-  fetchProductsRef.current = fetchProducts
+  const fetchProductsRef = useRef<(() => void) | null>(null)
 
   const category = searchParams.get('category')
   const search = searchParams.get('search')
@@ -102,6 +101,7 @@ export default function ProductsPage() {
       setLoading(false)
     }
   }
+  fetchProductsRef.current = fetchProducts
 
   useEffect(() => {
     fetchProducts()
