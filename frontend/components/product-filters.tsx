@@ -91,16 +91,16 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
   }
 
   return (
-    <div className="border border-border bg-card p-4 rounded-lg">
-      <div className="grid md:grid-cols-3 gap-4">
+    <div className="border border-border bg-card p-5 rounded-lg">
+      <div className="grid md:grid-cols-3 gap-6">
         {/* Category multi-select dropdown */}
         <div className="relative" ref={catRef}>
-          <label className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2 block">Category</label>
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-2 block">Category</label>
           <button
             onClick={() => setCatDropdownOpen(!catDropdownOpen)}
-            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm text-left flex items-center justify-between hover:border-primary transition-colors"
+            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-left flex items-center justify-between hover:border-foreground/40 transition-colors"
           >
-            <span className="truncate">
+            <span className="truncate text-foreground">
               {selectedFilters.length === 0
                 ? 'All categories'
                 : selectedFilters.length === 1
@@ -110,15 +110,15 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
             <ChevronDown className={'h-4 w-4 text-muted-foreground transition-transform ' + (catDropdownOpen ? 'rotate-180' : '')} />
           </button>
           {catDropdownOpen && (
-            <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
+            <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
               {PRODUCT_CATEGORIES.map(cat => (
                 <button
                   key={cat.name}
                   onClick={() => toggleFilter(cat.name)}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-secondary/50 transition-colors"
                 >
-                  <div className={'flex h-4 w-4 items-center justify-center rounded border ' + (selectedFilters.includes(cat.name) ? 'bg-primary border-primary' : 'border-border')}>
-                    {selectedFilters.includes(cat.name) && <Check className="h-3 w-3 text-primary-foreground" />}
+                  <div className={'flex h-4 w-4 items-center justify-center rounded border ' + (selectedFilters.includes(cat.name) ? 'bg-foreground border-foreground' : 'border-border')}>
+                    {selectedFilters.includes(cat.name) && <Check className="h-3 w-3 text-background" />}
                   </div>
                   <span className="flex-1 text-foreground">{cat.displayName}</span>
                   <span className="text-xs text-muted-foreground">({categoryCounts.find(c => c.name === cat.name)?.count || 0})</span>
@@ -130,13 +130,13 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
 
         {/* State dropdown */}
         <div>
-          <label className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2 block">State</label>
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-2 block">State</label>
           <select
             value={currentState}
             onChange={(e) => {
               updateUrl({ state: e.target.value || undefined })
             }}
-            className="w-full rounded-lg border border-border bg-transparent px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
           >
             <option value="">All states</option>
             {INDIAN_STATES.map(state => (
@@ -147,8 +147,8 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
 
         {/* Price range */}
         <div>
-          <label className="text-xs font-semibold text-foreground uppercase tracking-wider mb-2 block">
-            Price: ₹{priceRange[0].toLocaleString('en-IN')} - ₹{priceRange[1].toLocaleString('en-IN')}
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-2 block">
+            Price
           </label>
           <div className="flex items-center gap-2">
             <input
@@ -159,9 +159,9 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
                 setPriceRange([val, priceRange[1]])
               }}
               placeholder="Min"
-              className="w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
             />
-            <span className="text-muted-foreground text-xs">to</span>
+            <span className="text-muted-foreground text-xs">—</span>
             <input
               type="number"
               value={priceRange[1]}
@@ -170,11 +170,11 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
                 setPriceRange([priceRange[0], val])
               }}
               placeholder="Max"
-              className="w-full rounded-lg border border-border bg-transparent px-2 py-1.5 text-xs focus:border-primary focus:outline-none"
+              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
             />
             <button
               onClick={applyPriceFilter}
-              className="rounded-lg bg-foreground text-background px-3 py-1.5 text-xs font-medium hover:bg-foreground/90 whitespace-nowrap"
+              className="rounded-md bg-foreground text-background px-4 py-2 text-xs font-medium hover:bg-foreground/90 whitespace-nowrap"
             >
               Apply
             </button>
@@ -183,28 +183,37 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
       </div>
 
       {/* Active filters */}
-      {(selectedFilters.length > 0 || currentState) && (
-        <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
+      {(selectedFilters.length > 0 || currentState || searchParams.get('priceMin') || searchParams.get('priceMax')) && (
+        <div className="flex flex-wrap items-center gap-2 mt-5 pt-4 border-t border-border">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mr-1">Active:</span>
           {selectedFilters.map(f => (
             <button
               key={f}
               onClick={() => toggleFilter(f)}
-              className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-2.5 py-1 rounded hover:bg-foreground hover:text-background transition-colors"
+              className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-3 py-1 rounded-full hover:bg-foreground hover:text-background transition-colors"
             >
-              {PRODUCT_CATEGORIES.find(c => c.name === f)?.displayName || f} ✕
+              {PRODUCT_CATEGORIES.find(c => c.name === f)?.displayName || f} <X className="h-3 w-3" />
             </button>
           ))}
           {currentState && (
             <button
               onClick={() => updateUrl({ state: undefined })}
-              className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-2.5 py-1 rounded hover:bg-foreground hover:text-background transition-colors"
+              className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-3 py-1 rounded-full hover:bg-foreground hover:text-background transition-colors"
             >
-              {currentState} ✕
+              {currentState} <X className="h-3 w-3" />
+            </button>
+          )}
+          {(searchParams.get('priceMin') || searchParams.get('priceMax')) && (
+            <button
+              onClick={() => updateUrl({ priceMin: undefined, priceMax: undefined })}
+              className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-3 py-1 rounded-full hover:bg-foreground hover:text-background transition-colors"
+            >
+              ₹{searchParams.get('priceMin') || '0'} — ₹{searchParams.get('priceMax') || '∞'} <X className="h-3 w-3" />
             </button>
           )}
           <button
             onClick={clearAll}
-            className="text-xs text-primary hover:underline ml-2"
+            className="text-xs text-primary hover:underline ml-1"
           >
             Clear all
           </button>

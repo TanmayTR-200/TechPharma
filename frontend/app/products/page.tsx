@@ -153,21 +153,6 @@ export default function ProductsPage() {
           </Button>
         </div>
 
-        {category && (
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
-            {category.split(',').map((filter) => (
-              <Badge key={filter} className="flex items-center gap-1.5 bg-primary/10 text-primary border-0 rounded-full px-3 py-1">
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                <button onClick={() => {
-                  const newCategories = category.split(',').filter(c => c !== filter).join(',')
-                  window.location.search = newCategories ? '?category=' + newCategories : ''
-                }}><X className="h-3 w-3" /></button>
-              </Badge>
-            ))}
-            <Button variant="ghost" size="sm" onClick={() => { window.location.search = '' }} className="text-xs text-primary h-7">Clear all</Button>
-          </div>
-        )}
-
         {showFilters && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-6">
             <ProductFilters selectedCategory={category} selectedSort={sort} />
