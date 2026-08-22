@@ -73,17 +73,18 @@ export default function TrackOrderPage() {
   const currentStep = data ? getStatusIndex(data.status) : -1
 
   return (
-    <div className="w-full space-y-6">
-      <div>
-        <Link href="/orders" className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground mb-2">
-          <ArrowLeft className="h-3 w-3" /> Back to Orders
-        </Link>
-
-        <h1 className="font-display text-2xl font-bold text-foreground mb-2">Track Order</h1>
-        <p className="text-sm text-muted-foreground mb-6">Enter your tracking ID to see the latest status</p>
+    <>
+      <div className="w-full space-y-6">
+        <div>
+          <Link href="/orders" className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground mb-1">
+            <ArrowLeft className="h-3 w-3" /> Back to Orders
+          </Link>
+          <h1 className="font-display text-2xl font-bold text-foreground">Track Order</h1>
+          <p className="mt-1 text-muted-foreground">Enter your tracking ID to see the latest status</p>
+        </div>
 
         {/* Search bar */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <input
@@ -105,7 +106,7 @@ export default function TrackOrderPage() {
         </div>
 
         {error && (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 mb-6">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
@@ -191,6 +192,6 @@ export default function TrackOrderPage() {
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }
