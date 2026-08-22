@@ -264,14 +264,14 @@ export default function CheckoutPage() {
               <div>
                 <label className="text-xs text-muted-foreground mb-1.5 block">Save as</label>
                 <div className="flex flex-wrap gap-2 items-center">
-                  {LABELS.map(l => (
+                  {[...LABELS, ...Array.from(new Set(savedAddresses.map(a => a.label).filter(l => !LABELS.includes(l))))].map(l => (
                     <button key={l} type="button" onClick={() => setAddressForm({ ...addressForm, label: l })} className={'px-4 py-1.5 text-xs font-medium rounded-md border transition-colors ' + (addressForm.label === l ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground hover:border-foreground/40')}>
                       {l}
                     </button>
                   ))}
                   <input
                     type="text"
-                    value={!LABELS.includes(addressForm.label) ? addressForm.label : ''}
+                    value={![...LABELS, ...savedAddresses.map(a => a.label)].includes(addressForm.label) ? addressForm.label : ''}
                     onChange={e => setAddressForm({ ...addressForm, label: e.target.value })}
                     placeholder="Custom label..."
                     className="flex-1 min-w-[120px] border border-border bg-transparent px-3 py-1.5 text-xs text-foreground focus:border-foreground focus:outline-none rounded-md"

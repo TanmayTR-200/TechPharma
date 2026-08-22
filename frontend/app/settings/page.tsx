@@ -493,14 +493,14 @@ function SavedAddressesManager() {
           <div>
             <label className="text-xs text-muted-foreground mb-1.5 block">Save as</label>
             <div className="flex flex-wrap gap-2 items-center">
-              {ADDRESS_LABELS.map(l => (
+              {[...ADDRESS_LABELS, ...Array.from(new Set(addresses.map(a => a.label).filter(l => !ADDRESS_LABELS.includes(l))))].map(l => (
                 <button key={l} type="button" onClick={() => setForm({ ...form, label: l })} className={'px-4 py-1.5 text-xs font-medium rounded-md border transition-colors ' + (form.label === l ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground hover:border-foreground/40')}>
                   {l}
                 </button>
               ))}
               <input
                 type="text"
-                value={!ADDRESS_LABELS.includes(form.label) ? form.label : ''}
+                value={![...ADDRESS_LABELS, ...addresses.map(a => a.label)].includes(form.label) ? form.label : ''}
                 onChange={e => setForm({ ...form, label: e.target.value })}
                 placeholder="Custom label..."
                 className="flex-1 min-w-[120px] border border-border bg-transparent px-3 py-1.5 text-xs text-foreground focus:border-foreground focus:outline-none rounded-md"
