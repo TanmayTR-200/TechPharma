@@ -375,6 +375,7 @@ app.get('/api/health', async (req, res) => {
       mongoConnected: !!mongoDb,
       mongoUriSet: !!process.env.MONGODB_URI,
       mongoError: mongoConnectionError,
+      envKeys: Object.keys(process.env).sort(),
       cacheCounts: {
         products: (dataCache.products || []).length,
         users: (dataCache.users || []).length
