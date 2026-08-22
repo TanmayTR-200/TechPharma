@@ -31,7 +31,6 @@ function getStatusIndex(status: string): number {
 
 export default function TrackOrderPage() {
   const searchParams = useSearchParams()
-  const { user } = useAuth()
   const [trackingId, setTrackingId] = useState(searchParams.get('id') || '')
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(false)
