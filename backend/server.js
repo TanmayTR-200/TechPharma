@@ -625,6 +625,21 @@ app.get('/api/debug/clear-products', async (req, res) => {
   }
 });
 
+// Debug endpoint — clear all notifications
+app.get('/api/debug/clear-notifications', async (req, res) => {
+  try {
+    const notifFile = path.join(__dirname, './data/notifications.json');
+    writeJsonFile(notifFile, []);
+    if (mongoDb) {
+      await mongoDb.collection('notifications').deleteMany({});
+    }
+    dataCache['notifications'] = [];
+    res.json({ success: true, message: 'All notifications cleared' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Auth middleware
 const authMiddleware = async (req, res, next) => {
   try {
@@ -2693,11 +2708,14 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
       orderItems.forEach(item => {
         if (item.sellerId && !notified.has(item.sellerId)) {
           notified.add(item.sellerId);
+          const buyerDisplay = buyerUser.company?.name
+            ? `${buyerUser.name || 'a buyer'} (${buyerUser.company.name})`
+            : (buyerUser.name || buyerUser.email || 'a buyer');
           notifications.push({
             _id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
             userId: item.sellerId,
             title: 'New order received',
-            message: `You have a new order from ${buyerUser.name || 'a buyer'} for ${item.product.name}.`,
+            message: `You have a new order from ${buyerDisplay} for ${item.product.name}.`,
             type: 'order_placed',
             read: false,
             archived: false,
