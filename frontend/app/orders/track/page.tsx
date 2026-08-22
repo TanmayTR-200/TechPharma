@@ -190,6 +190,7 @@ export default function TrackOrderPage() {
             <p className="text-sm text-muted-foreground">Enter your tracking ID above to track your order</p>
           </div>
         )}
+      </div>
     </div>
   )
 }
