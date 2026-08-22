@@ -1675,7 +1675,8 @@ app.get('/api/products', async (req, res) => {
           if (!haystack.includes(filterSearch)) return false;
         }
         // Price filter
-        if (typeof p.price === 'number' && (p.price < priceMin || p.price > priceMax)) return false;
+        const pPrice = Number(p.price);
+        if (!isNaN(pPrice) && (pPrice < priceMin || pPrice > priceMax)) return false;
         return true;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

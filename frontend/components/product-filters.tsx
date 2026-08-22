@@ -25,7 +25,8 @@ interface ProductFiltersProps {
 }
 
 export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: ProductFiltersProps) {
-  const [priceRange, setPriceRange] = useState([0, 10000])
+  const [priceMin, setPriceMin] = useState('')
+  const [priceMax, setPriceMax] = useState('')
   const [selectedFilters, setSelectedFilters] = useState<string[]>([])
   const [catDropdownOpen, setCatDropdownOpen] = useState(false)
   const catRef = useRef<HTMLDivElement>(null)
@@ -47,6 +48,11 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
       setSelectedFilters([])
     }
   }, [selectedCategory])
+
+  useEffect(() => {
+    setPriceMin(searchParams.get('priceMin') || '')
+    setPriceMax(searchParams.get('priceMax') || '')
+  }, [searchParams])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -80,8 +86,8 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
   const applyPriceFilter = () => {
     updateUrl({
       category: selectedFilters.map(f => f.toLowerCase()).join(',') || undefined,
-      priceMin: priceRange[0].toString(),
-      priceMax: priceRange[1].toString()
+      priceMin: priceMin || undefined,
+      priceMax: priceMax || undefined
     })
   }
 
@@ -153,23 +159,17 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
           <div className="flex items-center gap-2">
             <input
               type="number"
-              value={priceRange[0]}
-              onChange={(e) => {
-                const val = parseInt(e.target.value) || 0
-                setPriceRange([val, priceRange[1]])
-              }}
-              placeholder="Min"
+              value={priceMin}
+              onChange={(e) => setPriceMin(e.target.value)}
+              placeholder="Min ₹"
               className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
             />
             <span className="text-muted-foreground text-xs">—</span>
             <input
               type="number"
-              value={priceRange[1]}
-              onChange={(e) => {
-                const val = parseInt(e.target.value) || 0
-                setPriceRange([priceRange[0], val])
-              }}
-              placeholder="Max"
+              value={priceMax}
+              onChange={(e) => setPriceMax(e.target.value)}
+              placeholder="Max ₹"
               className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
             />
             <button
