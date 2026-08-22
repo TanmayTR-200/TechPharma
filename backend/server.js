@@ -2178,7 +2178,14 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
       _id: o._id,
       orderNumber: o.orderNumber || o._id.slice(-6),
       trackingId: o.trackingId || null,
-      items: o.items,
+      items: o.items.map(item => ({
+        product: item.product,
+        name: item.product?.name,
+        quantity: item.quantity,
+        price: item.price,
+        sellerId: item.sellerId || null,
+        supplierName: item.supplierName || null,
+      })),
       totalAmount: o.totalAmount || 0,
       status: o.status || 'pending',
       paymentMethod: o.paymentMethod || 'cod',
@@ -2217,11 +2224,10 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
     const order = orders.find(o => o._id === req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    // Check if user is the seller of any item in this order
+    // Only the seller can update order status
     const isSeller = order.items.some(item => String(item.sellerId) === String(req.user._id));
-    const isBuyer = String(order.userId) === String(req.user._id);
-    if (!isSeller && !isBuyer) {
-      return res.status(403).json({ success: false, message: 'Not authorized' });
+    if (!isSeller) {
+      return res.status(403).json({ success: false, message: 'Only the seller can update order status' });
     }
 
     order.status = status;

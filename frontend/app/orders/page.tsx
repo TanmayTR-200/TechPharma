@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { ShoppingBag, Package, Truck, CheckCircle, X, FileText, MapPin } from 'lucide-react'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
+import { useAuth } from '@/contexts/auth'
 import Link from 'next/link'
 
 interface Order {
   _id: string
   orderNumber?: string
   trackingId?: string
-  items: { product?: { _id: string; name: string }; name?: string; quantity: number; price: number; supplierName?: string }[]
+  items: { product?: { _id: string; name: string }; name?: string; quantity: number; price: number; supplierName?: string; sellerId?: string }[]
   total: number
   totalAmount?: number
   status: string
@@ -33,6 +34,7 @@ const statusConfig: Record<string, { color: string; icon: any }> = {
 }
 
 export default function OrdersPage() {
+  const { user } = useAuth()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -322,8 +324,8 @@ export default function OrdersPage() {
               )}
             </div>
 
-            {/* Update status — seller actions */}
-            {selectedOrder.status && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+            {/* Update status — seller only */}
+            {selectedOrder.status && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && user && selectedOrder.items?.some(item => String(item.sellerId) === String(user._id)) && (
               <div className="border-t border-border pt-4 mb-4">
                 <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Update status</h3>
                 <div className="flex flex-wrap gap-2">
