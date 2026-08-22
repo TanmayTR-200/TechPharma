@@ -9,7 +9,7 @@ interface ProductSellerActionsProps {
   onEdit: () => void;
 }
 
-export function ProductSellerActions({ productId, onEdit }: ProductSellerActionsProps) {
+export function ProductSellerActions({ productId, onEdit, onDeleted }: ProductSellerActionsProps & { onDeleted?: () => void }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -34,8 +34,8 @@ export function ProductSellerActions({ productId, onEdit }: ProductSellerActions
         description: 'Product deleted successfully',
       });
 
-      // Refresh the page to update the product list
-      router.refresh();
+      window.dispatchEvent(new CustomEvent('product-deleted', { detail: { id: String(productId) } }));
+      onDeleted?.();
     } catch (error) {
       toast({
         title: 'Error',

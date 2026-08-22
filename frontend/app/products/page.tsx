@@ -111,8 +111,19 @@ export default function ProductsPage() {
     const handleProductAdded = () => {
       fetchProductsRef.current?.()
     }
+    const handleProductDeleted = (e: Event) => {
+      const deletedId = (e as CustomEvent).detail?.id
+      if (deletedId) {
+        setProducts(prev => prev.filter(p => String(p.id) !== deletedId && String(p._id) !== deletedId))
+        setTotalCount(prev => Math.max(0, prev - 1))
+      }
+    }
     window.addEventListener('product-added', handleProductAdded)
-    return () => window.removeEventListener('product-added', handleProductAdded)
+    window.addEventListener('product-deleted', handleProductDeleted)
+    return () => {
+      window.removeEventListener('product-added', handleProductAdded)
+      window.removeEventListener('product-deleted', handleProductDeleted)
+    }
   }, [])
 
   const priceMin = searchParams.get('priceMin') ? parseInt(searchParams.get('priceMin')!) : 0

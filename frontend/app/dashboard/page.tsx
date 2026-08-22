@@ -40,8 +40,15 @@ export default function DashboardPage() {
     const handleProductAdded = () => {
       mutate()
     }
+    const handleProductDeleted = () => {
+      mutate()
+    }
     window.addEventListener('product-added', handleProductAdded)
-    return () => window.removeEventListener('product-added', handleProductAdded)
+    window.addEventListener('product-deleted', handleProductDeleted)
+    return () => {
+      window.removeEventListener('product-added', handleProductAdded)
+      window.removeEventListener('product-deleted', handleProductDeleted)
+    }
   }, [mutate])
 
   if (isLoading) {

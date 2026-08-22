@@ -76,7 +76,7 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
 
           <div className="px-4 pb-4 space-y-2">
             {isOwner ? (
-              <ProductSellerActions productId={product.id} onEdit={() => setIsEditDialogOpen(true)} />
+              <ProductSellerActions productId={product.id} onEdit={() => setIsEditDialogOpen(true)} onDeleted={onDeleted} />
             ) : (
               <>
                 <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-xs" onClick={() => router.push('/products/' + product._id)}>
