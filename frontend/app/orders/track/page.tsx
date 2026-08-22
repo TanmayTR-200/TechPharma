@@ -4,8 +4,6 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Package, Truck, CheckCircle, MapPin, Search, ArrowLeft, Clock } from 'lucide-react'
 import Link from 'next/link'
-import DashboardLayout from '@/components/dashboard-layout'
-import { useAuth } from '@/contexts/auth'
 
 interface TrackingData {
   trackingId: string
@@ -38,14 +36,6 @@ export default function TrackOrderPage() {
   const [data, setData] = useState<TrackingData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!user) {
-      window.location.href = '/auth?mode=login'
-    }
-  }, [user])
-
-  if (!user) return null
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
 
@@ -84,7 +74,7 @@ export default function TrackOrderPage() {
   const currentStep = data ? getStatusIndex(data.status) : -1
 
   return (
-    <DashboardLayout>
+    <>
       <div className="w-full space-y-6">
         <div>
           <Link href="/orders" className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground mb-1">
@@ -203,6 +193,6 @@ export default function TrackOrderPage() {
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </>
   )
 }
