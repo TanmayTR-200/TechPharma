@@ -122,7 +122,7 @@ export default function ProductsPage() {
     const categories = category.toLowerCase().split(',')
     filteredProducts = filteredProducts.filter(p => p.category && categories.includes(p.category.toLowerCase()))
   }
-  filteredProducts = filteredProducts.filter(p => typeof p.price === 'number' && p.price >= priceMin && p.price <= priceMax)
+  filteredProducts = filteredProducts.filter(p => { const price = Number(p.price); return !isNaN(price) && price >= priceMin && price <= priceMax; })
 
   return (
     <>

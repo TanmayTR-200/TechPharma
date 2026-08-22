@@ -114,6 +114,7 @@ function validateName(name) {
 // ===== MongoDB + In-Memory Cache Storage =====
 let mongoClient = null;
 let mongoDb = null;
+let mongoConnectionError = null;
 const dataCache = {};
 global.dataCache = dataCache; // Expose cache for route modules (dashboard.js etc)
 const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'messages', 'conversations', 'reservations'];
@@ -183,6 +184,7 @@ async function connectMongoDB() {
     console.log('✅ Data loaded into memory cache');
     return true;
   } catch (err) {
+    mongoConnectionError = err.message;
     console.error('❌ MongoDB connection error:', err.message);
     console.log('⚠️ Falling back to file storage, will retry every 30s...');
     
@@ -193,6 +195,7 @@ async function connectMongoDB() {
         
         await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
         mongoDb = mongoose.connection.db;
+        mongoConnectionError = null;
         console.log('✅ Connected to MongoDB Atlas on retry!');
         
         for (const col of COLLECTIONS) {
@@ -229,6 +232,7 @@ async function connectMongoDB() {
         console.log('✅ Data loaded into memory cache');
         clearInterval(retryInterval);
       } catch (retryErr) {
+        mongoConnectionError = retryErr.message;
         console.log('⏳ MongoDB retry failed, will try again in 30s...');
       }
     }, 30000);
@@ -369,6 +373,12 @@ app.get('/api/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       storage: mongoDb ? 'mongodb-atlas' : 'file-based',
       mongoConnected: !!mongoDb,
+      mongoUriSet: !!process.env.MONGODB_URI,
+      mongoError: mongoConnectionError,
+      cacheCounts: {
+        products: (dataCache.products || []).length,
+        users: (dataCache.users || []).length
+      },
       nodeVersion: process.version
     });
   } catch (error) {
@@ -1358,7 +1368,7 @@ app.get('/api/products/category-counts', async (req, res) => {
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
     const counts = {};
     products.forEach(p => {
-      if (p.status === 'active' && p.category) {
+      if ((!p.status || p.status === 'active') && p.category) {
         counts[p.category] = (counts[p.category] || 0) + 1;
       }
     });
@@ -1384,7 +1394,7 @@ app.get('/api/products/featured', async (req, res) => {
     const userMap = new Map(users.map(u => [u._id, u]));
 
     const featured = products
-      .filter(p => p.status === 'active')
+      .filter(p => !p.status || p.status === 'active')
       .sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0))
       .slice(0, 3)
       .map(p => {
@@ -1418,7 +1428,7 @@ app.get('/api/products/all', async (req, res) => {
     const userMap = new Map(users.map(u => [u._id, u]));
 
     const active = products
-      .filter(p => p.status === 'active')
+      .filter(p => !p.status || p.status === 'active')
       .sort(() => Math.random() - 0.5)
       .slice(0, 5)
       .map(p => {
@@ -1498,7 +1508,7 @@ app.get('/api/products', async (req, res) => {
 
     // Filter active products
     let activeProducts = products
-      .filter(p => p.status === 'active')
+      .filter(p => !p.status || p.status === 'active')
       .filter(p => {
         // Category filter
         if (filterCategory) {
@@ -1736,7 +1746,7 @@ app.get('/api/supplier/:id', async (req, res) => {
     // Get all products listed by this supplier (public)
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
     const supplierProducts = products
-      .filter(p => p.status === 'active' && (p.userId === user._id || p.supplierId === user._id))
+      .filter(p => (!p.status || p.status === 'active') && (p.userId === user._id || p.supplierId === user._id))
       .map(p => ({
         _id: p._id,
         name: p.name,
@@ -1805,7 +1815,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
     const userProducts = products.filter(p => 
       String(p.userId || p.supplierId || '') === String(userId) && 
-      p.status === 'active'
+      (!p.status || p.status === 'active')
     );
 
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
