@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth"
 import { splitName } from "@/types/user"
 import { type ElementType } from 'react'
 import {
-  Package, BarChart3, ShoppingCart, Settings, LogOut, Mail, TrendingUp, Menu, X
+  Package, BarChart3, ShoppingCart, Settings, LogOut, Mail, TrendingUp, Menu, X, Search
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -18,6 +18,7 @@ const sidebarItems: SidebarItem[] = [
   { icon: Package, label: "Products", href: "/products" },
   { icon: ShoppingCart, label: "Orders", href: "/orders" },
   { icon: TrendingUp, label: "Sales", href: "/sales" },
+  { icon: Search, label: "Track Order", href: "/orders/track" },
   { icon: Mail, label: "Messages", href: "/messages" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ]
@@ -41,7 +42,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className={"fixed inset-y-0 left-0 z-40 w-56 bg-card border-r border-border transition-transform duration-200 lg:translate-x-0 " + (mobileOpen ? 'translate-x-0' : '-translate-x-full') + " pt-14"}>
         <nav className="px-3 py-4 space-y-0.5">
           {sidebarItems.map((item) => {
-            const isActive = pathname === item.href
+            const isActive = pathname === item.href || (item.href !== '/orders' && pathname.startsWith(item.href))
             return (
               <Link
                 key={item.label}
