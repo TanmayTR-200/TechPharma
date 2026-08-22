@@ -142,6 +142,25 @@ router.post('/send', authenticate, async (req, res) => {
 
       messages.push(newMessage);
       writeJsonFile(getMessagesFilePath(), messages);
+
+      // Create a notification for the recipient
+      const notifications = readJsonFile(path.join(__dirname, '../../data/notifications.json'));
+      const users = readJsonFile(path.join(__dirname, '../../data/users.json'));
+      const sender = users.find(u => u._id === req.user._id);
+      const senderName = sender?.name || 'Someone';
+      notifications.push({
+        _id: now.toString() + Math.random().toString(36).slice(2, 6) + 'msg',
+        userId: receiverId,
+        title: 'New message',
+        message: `${senderName} sent you a message: "${content.trim().slice(0, 80)}${content.length > 80 ? '...' : ''}"`,
+        type: 'info',
+        read: false,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        metadata: { senderId: req.user._id, senderName },
+      });
+      writeJsonFile(path.join(__dirname, '../../data/notifications.json'), notifications);
+
       return { message: newMessage };
     });
 

@@ -5,7 +5,7 @@ import { useAuth } from './auth';
 interface Notification {
   _id: string;
   userId: string;
-  type: 'order_placed' | 'order_confirmed' | 'order_shipped' | 'sale_made' | 'stock_update' | 'success' | 'info';
+  type: 'order_placed' | 'order_confirmed' | 'order_shipped' | 'sale_made' | 'stock_update' | 'success' | 'info' | 'weekly_summary';
   title: string;
   message: string;
   read: boolean;
@@ -54,7 +54,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!user) return;
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000);
+    const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, [user]);
 

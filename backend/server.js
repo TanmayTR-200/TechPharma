@@ -2618,11 +2618,34 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
             read: false,
             archived: false,
             createdAt: new Date().toISOString(),
-            metadata: { orderId: order._id, productId: item.product._id, buyerId: req.user._id, buyerName: req.user.name || '' },
+            metadata: { orderId: order._id, productId: item.product._id, buyerId: req.user._id, buyerName: buyerUser.name || '' },
           });
         }
       });
-      if (notified.size > 0) writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
+
+      // Low stock alerts — check each product after stock decrement
+      const LOW_STOCK_THRESHOLD = 5;
+      products.forEach(p => {
+        const currentStock = p.available_stock !== undefined ? p.available_stock : p.stock || 0;
+        if (currentStock > 0 && currentStock <= LOW_STOCK_THRESHOLD) {
+          const sellerId = p.userId || p.supplierId;
+          if (sellerId) {
+            notifications.push({
+              _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + p._id,
+              userId: sellerId,
+              title: 'Low stock alert',
+              message: `"${p.name}" is running low — only ${currentStock} left in stock.`,
+              type: 'stock_update',
+              read: false,
+              archived: false,
+              createdAt: new Date().toISOString(),
+              metadata: { productId: p._id },
+            });
+          }
+        }
+      });
+
+      if (notifications.length > 0) writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
 
       // Clear cart
       cart.items = [];
@@ -2668,6 +2691,63 @@ const startServer = async () => {
     // Start background reservation expiration job (runs every 60s)
     inventory.startExpirationJob(60000);
     console.log('[inventory] Expiration job started (60s interval)');
+
+    // Start weekly summary job — runs every 7 days
+    const WEEKLY_INTERVAL = 7 * 24 * 60 * 60 * 1000;
+    const generateWeeklySummary = () => {
+      try {
+        const products = readJsonFile(path.join(__dirname, './data/products.json'));
+        const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+        const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
+        const users = readJsonFile(path.join(__dirname, './data/users.json'));
+        const weekAgo = Date.now() - WEEKLY_INTERVAL;
+
+        const sellers = new Map();
+        orders.forEach(o => {
+          if (new Date(o.createdAt).getTime() < weekAgo) return;
+          (o.items || []).forEach(item => {
+            const sellerId = item.sellerId;
+            if (!sellerId) return;
+            if (!sellers.has(sellerId)) sellers.set(sellerId, { revenue: 0, orders: new Set(), products: new Set() });
+            const s = sellers.get(sellerId);
+            s.revenue += (item.price || 0) * (item.quantity || 0);
+            s.orders.add(o._id);
+            s.products.add(item.product?._id);
+          });
+        });
+
+        let created = 0;
+        sellers.forEach((stats, sellerId) => {
+          const seller = users.find(u => u._id === sellerId);
+          const existing = notifications.find(n => n.userId === sellerId && n.type === 'weekly_summary' && new Date(n.createdAt).getTime() > weekAgo);
+          if (existing) return; // Don't duplicate within the same week
+
+          notifications.push({
+            _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + 'wk',
+            userId: sellerId,
+            title: 'Weekly sales summary',
+            message: `This week: ${stats.orders.size} order(s), ${stats.products.size} product(s) sold, ₹${stats.revenue.toLocaleString('en-IN')} in revenue.`,
+            type: 'weekly_summary',
+            read: false,
+            archived: false,
+            createdAt: new Date().toISOString(),
+          });
+          created++;
+        });
+
+        if (created > 0) {
+          writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
+          console.log(`[weekly-summary] Created ${created} summary notification(s)`);
+        }
+      } catch (err) {
+        console.error('[weekly-summary] Error:', err.message);
+      }
+    };
+
+    // Generate summary shortly after startup (in case server was asleep for the week)
+    setTimeout(generateWeeklySummary, 5000);
+    setInterval(generateWeeklySummary, WEEKLY_INTERVAL);
+    console.log('[weekly-summary] Job started (7-day interval)');
 
     // Start Express server
     console.log('Starting Express server...');
