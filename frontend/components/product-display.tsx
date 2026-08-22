@@ -34,6 +34,10 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
     ? product.supplier.name
     : (product as any).supplierName || null
 
+  const supplierState = isSupplierInfo(product.supplier) && (product.supplier as any).state
+    ? (product.supplier as any).state
+    : null
+
   const isOwner = user && isSupplierInfo(product.supplier) && user._id === product.supplier._id
 
   const validImages = Array.isArray(product.images) ? product.images.filter(img => typeof img === 'string' && img.startsWith('http')) : []
@@ -55,7 +59,12 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
 
           <div className="p-4 cursor-pointer" onClick={() => router.push('/products/' + product._id)}>
             <div className="mb-3 pb-3 border-b border-border">
-              <p className="text-xs text-muted-foreground mb-0.5">Sold by</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground mb-0.5">Sold by</p>
+                {supplierState && !isOwner && (
+                  <span className="text-xs text-muted-foreground">{supplierState}</span>
+                )}
+              </div>
               {isOwner ? (
                 <p className="text-sm font-semibold text-muted-foreground">You</p>
               ) : supplierName ? (
