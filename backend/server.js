@@ -640,6 +640,31 @@ app.get('/api/debug/clear-notifications', async (req, res) => {
   }
 });
 
+// Debug endpoint — fix product stock to match total_stock
+app.get('/api/debug/fix-stock', async (req, res) => {
+  try {
+    const productsFile = path.join(__dirname, './data/products.json');
+    const products = readJsonFile(productsFile);
+    products.forEach(p => {
+      if (p.total_stock !== undefined) {
+        const sold = p.sold || 0;
+        const reserved = p.reserved_stock || 0;
+        p.available_stock = p.total_stock - sold - reserved;
+        p.stock = p.available_stock;
+      }
+    });
+    writeJsonFile(productsFile, products);
+    if (mongoDb) {
+      for (const p of products) {
+        await mongoDb.collection('products').updateOne({ _id: p._id }, { $set: { stock: p.stock, available_stock: p.available_stock } });
+      }
+    }
+    res.json({ success: true, products: products.map(p => ({ _id: p._id, name: p.name, stock: p.stock, available_stock: p.available_stock, total_stock: p.total_stock, sold: p.sold })) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Debug endpoint — clear all orders
 app.get('/api/debug/clear-orders', async (req, res) => {
   try {
@@ -2698,17 +2723,11 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
         }
       }
 
-      // Decrement product stock + increment salesCount + track sellers per item
+      // Track sellers per item + increment salesCount (stock already handled by inventory reserve/confirm)
       const mySellerId = req.user._id
       cart.items.forEach(item => {
         const product = products.find(p => p._id === item.productId);
         if (product) {
-          const stockVal = product.available_stock !== undefined ? product.available_stock : product.stock;
-          const newStock = Math.max(0, stockVal - item.quantity);
-          if (product.available_stock !== undefined) {
-            product.available_stock = newStock;
-          }
-          product.stock = newStock;
           // Track total units sold per product (used for 'featured = top sold')
           product.salesCount = (product.salesCount || 0) + item.quantity;
         }
