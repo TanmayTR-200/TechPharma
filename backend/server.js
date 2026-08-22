@@ -640,6 +640,21 @@ app.get('/api/debug/clear-notifications', async (req, res) => {
   }
 });
 
+// Debug endpoint — clear all orders
+app.get('/api/debug/clear-orders', async (req, res) => {
+  try {
+    const ordersFile = path.join(__dirname, './data/orders.json');
+    writeJsonFile(ordersFile, []);
+    if (mongoDb) {
+      await mongoDb.collection('orders').deleteMany({});
+    }
+    dataCache['orders'] = [];
+    res.json({ success: true, message: 'All orders cleared' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Auth middleware
 const authMiddleware = async (req, res, next) => {
   try {
