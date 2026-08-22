@@ -1504,7 +1504,7 @@ app.get('/api/products', async (req, res) => {
     const filterState = req.query.state ? String(req.query.state) : null;
     const filterSearch = req.query.search ? String(req.query.search).toLowerCase() : null;
     const priceMin = req.query.priceMin ? parseFloat(req.query.priceMin) : 0;
-    const priceMax = req.query.priceMax ? parseFloat(req.query.priceMax) : 100000;
+    const priceMax = req.query.priceMax ? parseFloat(req.query.priceMax) : 10000000;
 
     // Filter active products
     let activeProducts = products

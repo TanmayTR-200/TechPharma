@@ -116,7 +116,7 @@ export default function ProductsPage() {
   }, [])
 
   const priceMin = searchParams.get('priceMin') ? parseInt(searchParams.get('priceMin')!) : 0
-  const priceMax = searchParams.get('priceMax') ? parseInt(searchParams.get('priceMax')!) : 10000
+  const priceMax = searchParams.get('priceMax') ? parseInt(searchParams.get('priceMax')!) : 10000000
   let filteredProducts = products
   if (category) {
     const categories = category.toLowerCase().split(',')
