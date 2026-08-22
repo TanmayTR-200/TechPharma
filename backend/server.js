@@ -644,13 +644,23 @@ app.get('/api/debug/clear-notifications', async (req, res) => {
 app.get('/api/debug/fix-stock', async (req, res) => {
   try {
     const productsFile = path.join(__dirname, './data/products.json');
+    const reservations = readJsonFile(path.join(__dirname, './data/reservations.json'));
+    const activeReservations = reservations.filter(r => r.status === 'ACTIVE');
+    const reservedByProduct = {};
+    activeReservations.forEach(r => {
+      reservedByProduct[r.product_id] = (reservedByProduct[r.product_id] || 0) + r.quantity;
+    });
     const products = readJsonFile(productsFile);
     products.forEach(p => {
       if (p.total_stock !== undefined) {
         const sold = p.sold || 0;
-        const reserved = p.reserved_stock || 0;
+        const reserved = reservedByProduct[p._id] || 0;
+        p.reserved_stock = reserved;
         p.available_stock = p.total_stock - sold - reserved;
         p.stock = p.available_stock;
+      } else {
+        // No inventory migration yet — reset to original stock
+        p.stock = p.stock || 0;
       }
     });
     writeJsonFile(productsFile, products);
