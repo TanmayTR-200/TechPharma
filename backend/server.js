@@ -2233,6 +2233,29 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
     }
     writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
 
+    // Notify the buyer about the status update
+    const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const statusMessages = {
+      processing: 'Your order is being processed',
+      shipped: 'Your order has been shipped',
+      delivered: 'Your order has been delivered',
+      cancelled: 'Your order has been cancelled',
+    };
+    if (statusMessages[status]) {
+      notifications.push({
+        _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + 'st',
+        userId: order.userId,
+        title: 'Order update',
+        message: `${statusMessages[status]}. Tracking ID: ${order.trackingId || order._id}.`,
+        type: status === 'delivered' ? 'success' : 'info',
+        read: false,
+        archived: false,
+        createdAt: new Date().toISOString(),
+        metadata: { orderId: order._id },
+      });
+      writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
+    }
+
     res.json({ success: true, message: 'Order status updated', order });
   } catch (error) {
     console.error('Update order status error:', error);

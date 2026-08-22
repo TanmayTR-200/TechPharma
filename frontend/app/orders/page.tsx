@@ -37,8 +37,27 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [downloadingInvoice, setDownloadingInvoice] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+
+  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
+    setUpdatingStatus(true)
+    try {
+      const data = await fetcher(API_ENDPOINTS.orders.base + '/' + orderId + '/status', {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (data.success) {
+        setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: newStatus } : o))
+        setSelectedOrder(prev => prev ? { ...prev, status: newStatus } : null)
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
 
   useEffect(() => {
     async function fetchOrders() {
@@ -302,6 +321,30 @@ export default function OrdersPage() {
                 </Link>
               )}
             </div>
+
+            {/* Update status — seller actions */}
+            {selectedOrder.status && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && (
+              <div className="border-t border-border pt-4 mb-4">
+                <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Update status</h3>
+                <div className="flex flex-wrap gap-2">
+                  {(['processing', 'shipped', 'delivered'] as const)
+                    .filter(s => {
+                      const order = ['pending', 'processing', 'shipped', 'delivered']
+                      return order.indexOf(s) > order.indexOf(selectedOrder.status?.toLowerCase() || 'pending')
+                    })
+                    .map(s => (
+                    <button
+                      key={s}
+                      onClick={() => handleUpdateStatus(selectedOrder._id, s)}
+                      disabled={updatingStatus}
+                      className="rounded-md border border-border px-4 py-2 text-xs font-medium capitalize text-foreground hover:border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
+                    >
+                      {updatingStatus ? 'Updating...' : `Mark as ${s}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Items */}
             <div className="border-t border-border pt-4 mb-4">
