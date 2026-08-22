@@ -1214,6 +1214,26 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   }
 });
 
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Token required' });
+    }
+
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      const newToken = jwt.sign({ userId: decoded.userId }, JWT_SECRET);
+      res.json({ success: true, token: newToken });
+    } catch (err) {
+      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    }
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ success: false, message: 'Token refresh failed' });
+  }
+});
+
 // Profile endpoints (GET + PUT)
 app.get('/api/profile', authMiddleware, async (req, res) => {
   try {

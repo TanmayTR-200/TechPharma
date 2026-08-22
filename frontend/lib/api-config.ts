@@ -65,8 +65,8 @@ interface ApiEndpoints {
 
 export const API_CONFIG = {
   port: 5000,
-  timeout: 8000,
-  retries: 3,
+  timeout: 15000,
+  retries: 2,
   retryDelay: 1000
 };
 
@@ -147,7 +147,7 @@ export const API_ENDPOINTS: ApiEndpoints = {
   },
   notifications: {
     list: buildApiUrl('notifications'),
-    create: buildApiUrl('notifications/create'),
+    create: buildApiUrl('notifications'),
     markAsRead: (id: string) => buildApiUrl(`notifications/${id}/read`),
     markAllAsRead: buildApiUrl('notifications/mark-all-read'),
     archive: (id: string) => buildApiUrl(`notifications/${id}/archive`),
