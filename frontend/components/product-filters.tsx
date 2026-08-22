@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { useProductNavigation } from "@/hooks/use-product-navigation"
 import { useProductFilters } from "@/hooks/use-product-filters"
 import { PRODUCT_CATEGORIES } from "@/lib/constants"
-import { Check, ChevronDown } from "lucide-react"
+import { Check, ChevronDown, X } from "lucide-react"
 
 const INDIAN_STATES = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
