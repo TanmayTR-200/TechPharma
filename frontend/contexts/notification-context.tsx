@@ -5,7 +5,7 @@ import { useAuth } from './auth';
 interface Notification {
   _id: string;
   userId: string;
-  type: 'order_placed' | 'order_confirmed' | 'order_shipped' | 'sale_made' | 'stock_update';
+  type: 'order_placed' | 'order_confirmed' | 'order_shipped' | 'sale_made' | 'stock_update' | 'success' | 'info';
   title: string;
   message: string;
   read: boolean;
