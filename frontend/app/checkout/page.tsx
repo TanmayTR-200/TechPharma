@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast'
 import { ArrowLeft, Package, Plus, MapPin, Trash2, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
+import { INDIAN_STATES, INDIAN_CITIES } from '@/lib/locations'
 
 interface SavedAddress {
   _id: string
@@ -259,15 +260,22 @@ export default function CheckoutPage() {
           {/* Address form */}
           {showAddressForm && (
             <div className="space-y-3">
-              {/* Label selector */}
+              {/* Label selector with custom input */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1.5 block">Save as</label>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 items-center">
                   {LABELS.map(l => (
                     <button key={l} type="button" onClick={() => setAddressForm({ ...addressForm, label: l })} className={'px-4 py-1.5 text-xs font-medium rounded-md border transition-colors ' + (addressForm.label === l ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground hover:border-foreground/40')}>
                       {l}
                     </button>
                   ))}
+                  <input
+                    type="text"
+                    value={!LABELS.includes(addressForm.label) ? addressForm.label : ''}
+                    onChange={e => setAddressForm({ ...addressForm, label: e.target.value })}
+                    placeholder="Custom label..."
+                    className="flex-1 min-w-[120px] border border-border bg-transparent px-3 py-1.5 text-xs text-foreground focus:border-foreground focus:outline-none rounded-md"
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -286,12 +294,27 @@ export default function CheckoutPage() {
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">City *</label>
-                  <input type="text" value={addressForm.city} onChange={e => setAddressForm({ ...addressForm, city: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+                  <label className="text-xs text-muted-foreground mb-1 block">State</label>
+                  <select
+                    value={addressForm.state}
+                    onChange={e => setAddressForm({ ...addressForm, state: e.target.value, city: '' })}
+                    className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
+                  >
+                    <option value="">Select state</option>
+                    {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">State</label>
-                  <input type="text" value={addressForm.state} onChange={e => setAddressForm({ ...addressForm, state: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+                  <label className="text-xs text-muted-foreground mb-1 block">City *</label>
+                  <select
+                    value={addressForm.city}
+                    onChange={e => setAddressForm({ ...addressForm, city: e.target.value })}
+                    disabled={!addressForm.state}
+                    className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none disabled:opacity-40"
+                  >
+                    <option value="">{addressForm.state ? 'Select city' : 'Select state first'}</option>
+                    {(INDIAN_CITIES[addressForm.state] || []).map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">Pincode *</label>

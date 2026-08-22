@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/auth'
 import { useToast } from '@/hooks/use-toast'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
 import { Button } from '@/components/ui/button'
+import { INDIAN_STATES, INDIAN_CITIES } from '@/lib/locations'
 
 const tabs = [
   { id: 'profile', label: 'Profile', icon: User },
@@ -491,12 +492,19 @@ function SavedAddressesManager() {
         <div className="border border-border p-4 space-y-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1.5 block">Save as</label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 items-center">
               {ADDRESS_LABELS.map(l => (
                 <button key={l} type="button" onClick={() => setForm({ ...form, label: l })} className={'px-4 py-1.5 text-xs font-medium rounded-md border transition-colors ' + (form.label === l ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground hover:border-foreground/40')}>
                   {l}
                 </button>
               ))}
+              <input
+                type="text"
+                value={!ADDRESS_LABELS.includes(form.label) ? form.label : ''}
+                onChange={e => setForm({ ...form, label: e.target.value })}
+                placeholder="Custom label..."
+                className="flex-1 min-w-[120px] border border-border bg-transparent px-3 py-1.5 text-xs text-foreground focus:border-foreground focus:outline-none rounded-md"
+              />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -515,12 +523,27 @@ function SavedAddressesManager() {
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">City *</label>
-              <input type="text" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+              <label className="text-xs text-muted-foreground mb-1 block">State</label>
+              <select
+                value={form.state}
+                onChange={e => setForm({ ...form, state: e.target.value, city: '' })}
+                className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
+              >
+                <option value="">Select state</option>
+                {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">State</label>
-              <input type="text" value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+              <label className="text-xs text-muted-foreground mb-1 block">City *</label>
+              <select
+                value={form.city}
+                onChange={e => setForm({ ...form, city: e.target.value })}
+                disabled={!form.state}
+                className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none disabled:opacity-40"
+              >
+                <option value="">{form.state ? 'Select city' : 'Select state first'}</option>
+                {(INDIAN_CITIES[form.state] || []).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Pincode *</label>
