@@ -61,6 +61,12 @@ interface ApiEndpoints {
     unarchive: (id: string) => string;
     listArchived: string;
   };
+  addresses: {
+    list: string;
+    create: string;
+    update: (id: string) => string;
+    delete: (id: string) => string;
+  };
 }
 
 export const API_CONFIG = {
@@ -153,6 +159,12 @@ export const API_ENDPOINTS: ApiEndpoints = {
     archive: (id: string) => buildApiUrl(`notifications/${id}/archive`),
     unarchive: (id: string) => buildApiUrl(`notifications/${id}/unarchive`),
     listArchived: buildApiUrl('notifications/archived')
+  },
+  addresses: {
+    list: buildApiUrl('addresses'),
+    create: buildApiUrl('addresses'),
+    update: (id: string) => buildApiUrl(`addresses/${id}`),
+    delete: (id: string) => buildApiUrl(`addresses/${id}`)
   }
 };
 

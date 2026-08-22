@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { User, Store, Bell, Shield, Trash2, AlertTriangle, Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { User, Store, Bell, Shield, Trash2, AlertTriangle, Loader2, MapPin, Plus, Check } from 'lucide-react'
 import { EditProfileDialog } from '@/components/edit-profile-dialog'
 import { useAuth } from '@/contexts/auth'
 import { useToast } from '@/hooks/use-toast'
+import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
+import { Button } from '@/components/ui/button'
 
 const tabs = [
   { id: 'profile', label: 'Profile', icon: User },
+  { id: 'addresses', label: 'Addresses', icon: MapPin },
   { id: 'store', label: 'Store', icon: Store },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security', icon: Shield },
@@ -231,6 +234,13 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {activeTab === 'addresses' && (
+              <div className="space-y-4">
+                <h2 className="text-base font-semibold text-foreground">Saved addresses</h2>
+                <SavedAddressesManager />
+              </div>
+            )}
+
             {activeTab === 'notifications' && (
               <div className="space-y-4">
                 <h2 className="text-base font-semibold text-foreground">Notification preferences</h2>
@@ -374,5 +384,162 @@ export default function SettingsPage() {
 
       <EditProfileDialog externalOpen={editOpen} onExternalOpenChange={setEditOpen} />
     </>
+  )
+}
+
+const ADDRESS_LABELS = ['Home', 'Work', 'Other']
+
+interface SavedAddress {
+  _id: string
+  label: string
+  name: string
+  phone: string
+  line1: string
+  city: string
+  state: string
+  pincode: string
+}
+
+function SavedAddressesManager() {
+  const { toast } = useToast()
+  const { user } = useAuth()
+  const [addresses, setAddresses] = useState<SavedAddress[]>([])
+  const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ label: 'Home', name: '', phone: '', line1: '', city: '', state: '', pincode: '' })
+
+  useEffect(() => { fetchAddresses() }, [])
+
+  const fetchAddresses = async () => {
+    try {
+      const data = await fetcher(API_ENDPOINTS.addresses.list)
+      if (data.addresses) setAddresses(data.addresses)
+    } catch (e) { /* ignore */ }
+  }
+
+  const handleSave = async () => {
+    if (!form.name || !form.line1 || !form.city || !form.pincode) {
+      toast({ title: 'Missing fields', description: 'Please fill all required fields.', variant: 'destructive' })
+      return
+    }
+    try {
+      if (editingId) {
+        await fetcher(API_ENDPOINTS.addresses.update(editingId), { method: 'PUT', body: JSON.stringify(form) })
+        toast({ title: 'Address updated' })
+      } else {
+        const data = await fetcher(API_ENDPOINTS.addresses.create, { method: 'POST', body: JSON.stringify(form) })
+        if (data.address) setAddresses(prev => [...prev, data.address])
+        toast({ title: 'Address saved' })
+      }
+      setShowForm(false)
+      setEditingId(null)
+      setForm({ label: 'Home', name: user?.name || '', phone: user?.phone || '', line1: '', city: '', state: '', pincode: '' })
+      fetchAddresses()
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message || 'Failed to save address', variant: 'destructive' })
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await fetcher(API_ENDPOINTS.addresses.delete(id), { method: 'DELETE' })
+      setAddresses(prev => prev.filter(a => a._id !== id))
+      toast({ title: 'Address deleted' })
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to delete address', variant: 'destructive' })
+    }
+  }
+
+  const startEdit = (addr: SavedAddress) => {
+    setEditingId(addr._id)
+    setForm({ label: addr.label, name: addr.name, phone: addr.phone, line1: addr.line1, city: addr.city, state: addr.state, pincode: addr.pincode })
+    setShowForm(true)
+  }
+
+  return (
+    <div className="space-y-3">
+      {!showForm && (
+        <button onClick={() => { setEditingId(null); setForm({ label: 'Home', name: user?.name || '', phone: user?.phone || '', line1: '', city: '', state: '', pincode: '' }); setShowForm(true) }} className="flex items-center gap-2 text-sm text-primary hover:underline">
+          <Plus className="h-4 w-4" /> Add new address
+        </button>
+      )}
+
+      {/* Saved addresses */}
+      {addresses.map(addr => (
+        <div key={addr._id} className="border border-border p-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-medium bg-secondary text-foreground px-2 py-0.5 rounded">{addr.label}</span>
+                <p className="text-sm font-medium text-foreground">{addr.name}</p>
+              </div>
+              <p className="text-sm text-muted-foreground">{addr.line1}, {addr.city}, {addr.state} - {addr.pincode}</p>
+              {addr.phone && <p className="text-xs text-muted-foreground mt-1">Phone: {addr.phone}</p>}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => startEdit(addr)} className="text-xs text-primary hover:underline">Edit</button>
+              <button onClick={() => handleDelete(addr._id)} className="text-muted-foreground hover:text-destructive">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {/* Form */}
+      {showForm && (
+        <div className="border border-border p-4 space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1.5 block">Save as</label>
+            <div className="flex gap-2">
+              {ADDRESS_LABELS.map(l => (
+                <button key={l} type="button" onClick={() => setForm({ ...form, label: l })} className={'px-4 py-1.5 text-xs font-medium rounded-md border transition-colors ' + (form.label === l ? 'border-foreground bg-foreground text-background' : 'border-border text-foreground hover:border-foreground/40')}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Full name *</label>
+              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Phone</label>
+              <input type="text" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Address line *</label>
+            <input type="text" value={form.line1} onChange={e => setForm({ ...form, line1: e.target.value })} placeholder="House no, street, area" className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">City *</label>
+              <input type="text" value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">State</label>
+              <input type="text" value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Pincode *</label>
+              <input type="text" value={form.pincode} onChange={e => setForm({ ...form, pincode: e.target.value })} className="w-full border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none" />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" className="text-xs" onClick={() => { setShowForm(false); setEditingId(null) }}>Cancel</Button>
+            <Button type="button" size="sm" className="text-xs" onClick={handleSave}>{editingId ? 'Update' : 'Save'} address</Button>
+          </div>
+        </div>
+      )}
+
+      {addresses.length === 0 && !showForm && (
+        <div className="text-center py-8">
+          <MapPin className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No saved addresses yet</p>
+        </div>
+      )}
+    </div>
   )
 }

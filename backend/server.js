@@ -1304,6 +1304,90 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
   }
 });
 
+// ===== Saved Addresses =====
+app.get('/api/addresses', authMiddleware, async (req, res) => {
+  try {
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const user = users.find(u => u._id === req.user._id);
+    if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
+    res.json({ success: true, addresses: user.savedAddresses || [] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch addresses' });
+  }
+});
+
+app.post('/api/addresses', authMiddleware, async (req, res) => {
+  try {
+    const { label, name, phone, line1, city, state, pincode } = req.body;
+    if (!name || !line1 || !city || !pincode) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u._id === req.user._id);
+    if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    if (!user.savedAddresses) user.savedAddresses = [];
+    const newAddress = {
+      _id: Date.now().toString(),
+      label: label || 'Home',
+      name, phone: phone || '', line1, city, state: state || '', pincode,
+    };
+    user.savedAddresses.push(newAddress);
+    writeJsonFile(usersFile, users);
+    res.status(201).json({ success: true, address: newAddress });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to save address' });
+  }
+});
+
+app.put('/api/addresses/:id', authMiddleware, async (req, res) => {
+  try {
+    const { label, name, phone, line1, city, state, pincode } = req.body;
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u._id === req.user._id);
+    if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    if (!user.savedAddresses) return res.status(404).json({ success: false, message: 'Address not found' });
+    const addr = user.savedAddresses.find(a => a._id === req.params.id);
+    if (!addr) return res.status(404).json({ success: false, message: 'Address not found' });
+
+    if (label !== undefined) addr.label = label;
+    if (name !== undefined) addr.name = name;
+    if (phone !== undefined) addr.phone = phone;
+    if (line1 !== undefined) addr.line1 = line1;
+    if (city !== undefined) addr.city = city;
+    if (state !== undefined) addr.state = state;
+    if (pincode !== undefined) addr.pincode = pincode;
+
+    writeJsonFile(usersFile, users);
+    res.json({ success: true, address: addr });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to update address' });
+  }
+});
+
+app.delete('/api/addresses/:id', authMiddleware, async (req, res) => {
+  try {
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u._id === req.user._id);
+    if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
+
+    if (!user.savedAddresses) return res.status(404).json({ success: false, message: 'Address not found' });
+    const before = user.savedAddresses.length;
+    user.savedAddresses = user.savedAddresses.filter(a => a._id !== req.params.id);
+    if (user.savedAddresses.length === before) {
+      return res.status(404).json({ success: false, message: 'Address not found' });
+    }
+    writeJsonFile(usersFile, users);
+    res.json({ success: true, message: 'Address deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to delete address' });
+  }
+});
+
 // Protected Routes
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
