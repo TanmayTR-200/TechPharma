@@ -73,9 +73,9 @@ export default function TrackOrderPage() {
   const currentStep = data ? getStatusIndex(data.status) : -1
 
   return (
-    <div className="pt-14 min-h-screen relative z-10">
-      <div className="max-w-2xl mx-auto px-6 py-8">
-        <Link href="/orders" className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground mb-6">
+    <div className="w-full space-y-6">
+      <div>
+        <Link href="/orders" className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground mb-2">
           <ArrowLeft className="h-3 w-3" /> Back to Orders
         </Link>
 
@@ -190,7 +190,6 @@ export default function TrackOrderPage() {
             <p className="text-sm text-muted-foreground">Enter your tracking ID above to track your order</p>
           </div>
         )}
-      </div>
     </div>
   )
 }
