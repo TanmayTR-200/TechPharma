@@ -17,6 +17,7 @@ export function useAuthForm() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [signupData, setSignupData] = useState<SignupData | null>(null);
+  const [accountCreated, setAccountCreated] = useState(false);
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -121,6 +122,8 @@ export function useAuthForm() {
 
       if (registerResult.success && registerResult.token) {
         localStorage.setItem('token', registerResult.token);
+        setAccountCreated(true);
+        setOtpSent(false);
         toast({
           title: 'Welcome!',
           description: 'Your account has been created successfully.',
@@ -145,7 +148,7 @@ export function useAuthForm() {
   };
 
   const resendOtp = async () => {
-    if (!signupData) return;
+    if (!signupData || accountCreated) return;
 
     try {
       const response = await fetch(`${API_URL}/api/auth/send-otp`, {

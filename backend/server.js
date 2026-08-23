@@ -942,7 +942,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
     if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      return res.status(400).json({ success: false, message: 'Unable to process this request.' });
+      return res.status(400).json({ success: false, message: 'This email is already registered. Please log in.' });
     }
 
     // Generate 6-digit OTP
