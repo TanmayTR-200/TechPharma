@@ -56,11 +56,15 @@ export default function RegisterPage() {
         throw new Error('No token received from server');
       }
     } catch (error: any) {
+      const serverMsg = error.response?.data?.message;
       toast({
         title: "Registration failed",
-        description: error.message || "Something went wrong",
+        description: serverMsg || error.message || "Something went wrong",
         variant: "destructive",
       });
+      if (serverMsg && serverMsg.includes('already exists')) {
+        setTimeout(() => router.push('/auth?mode=login'), 2000);
+      }
     } finally {
       setIsLoading(false);
     }

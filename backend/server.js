@@ -745,11 +745,11 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
 
-    // Check if user exists — don't reveal the email is registered
+    // Check if user exists
     if (users.find(u => u.email === email)) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: 'Unable to create account with these details.'
+        message: 'An account with this email already exists. Please log in instead.'
       });
     }
 
