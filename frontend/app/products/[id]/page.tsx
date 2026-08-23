@@ -9,7 +9,6 @@ import { useAuth } from "@/contexts/auth"
 import { SkeletonLoader } from "@/components/skeleton-loader"
 import { useToast } from "@/hooks/use-toast"
 import { motion } from "framer-motion"
-import DashboardLayout from "@/components/dashboard-layout"
 
 interface ProductDetail {
   _id: string
@@ -58,17 +57,14 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <DashboardLayout>
-        <div className="w-full flex items-center justify-center min-h-[60vh]">
-          <SkeletonLoader type="product-detail" />
-        </div>
-      </DashboardLayout>
+      <div className="w-full flex items-center justify-center min-h-[60vh]">
+        <SkeletonLoader type="product-detail" />
+      </div>
     )
   }
 
   if (!product) {
     return (
-      <DashboardLayout>
         <div className="w-full min-h-[60vh] flex flex-col items-center justify-center">
           <Package className="h-10 w-10 mb-3 text-muted-foreground/40" />
           <p className="text-sm text-foreground font-medium">Product not found</p>
@@ -76,7 +72,6 @@ export default function ProductDetailPage() {
             Back to products
           </Button>
         </div>
-      </DashboardLayout>
     )
   }
 
@@ -117,7 +112,7 @@ export default function ProductDetailPage() {
   const stockLevel = product.stock > 10 ? 'high' : product.stock > 0 ? 'low' : 'out'
 
   return (
-    <DashboardLayout>
+    <>
       <div className="w-full space-y-6">
         <button onClick={() => router.back()} className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3 w-3" /> Back to products
@@ -245,6 +240,6 @@ export default function ProductDetailPage() {
           </motion.div>
         </div>
       </div>
-    </DashboardLayout>
+    </>
   )
 }
