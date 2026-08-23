@@ -1763,12 +1763,13 @@ app.post('/api/products', authMiddleware, async (req, res) => {
     }
 
     // Generate new ID
-    const id = products.length ? Math.max(...products.map(p => Number(p.id) || 0)) + 1 : 1;
+    // Generate unique product ID
+    const productId = 'prod_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
     // Create new product
     const product = {
-      id,
-      _id: String(id),
+      id: productId,
+      _id: productId,
       name: name?.trim(),
       description: description?.trim(),
       price: Number(price),
