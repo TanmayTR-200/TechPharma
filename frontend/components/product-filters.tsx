@@ -28,14 +28,15 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
   const [priceMin, setPriceMin] = useState('')
   const [priceMax, setPriceMax] = useState('')
   const [selectedFilters, setSelectedFilters] = useState<string[]>([])
+  const [selectedStates, setSelectedStates] = useState<string[]>([])
   const [catDropdownOpen, setCatDropdownOpen] = useState(false)
+  const [stateDropdownOpen, setStateDropdownOpen] = useState(false)
   const catRef = useRef<HTMLDivElement>(null)
+  const stateRef = useRef<HTMLDivElement>(null)
   const { navigateToProducts } = useProductNavigation()
   const { categoryCounts } = useProductFilters()
   const searchParams = useSearchParams()
   const router = useRouter()
-
-  const currentState = searchParams.get('state') || ''
 
   useEffect(() => {
     if (selectedCategory) {
@@ -50,6 +51,8 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
   }, [selectedCategory])
 
   useEffect(() => {
+    const stateParam = searchParams.get('state') || ''
+    setSelectedStates(stateParam ? stateParam.split(',').map(s => s.trim()).filter(Boolean) : [])
     setPriceMin(searchParams.get('priceMin') || '')
     setPriceMax(searchParams.get('priceMax') || '')
   }, [searchParams])
@@ -58,6 +61,9 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
     const handleClickOutside = (e: MouseEvent) => {
       if (catRef.current && !catRef.current.contains(e.target as Node)) {
         setCatDropdownOpen(false)
+      }
+      if (stateRef.current && !stateRef.current.contains(e.target as Node)) {
+        setStateDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -70,7 +76,6 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
       if (value) params.set(key, value)
       else params.delete(key)
     })
-    // Reset to page 1 when filters change
     params.delete('page')
     router.push(`/products?${params.toString()}`, { scroll: false })
   }
@@ -83,9 +88,16 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
     updateUrl({ category: newFilters.map(f => f.toLowerCase()).join(',') || undefined })
   }
 
+  const toggleState = (state: string) => {
+    const newStates = selectedStates.includes(state)
+      ? selectedStates.filter(s => s !== state)
+      : [...selectedStates, state]
+    setSelectedStates(newStates)
+    updateUrl({ state: newStates.join(',') || undefined })
+  }
+
   const applyPriceFilter = () => {
     updateUrl({
-      category: selectedFilters.map(f => f.toLowerCase()).join(',') || undefined,
       priceMin: priceMin || undefined,
       priceMax: priceMax || undefined
     })
@@ -93,6 +105,9 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
 
   const clearAll = () => {
     setSelectedFilters([])
+    setSelectedStates([])
+    setPriceMin('')
+    setPriceMax('')
     router.push('/products', { scroll: false })
   }
 
@@ -134,21 +149,38 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
           )}
         </div>
 
-        {/* State dropdown */}
-        <div>
+        {/* State multi-select dropdown */}
+        <div className="relative" ref={stateRef}>
           <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mb-2 block">State</label>
-          <select
-            value={currentState}
-            onChange={(e) => {
-              updateUrl({ state: e.target.value || undefined })
-            }}
-            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
+          <button
+            onClick={() => setStateDropdownOpen(!stateDropdownOpen)}
+            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-left flex items-center justify-between hover:border-foreground/40 transition-colors"
           >
-            <option value="">All states</option>
-            {INDIAN_STATES.map(state => (
-              <option key={state} value={state}>{state}</option>
-            ))}
-          </select>
+            <span className="truncate text-foreground">
+              {selectedStates.length === 0
+                ? 'All states'
+                : selectedStates.length === 1
+                  ? selectedStates[0]
+                  : `${selectedStates.length} states selected`}
+            </span>
+            <ChevronDown className={'h-4 w-4 text-muted-foreground transition-transform ' + (stateDropdownOpen ? 'rotate-180' : '')} />
+          </button>
+          {stateDropdownOpen && (
+            <div className="absolute z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+              {INDIAN_STATES.map(state => (
+                <button
+                  key={state}
+                  onClick={() => toggleState(state)}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-secondary/50 transition-colors"
+                >
+                  <div className={'flex h-4 w-4 items-center justify-center rounded border ' + (selectedStates.includes(state) ? 'bg-foreground border-foreground' : 'border-border')}>
+                    {selectedStates.includes(state) && <Check className="h-3 w-3 text-background" />}
+                  </div>
+                  <span className="flex-1 text-foreground">{state}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Price range */}
@@ -183,7 +215,7 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
       </div>
 
       {/* Active filters */}
-      {(selectedFilters.length > 0 || currentState || searchParams.get('priceMin') || searchParams.get('priceMax')) && (
+      {(selectedFilters.length > 0 || selectedStates.length > 0 || searchParams.get('priceMin') || searchParams.get('priceMax')) && (
         <div className="flex flex-wrap items-center gap-2 mt-5 pt-4 border-t border-border">
           <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.15em] mr-1">Active:</span>
           {selectedFilters.map(f => (
@@ -195,14 +227,15 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
               {PRODUCT_CATEGORIES.find(c => c.name === f)?.displayName || f} <X className="h-3 w-3" />
             </button>
           ))}
-          {currentState && (
+          {selectedStates.map(s => (
             <button
-              onClick={() => updateUrl({ state: undefined })}
+              key={s}
+              onClick={() => toggleState(s)}
               className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-3 py-1 rounded-full hover:bg-foreground hover:text-background transition-colors"
             >
-              {currentState} <X className="h-3 w-3" />
+              {s} <X className="h-3 w-3" />
             </button>
-          )}
+          ))}
           {(searchParams.get('priceMin') || searchParams.get('priceMax')) && (
             <button
               onClick={() => updateUrl({ priceMin: undefined, priceMax: undefined })}

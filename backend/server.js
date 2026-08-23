@@ -1651,6 +1651,7 @@ app.get('/api/products', async (req, res) => {
     // Parse query params for filtering
     const filterCategory = req.query.category ? String(req.query.category).toLowerCase() : null;
     const filterState = req.query.state ? String(req.query.state) : null;
+    const filterStates = filterState ? filterState.split(',').map(s => s.trim()) : null;
     const filterSearch = req.query.search ? String(req.query.search).toLowerCase() : null;
     const priceMin = req.query.priceMin ? parseFloat(req.query.priceMin) : 0;
     const priceMax = req.query.priceMax ? parseFloat(req.query.priceMax) : 10000000;
@@ -1665,9 +1666,9 @@ app.get('/api/products', async (req, res) => {
           if (!cats.includes(String(p.category).toLowerCase())) return false;
         }
         // State filter (join with user)
-        if (filterState) {
+        if (filterStates) {
           const seller = userMap.get(p.userId);
-          if (!seller || seller.state !== filterState) return false;
+          if (!seller || !filterStates.includes(seller.state)) return false;
         }
         // Search filter
         if (filterSearch) {
