@@ -18,8 +18,8 @@ interface SoldProduct {
 interface SellerOrder {
   _id: string
   trackingId?: string
-  buyerName: string
-  items: { name: string; quantity: number; price: number }[]
+  user: string
+  items: { product?: { _id: string; name: string }; name?: string; quantity: number; price: number; sellerId?: string }[]
   totalAmount: number
   status: string
   createdAt: string
@@ -166,7 +166,7 @@ export default function SalesPage() {
                 const isOpen = expandedId === id
                 // Find orders for this product
                 const productOrders = sellerOrders.filter(o =>
-                  o.items.some(item => item.name === product.name)
+                  o.items.some(item => (item.product?.name || item.name) === product.name)
                 )
 
                 return (
@@ -203,7 +203,7 @@ export default function SalesPage() {
                                   <div className="flex items-center justify-between mb-3">
                                     <div>
                                       <p className="text-sm font-medium text-foreground">#{order._id.slice(-8)}</p>
-                                      <p className="text-xs text-muted-foreground">{order.buyerName} · {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
+                                      <p className="text-xs text-muted-foreground">{order.user} · {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
                                     </div>
                                     <div className="text-right">
                                       <p className="text-sm font-bold text-foreground">{fmt(order.totalAmount)}</p>
