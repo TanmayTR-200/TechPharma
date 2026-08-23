@@ -1971,10 +1971,21 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     );
 
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    // Seller's orders = orders where any item has sellerId matching this user
     const userOrders = orders.filter(o => 
-      String(o.userId || '') === String(userId) || 
-      String(o.supplierId || '') === String(userId)
+      (o.items || []).some(item => String(item.sellerId || '') === String(userId))
     );
+    // Buyer's orders = orders they placed
+    const buyerOrders = orders.filter(o => String(o.userId) === String(userId));
+
+    let totalRevenue = 0;
+    userOrders.forEach(order => {
+      (order.items || []).forEach(item => {
+        if (String(item.sellerId || '') === String(userId)) {
+          totalRevenue += (item.price || 0) * (item.quantity || 1);
+        }
+      });
+    });
 
     res.json({
       success: true,
@@ -1983,15 +1994,13 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
           totalProducts: userProducts.length,
           productViews: userProducts.reduce((sum, p) => sum + (p.views || 0), 0),
           recentOrders: userOrders.length,
-          revenue: userOrders
-            .filter(o => o.status === 'completed')
-            .reduce((sum, o) => sum + (o.totalAmount || 0), 0)
+          revenue: totalRevenue
         },
         orders: userOrders.slice(0, 10).map(order => ({
           _id: order._id || order.id,
-          user: order.userName || 'Anonymous',
-          items: order.items || [],
-          totalAmount: order.totalAmount || 0,
+          user: order.buyerName || order.userName || 'Anonymous',
+          items: (order.items || []).filter(item => String(item.sellerId || '') === String(userId)),
+          totalAmount: (order.items || []).filter(item => String(item.sellerId || '') === String(userId)).reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0),
           status: order.status || 'pending',
           createdAt: order.createdAt || new Date().toISOString(),
           paymentDetails: order.paymentDetails || { status: 'pending', method: 'unknown' }
@@ -2184,7 +2193,11 @@ app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const userOrders = orders.filter(o => o.userId === req.user._id);
+    // Show orders where user is the buyer OR seller of any item
+    const userOrders = orders.filter(o =>
+      String(o.userId) === String(req.user._id) ||
+      (o.items || []).some(item => String(item.sellerId || '') === String(req.user._id))
+    );
 
     // Resolve product details for each order item
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
