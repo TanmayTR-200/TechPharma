@@ -76,7 +76,7 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
     if (!user) {
       toast({
         title: 'Sign in required',
-        description: 'Please sign in to request a quote',
+        description: 'Please sign in to contact the seller',
         variant: 'destructive',
       });
       return;
@@ -88,7 +88,6 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
         throw new Error('Authentication token not found');
       }
 
-      // TODO: Implement quote functionality
       toast({
         title: 'Coming soon',
         description: 'Quote requests will be available soon',
@@ -237,7 +236,7 @@ export function ProductActions({ product, mode = 'marketplace' }: ProductActions
             variant="outline"
             className="w-full"
           >
-            Get quote
+            Contact seller
           </Button>
         </>
       )}

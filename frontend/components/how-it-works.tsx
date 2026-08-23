@@ -3,7 +3,7 @@ import { UserPlus, Package, ShoppingCart } from "lucide-react"
 const steps = [
   { icon: UserPlus, title: "Create your account", desc: "Sign up as a supplier or buyer. Add your business details and get started." },
   { icon: Package, title: "List or find products", desc: "Suppliers list products with photos and pricing. Buyers search, filter, and compare." },
-  { icon: ShoppingCart, title: "Connect and order", desc: "Message suppliers, request quotes, place orders, and track everything from your dashboard." },
+  { icon: ShoppingCart, title: "Connect and order", desc: "Message suppliers, place orders at fixed prices, and track everything from your dashboard." },
 ]
 
 export function HowItWorks() {

@@ -95,7 +95,7 @@ export function HeroSection() {
               transition={{ duration: 0.6, delay: 1.0 }}
               className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-md mb-10"
             >
-              Stop chasing quotes across emails and spreadsheets. List, find, compare, and order industrial supplies in one place.
+              Stop chasing suppliers across emails and spreadsheets. List, find, compare, and order industrial supplies in one place.
             </motion.p>
 
             {/* Buttons */}

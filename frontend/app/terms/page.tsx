@@ -31,7 +31,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-sm font-semibold text-foreground mb-2">3. Supplier responsibilities</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Suppliers must list accurate product information, including pricing, specifications, and images. Suppliers are responsible for fulfilling orders and honoring quoted prices. Misleading listings may result in account suspension.
+              Suppliers must list accurate product information, including pricing, specifications, and images. Suppliers are responsible for fulfilling orders and honoring listed prices. Prices are fixed and non-negotiable. Misleading listings may result in account suspension.
             </p>
           </section>
 

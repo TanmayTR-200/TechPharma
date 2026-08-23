@@ -10,7 +10,7 @@ const faqs = [
   },
   {
     question: "How do I contact a supplier?",
-    answer: "Click 'Get quote' on any product card or 'Contact seller' on the product detail page. This opens a chat with the supplier where you can negotiate pricing, ask questions, and place orders."
+    answer: "Click 'Contact seller' on the product detail page to open a chat with the supplier. You can ask questions about the product and place orders. Prices are fixed and set by the supplier."
   },
   {
     question: "How does ordering work?",

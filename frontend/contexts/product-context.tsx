@@ -272,17 +272,16 @@ const ProductProvider = ({ children }: { children: React.ReactNode }): React.Rea
       if (!user) {
         toast({
           title: "Authentication Required",
-          description: "Please login to request a quote",
+          description: "Please login to contact the seller",
           variant: "destructive",
         })
         return
       }
 
-      // Redirect to messages with the seller, pre-filling a quote request message
+      // Redirect to messages with the seller
       const supplierId = product.supplierId || product.userId
       if (supplierId) {
-        const productInfo = encodeURIComponent(JSON.stringify({ id: product._id, name: product.name, price: product.price }))
-        router.push('/messages/' + supplierId + '?product=' + productInfo)
+        router.push('/messages/' + supplierId)
       } else {
         toast({
           title: "Error",
@@ -293,7 +292,7 @@ const ProductProvider = ({ children }: { children: React.ReactNode }): React.Rea
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to request quote. Please try again.",
+        description: "Failed to contact seller. Please try again.",
         variant: "destructive",
       })
     } finally {

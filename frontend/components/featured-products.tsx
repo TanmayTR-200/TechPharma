@@ -96,8 +96,8 @@ export function FeaturedProducts() {
                         Manage
                       </Button>
                     ) : (
-                      <Button size="sm" className="rounded-none bg-foreground text-background hover:bg-foreground/90 text-xs" onClick={() => getQuote(p)} disabled={p.stock === 0}>
-                        {p.stock === 0 ? 'Sold out' : 'Get quote'}
+                      <Button size="sm" className="rounded-none bg-foreground text-background hover:bg-foreground/90 text-xs" onClick={() => router.push('/products/' + p._id)} disabled={p.stock === 0}>
+                        {p.stock === 0 ? 'Sold out' : 'View details'}
                       </Button>
                     )}
                   </div>
