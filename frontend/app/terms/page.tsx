@@ -73,7 +73,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-sm font-semibold text-foreground mb-2">9. Account termination</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              We may suspend or terminate accounts that violate these terms. You may delete your account at any time by contacting us.
+              Accounts that violate these terms may be suspended or terminated. Reports of fraudulent activity can be sent to techpharma10@gmail.com for review. You may delete your account at any time from Settings.
             </p>
           </section>
 

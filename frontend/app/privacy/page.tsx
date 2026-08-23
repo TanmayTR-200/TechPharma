@@ -36,9 +36,9 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-sm font-semibold text-foreground mb-2">4. Cookies</h2>
+            <h2 className="text-sm font-semibold text-foreground mb-2">4. Authentication & data storage</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              We use essential cookies for authentication and session management. We do not use third-party tracking cookies or advertising networks.
+              We use browser localStorage to store your authentication token after login. This keeps you signed in across sessions. No third-party tracking cookies or advertising networks are used. You can clear your stored data by logging out or clearing your browser storage.
             </p>
           </section>
 
