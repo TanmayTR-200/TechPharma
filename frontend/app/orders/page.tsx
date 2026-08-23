@@ -120,6 +120,16 @@ export default function OrdersPage() {
 
           <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
             <div class="section" style="flex: 1;">
+              <h3>From</h3>
+              <div class="party">
+                <strong>${inv.seller?.name || inv.from?.name || 'Seller'}</strong><br>
+                ${inv.seller?.company || inv.from?.company ? (inv.seller?.company || inv.from?.company) + '<br>' : ''}
+                ${inv.seller?.address || inv.from?.address ? (inv.seller?.address || inv.from?.address) + '<br>' : ''}
+                ${inv.seller?.email || inv.from?.email || ''}
+                ${inv.seller?.phone || inv.from?.phone ? '<br>Phone: ' + (inv.seller?.phone || inv.from?.phone) : ''}
+              </div>
+            </div>
+            <div class="section" style="flex: 1;">
               <h3>Bill To</h3>
               <div class="party">
                 <strong>${inv.buyer.name}</strong><br>

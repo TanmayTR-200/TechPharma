@@ -2193,11 +2193,8 @@ app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    // Show orders where user is the buyer OR seller of any item
-    const userOrders = orders.filter(o =>
-      String(o.userId) === String(req.user._id) ||
-      (o.items || []).some(item => String(item.sellerId || '') === String(req.user._id))
-    );
+    // Orders page = buyer's purchases only
+    const userOrders = orders.filter(o => String(o.userId) === String(req.user._id));
 
     // Resolve product details for each order item
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
@@ -2390,6 +2387,12 @@ app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
     const users = readJsonFile(path.join(__dirname, './data/users.json'));
     const buyer = users.find(u => u._id === order.userId) || {};
 
+    // Get the actual seller info from the first item's sellerId
+    const sellerId = order.items?.[0]?.sellerId || order.items?.[0]?.product?.sellerId;
+    const seller = users.find(u => u._id === sellerId) || {};
+    const sellerProducts = readJsonFile(path.join(__dirname, './data/products.json'));
+    const sellerProduct = sellerProducts.find(p => p._id === (order.items?.[0]?.product?._id || order.items?.[0]?.productId)) || {};
+
     res.json({
       success: true,
       invoice: {
@@ -2399,13 +2402,28 @@ app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
         date: order.createdAt,
         status: order.status || 'pending',
         paymentMethod: order.paymentMethod || 'cod',
+        from: {
+          name: seller.name || 'Seller',
+          email: seller.email || '',
+          company: seller.company?.name || '',
+          address: seller.company?.address || seller.state || '',
+          phone: seller.phone || ''
+        },
+        to: {
+          name: order.buyerName || buyer.name || '',
+          email: order.buyerEmail || buyer.email || '',
+          address: order.shippingAddress || {}
+        },
         buyer: {
           name: order.buyerName || buyer.name || '',
           email: order.buyerEmail || buyer.email || ''
         },
         seller: {
-          name: 'TechPharma Marketplace',
-          email: 'techpharma10@gmail.com'
+          name: seller.name || 'Seller',
+          email: seller.email || '',
+          company: seller.company?.name || '',
+          address: seller.company?.address || seller.state || '',
+          phone: seller.phone || ''
         },
         items: (order.items || []).map(item => ({
           name: item.product?.name || 'Product',
