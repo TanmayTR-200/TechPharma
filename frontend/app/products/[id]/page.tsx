@@ -4,11 +4,12 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, ArrowRight, Package, ShoppingCart, MessageSquare, MapPin, Truck, ShieldCheck, Calendar, Building2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, Package, ShoppingCart, MessageSquare, MapPin, Calendar } from "lucide-react"
 import { useAuth } from "@/contexts/auth"
 import { SkeletonLoader } from "@/components/skeleton-loader"
 import { useToast } from "@/hooks/use-toast"
 import { motion } from "framer-motion"
+import DashboardLayout from "@/components/dashboard-layout"
 
 interface ProductDetail {
   _id: string
@@ -38,7 +39,10 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + "/api/products/" + params.id)
+        const token = localStorage.getItem("token")
+        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + "/api/products/" + params.id, {
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+        })
         const data = await res.json()
         if (data.success && data.product) setProduct(data.product)
       } catch (e) {
@@ -54,21 +58,25 @@ export default function ProductDetailPage() {
 
   if (loading) {
     return (
-      <div className="pt-[88px] min-h-screen flex items-center justify-center">
-        <SkeletonLoader type="product-detail" />
-      </div>
+      <DashboardLayout>
+        <div className="w-full flex items-center justify-center min-h-[60vh]">
+          <SkeletonLoader type="product-detail" />
+        </div>
+      </DashboardLayout>
     )
   }
 
   if (!product) {
     return (
-      <div className="pt-[88px] min-h-screen flex flex-col items-center justify-center">
-        <Package className="h-10 w-10 mb-3 text-muted-foreground/40" />
-        <p className="text-sm text-foreground font-medium">Product not found</p>
-        <Button variant="outline" size="sm" className="mt-3 border-border text-foreground hover:bg-secondary rounded-md" onClick={() => router.push('/products')}>
-          Back to products
-        </Button>
-      </div>
+      <DashboardLayout>
+        <div className="w-full min-h-[60vh] flex flex-col items-center justify-center">
+          <Package className="h-10 w-10 mb-3 text-muted-foreground/40" />
+          <p className="text-sm text-foreground font-medium">Product not found</p>
+          <Button variant="outline" size="sm" className="mt-3 border-border text-foreground hover:bg-secondary rounded-md" onClick={() => router.push('/products')}>
+            Back to products
+          </Button>
+        </div>
+      </DashboardLayout>
     )
   }
 
@@ -109,10 +117,9 @@ export default function ProductDetailPage() {
   const stockLevel = product.stock > 10 ? 'high' : product.stock > 0 ? 'low' : 'out'
 
   return (
-    <div className="pt-[88px] min-h-screen relative z-10">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 pb-8">
-        {/* Back button */}
-        <button onClick={() => router.back()} className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground mb-4">
+    <DashboardLayout>
+      <div className="w-full space-y-6">
+        <button onClick={() => router.back()} className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
           <ArrowLeft className="h-3 w-3" /> Back to products
         </button>
 
@@ -170,11 +177,6 @@ export default function ProductDetailPage() {
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }} className="flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <Badge className="bg-secondary text-foreground border-0 text-xs font-medium px-3 py-1 capitalize">{product.category}</Badge>
-              {product.status === 'active' && (
-                <Badge className="bg-emerald-500/10 text-emerald-600 border-0 text-xs px-2 py-1">
-                  <ShieldCheck className="h-3 w-3 mr-1" /> Active
-                </Badge>
-              )}
             </div>
 
             <h1 className="font-display text-2xl font-bold text-foreground mb-2">{product.name}</h1>
@@ -221,22 +223,6 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Trust badges */}
-            <div className="grid grid-cols-3 gap-2 mb-5">
-              <div className="border border-border rounded-md p-3 text-center">
-                <Truck className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-[10px] text-muted-foreground">Pan-India delivery</p>
-              </div>
-              <div className="border border-border rounded-md p-3 text-center">
-                <ShieldCheck className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-[10px] text-muted-foreground">Verified supplier</p>
-              </div>
-              <div className="border border-border rounded-md p-3 text-center">
-                <Building2 className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                <p className="text-[10px] text-muted-foreground">B2B pricing</p>
-              </div>
-            </div>
-
             {/* Actions */}
             <div className="space-y-2 mt-auto">
               {!isOwner ? (
@@ -259,6 +245,6 @@ export default function ProductDetailPage() {
           </motion.div>
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   )
 }
