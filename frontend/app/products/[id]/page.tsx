@@ -118,10 +118,10 @@ export default function ProductDetailPage() {
           <ArrowLeft className="h-3 w-3" /> Back to products
         </button>
 
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid md:grid-cols-2 gap-6">
           {/* Left: Images */}
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
-            <div className="relative w-full aspect-square rounded-lg border border-border bg-secondary overflow-hidden">
+            <div className="relative w-full aspect-[4/3] rounded-lg border border-border bg-secondary overflow-hidden">
               {validImages.length > 0 ? (
                 <img src={validImages[currentImage]} alt={product.name} className="w-full h-full object-cover" />
               ) : (
@@ -174,11 +174,11 @@ export default function ProductDetailPage() {
               <Badge className="bg-secondary text-foreground border-0 text-xs font-medium px-3 py-1 capitalize">{product.category}</Badge>
             </div>
 
-            <h1 className="font-display text-2xl font-bold text-foreground mb-2">{product.name}</h1>
-            <p className="text-sm text-muted-foreground mb-4 leading-relaxed">{product.description || 'No description provided.'}</p>
+            <h1 className="font-display text-2xl font-bold text-foreground mb-1">{product.name}</h1>
+            <p className="text-sm text-muted-foreground mb-3 leading-relaxed">{product.description || 'No description provided.'}</p>
 
             {/* Price */}
-            <div className="border-y border-border py-4 mb-4">
+            <div className="border-y border-border py-3 mb-3">
               <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-1">Price</p>
               <div className="flex items-baseline gap-2">
                 <span className="font-display text-3xl font-bold text-foreground">{fmt(product.price)}</span>
@@ -187,7 +187,7 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Stock */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-3">
               <div className="flex items-center gap-1.5">
                 <div className={"h-2 w-2 rounded-full " + (stockLevel === 'high' ? 'bg-emerald-500' : stockLevel === 'low' ? 'bg-amber-500' : 'bg-destructive')} />
                 <span className="text-sm text-foreground font-medium">
@@ -200,7 +200,7 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Seller card */}
-            <div className="border border-border rounded-lg p-4 mb-4 bg-secondary/30">
+            <div className="border border-border rounded-lg p-3 mb-3 bg-secondary/30">
               <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-2">Seller</p>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -219,7 +219,7 @@ export default function ProductDetailPage() {
             </div>
 
             {/* Actions */}
-            <div className="space-y-2 mt-auto">
+            <div className="space-y-2">
               {!isOwner ? (
                 <>
                   <Button className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-md h-11 text-sm font-medium" onClick={handleAddToCart} disabled={product.stock === 0}>
