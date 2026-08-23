@@ -199,7 +199,7 @@ export default function SalesPage() {
                           <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                           <div>
                             <p className="text-sm font-medium text-foreground">#{order._id.slice(-8)}</p>
-                            <p className="text-xs text-muted-foreground">{order.user} · {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
+                            <p className="text-xs text-muted-foreground">{order.user} · {new Date(order.createdAt).toLocaleDateString('en-GB')}</p>
                           </div>
                         </div>
                         <div className="text-right flex items-center gap-3">
@@ -314,7 +314,7 @@ export default function SalesPage() {
                                   </div>
                                   <div className="text-right">
                                     <p className="text-sm text-foreground">Qty {b.quantity}</p>
-                                    <p className="text-xs text-muted-foreground">{b.date ? new Date(b.date).toLocaleDateString() : ''}</p>
+                                    <p className="text-xs text-muted-foreground">{b.date ? new Date(b.date).toLocaleDateString('en-GB') : ''}</p>
                                   </div>
                                 </div>
                               ))}

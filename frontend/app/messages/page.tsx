@@ -104,7 +104,7 @@ export default function MessagesPage() {
                       <p className="text-sm font-medium text-foreground">{name}</p>
                       {conv.lastMessageTime && !isNaN(new Date(conv.lastMessageTime).getTime()) && (
                         <span className="text-xs text-muted-foreground">
-                          {new Date(conv.lastMessageTime).toLocaleDateString()}
+                          {new Date(conv.lastMessageTime).toLocaleDateString('en-GB')}
                         </span>
                       )}
                     </div>

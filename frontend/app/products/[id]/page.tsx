@@ -79,7 +79,7 @@ export default function ProductDetailPage() {
   const validImages = (product.images || []).filter(img => typeof img === "string" && img.startsWith("http"))
   const supplierName = product.supplier?.name || product.supplierName || 'Supplier'
   const supplierState = (product.supplier as any)?.state || ''
-  const listedDate = product.createdAt ? new Date(product.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+  const listedDate = product.createdAt ? new Date(product.createdAt).toLocaleDateString('en-GB') : ''
 
   const handleContactSeller = () => {
     if (!user) {

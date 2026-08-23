@@ -136,13 +136,13 @@ export default function TrackOrderPage() {
                       <div className="pt-1.5">
                         <p className={`text-sm font-medium ${isDone ? 'text-foreground' : 'text-muted-foreground'}`}>{step.label}</p>
                         {isDone && idx === 0 && data.createdAt && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{new Date(data.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{new Date(data.createdAt).toLocaleDateString('en-GB')}</p>
                         )}
                         {isDone && idx === 2 && data.shippedAt && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{new Date(data.shippedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{new Date(data.shippedAt).toLocaleDateString('en-GB')}</p>
                         )}
                         {isDone && idx === 3 && data.deliveredAt && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{new Date(data.deliveredAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{new Date(data.deliveredAt).toLocaleDateString('en-GB')}</p>
                         )}
                       </div>
                     </div>

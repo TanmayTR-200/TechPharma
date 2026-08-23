@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { ShoppingBag, Package, Truck, CheckCircle, X, FileText, MapPin } from 'lucide-react'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
 import { useAuth } from '@/contexts/auth'
+import { formatDateShort } from '@/lib/formatDate'
 import Link from 'next/link'
 
 interface Order {
@@ -113,7 +114,7 @@ export default function OrdersPage() {
             <div class="invoice-meta">
               <strong>INVOICE</strong>
               ${inv.invoiceNumber}<br>
-              ${new Date(inv.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}<br>
+              ${new Date(inv.date).toLocaleDateString('en-GB')}<br>
               Tracking: ${inv.trackingId || 'N/A'}
             </div>
           </div>
@@ -251,7 +252,7 @@ export default function OrdersPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '-'}
+                        {order.createdAt ? formatDateShort(order.createdAt) : '-'}
                       </td>
                       <td className="px-4 py-3">
                         <button
@@ -298,7 +299,7 @@ export default function OrdersPage() {
               )}
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Date</span>
-                <span className="text-foreground">{selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toLocaleDateString() : '-'}</span>
+                <span className="text-foreground">{selectedOrder.createdAt ? formatDateShort(selectedOrder.createdAt) : '-'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Status</span>
