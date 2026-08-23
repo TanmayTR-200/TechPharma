@@ -127,7 +127,7 @@ export default function DashboardPage() {
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-medium text-foreground">Recent orders</h3>
-                  <Button variant="ghost" size="sm" onClick={() => router.push('/orders')} className="text-primary text-xs h-7">View all <ArrowUpRight className="ml-1 h-3 w-3" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => router.push('/sales')} className="text-primary text-xs h-7">View all <ArrowUpRight className="ml-1 h-3 w-3" /></Button>
                 </div>
                 <div className="divide-y divide-border">
                   {orders.map((o) => (

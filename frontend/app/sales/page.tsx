@@ -32,6 +32,8 @@ const statusConfig: Record<string, { color: string; icon: any }> = {
   delivered: { color: 'bg-emerald-500/15 text-emerald-600', icon: CheckCircle },
 }
 
+const orderSteps = ['pending', 'processing', 'shipped', 'delivered']
+
 export default function SalesPage() {
   const [totalRevenue, setTotalRevenue] = useState(0)
   const [totalOrders, setTotalOrders] = useState(0)
@@ -62,7 +64,6 @@ export default function SalesPage() {
       const sold = await fetcher(API_ENDPOINTS.products.sold.list)
       setSoldProducts(sold.products || [])
 
-      // Fetch seller orders from dashboard
       const dash = await fetcher(API_ENDPOINTS.dashboard.base, {
         headers: { 'Authorization': `Bearer ${token}` },
       })
@@ -90,6 +91,7 @@ export default function SalesPage() {
   }
 
   const totalUnits = soldProducts.reduce((sum, p) => sum + (p.quantitySold || 0), 0)
+  const fmt = (p: number) => '\u20B9' + p.toLocaleString('en-IN')
 
   return (
     <DashboardLayout>
@@ -99,7 +101,7 @@ export default function SalesPage() {
           <p className="mt-1 text-muted-foreground">Track your revenue, manage orders, and update delivery status</p>
         </div>
 
-        {/* 2x2 grid of metric cards */}
+        {/* Stats grid */}
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-lg border border-border bg-card p-5">
             <div className="flex items-center justify-between">
@@ -150,89 +152,7 @@ export default function SalesPage() {
           </div>
         </div>
 
-        {/* Seller Orders — manage delivery status */}
-        <div className="rounded-lg border border-border bg-card p-5">
-          <h2 className="mb-4 text-base font-semibold text-foreground">Orders to fulfill</h2>
-          {loading ? (
-            <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => (<div key={i} className="h-20 shimmer rounded-lg" />))}</div>
-          ) : sellerOrders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No orders yet. When buyers purchase your products, they'll appear here.</p>
-          ) : (
-            <div className="space-y-3">
-              {sellerOrders.map((order) => {
-                const status = order.status?.toLowerCase() || 'pending'
-                const config = statusConfig[status] || statusConfig.pending
-                const StatusIcon = config.icon
-                const orderSteps = ['pending', 'processing', 'shipped', 'delivered']
-                const currentStepIdx = orderSteps.indexOf(status)
-                const fmt = (p: number) => '\u20B9' + p.toLocaleString('en-IN')
-
-                return (
-                  <div key={order._id} className="rounded-lg border border-border p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">#{order._id.slice(-8)}</p>
-                        <p className="text-xs text-muted-foreground">{order.buyerName} · {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-foreground">{fmt(order.totalAmount)}</p>
-                        <span className={'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ' + config.color}>
-                          <StatusIcon className="h-3 w-3" /> {status}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Items */}
-                    <div className="space-y-1 mb-3">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-xs text-muted-foreground">
-                          <span>{item.name} × {item.quantity}</span>
-                          <span>{fmt((item.price || 0) * (item.quantity || 1))}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Status timeline */}
-                    <div className="flex items-center gap-1 mb-3">
-                      {orderSteps.map((step, idx) => (
-                        <div key={step} className="flex items-center flex-1">
-                          <div className={'h-2 flex-1 rounded-full ' + (idx <= currentStepIdx ? 'bg-foreground' : 'bg-border')} />
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {status !== 'delivered' && status !== 'cancelled' && orderSteps
-                        .filter(s => orderSteps.indexOf(s) > currentStepIdx)
-                        .map(s => (
-                          <button
-                            key={s}
-                            onClick={() => handleUpdateStatus(order._id, s)}
-                            disabled={updatingStatus}
-                            className="rounded-md border border-border px-3 py-1.5 text-xs font-medium capitalize text-foreground hover:border-foreground hover:bg-foreground hover:text-background transition-colors disabled:opacity-50"
-                          >
-                            {updatingStatus ? 'Updating...' : `Mark as ${s}`}
-                          </button>
-                        ))
-                      }
-                      {order.trackingId && (
-                        <Link
-                          href={`/orders/track?id=${order.trackingId}`}
-                          className="flex items-center gap-1 text-xs text-primary hover:underline ml-auto"
-                        >
-                          <LinkIcon className="h-3 w-3" /> Track
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Product sales breakdown — click to expand buyers */}
+        {/* Product sales breakdown with order management */}
         <div className="rounded-lg border border-border bg-card p-5">
           <h2 className="mb-4 text-base font-semibold text-foreground">Product sales breakdown</h2>
           {loading ? (
@@ -244,6 +164,11 @@ export default function SalesPage() {
               {soldProducts.map((product) => {
                 const id = product._id || product.name
                 const isOpen = expandedId === id
+                // Find orders for this product
+                const productOrders = sellerOrders.filter(o =>
+                  o.items.some(item => item.name === product.name)
+                )
+
                 return (
                   <div key={id} className="rounded-lg border border-border overflow-hidden">
                     <button
@@ -254,21 +179,87 @@ export default function SalesPage() {
                         <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                         <div>
                           <p className="text-sm font-medium text-foreground">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">{product.buyers?.length || 0} buyer(s)</p>
+                          <p className="text-xs text-muted-foreground">{product.buyers?.length || 0} buyer(s) · {product.quantitySold} sold</p>
                         </div>
                       </div>
-                      <div className="text-right flex items-center gap-4">
-                        <div>
-                          <p className="text-sm font-bold text-foreground">{product.quantitySold} sold</p>
-                          <p className="text-xs text-muted-foreground">₹{(product.revenue || 0).toLocaleString('en-IN')}</p>
-                        </div>
-                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                      </div>
+                      <p className="text-sm font-bold text-foreground">₹{(product.revenue || 0).toLocaleString('en-IN')}</p>
                     </button>
 
                     {isOpen && (
-                      <div className="border-t border-border bg-secondary/20 p-4">
-                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Who bought this</h4>
+                      <div className="border-t border-border bg-secondary/20 p-4 space-y-4">
+                        {/* Orders for this product with timeline */}
+                        {productOrders.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Orders</h4>
+                            {productOrders.map(order => {
+                              const status = order.status?.toLowerCase() || 'pending'
+                              const config = statusConfig[status] || statusConfig.pending
+                              const StatusIcon = config.icon
+                              const currentStepIdx = orderSteps.indexOf(status)
+                              const nextStep = orderSteps[currentStepIdx + 1]
+
+                              return (
+                                <div key={order._id} className="bg-card border border-border rounded-lg p-4">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div>
+                                      <p className="text-sm font-medium text-foreground">#{order._id.slice(-8)}</p>
+                                      <p className="text-xs text-muted-foreground">{order.buyerName} · {new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm font-bold text-foreground">{fmt(order.totalAmount)}</p>
+                                      <span className={'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ' + config.color}>
+                                        <StatusIcon className="h-3 w-3" /> {status}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Timeline */}
+                                  <div className="flex items-center gap-1 mb-3">
+                                    {orderSteps.map((step, idx) => (
+                                      <div key={step} className="flex items-center flex-1">
+                                        <div className={'h-2 flex-1 rounded-full ' + (idx <= currentStepIdx ? 'bg-foreground' : 'bg-border')} />
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Actions — only next step is active, rest are grayed */}
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {orderSteps.filter(s => s !== 'pending').map(s => {
+                                      const stepIdx = orderSteps.indexOf(s)
+                                      const isNext = s === nextStep
+                                      const isPast = stepIdx <= currentStepIdx
+                                      return (
+                                        <button
+                                          key={s}
+                                          onClick={() => isNext && handleUpdateStatus(order._id, s)}
+                                          disabled={!isNext || updatingStatus || isPast}
+                                          className={'rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-colors ' + (
+                                            isNext ? 'border-foreground text-foreground hover:bg-foreground hover:text-background' :
+                                            isPast ? 'border-border text-muted-foreground/40 cursor-default' :
+                                            'border-border text-muted-foreground/40 cursor-not-allowed'
+                                          )}
+                                        >
+                                          {isNext && updatingStatus ? 'Updating...' : `Mark as ${s}`}
+                                        </button>
+                                      )
+                                    })}
+                                    {order.trackingId && (
+                                      <Link
+                                        href={`/orders/track?id=${order.trackingId}`}
+                                        className="flex items-center gap-1 text-xs text-primary hover:underline ml-auto"
+                                      >
+                                        <LinkIcon className="h-3 w-3" /> Track
+                                      </Link>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+
+                        {/* Buyer details */}
+                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Who bought this</h4>
                         {product.buyers && product.buyers.length > 0 ? (
                           <div className="space-y-2">
                             {product.buyers.map((b, idx) => (
