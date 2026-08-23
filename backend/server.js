@@ -156,9 +156,9 @@ async function connectMongoDB() {
           const defaultUsers = [
             {
               _id: '1760257427529',
-              email: 'tanmaytr05@gmail.com',
+              email: 'techpharma10@gmail.com',
               password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
-              name: 'Tanmay',
+              name: 'TechPharma_Admin',
               role: 'admin',
               createdAt: new Date().toISOString(),
               company: { name: 'ABC' }
@@ -218,7 +218,7 @@ async function connectMongoDB() {
               dataCache[col] = fileData;
             } else if (col === 'users' && (!dataCache['users'] || dataCache['users'].length === 0)) {
               const defaultUsers = [
-                { _id: '1760257427529', email: 'tanmaytr05@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'Tanmay', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' }, phone: '+91 800-123-4567' },
+                { _id: '1760257427529', email: 'techpharma10@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'TechPharma_Admin', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' }, phone: '+91 800-123-4567' },
                 { _id: '1760360335467', email: 'tanmaytalanki.cs23@bmsce.ac.in', password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De', name: 'Tanmay T', company: { name: 'BCD' }, role: 'buyer', createdAt: new Date().toISOString(), phone: '+91 900-123-4567' }
               ];
               await mongoDb.collection('users').insertMany(defaultUsers);
@@ -406,9 +406,9 @@ app.get('/api/seed', async (req, res) => {
       const defaultUsers = [
         {
           _id: '1760257427529',
-          email: 'tanmaytr05@gmail.com',
+          email: 'techpharma10@gmail.com',
           password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
-          name: 'Tanmay',
+          name: 'TechPharma_Admin',
           role: 'admin',
           createdAt: '2025-09-15T08:23:47.529Z',
           company: { name: 'ABC' },
@@ -474,7 +474,7 @@ app.get('/api/seed', async (req, res) => {
           trackingId: 'TP17864681ABC',
           userId: '1760257427529',
           buyerName: 'Tanmay',
-          buyerEmail: 'tanmaytr05@gmail.com',
+          buyerEmail: 'techpharma10@gmail.com',
           items: [{ product: { _id: '1761573298298', name: 'Arduino set' }, quantity: 4, price: 1000, sellerId: '1760360335467' }],
           totalAmount: 4000,
           status: 'completed',
@@ -685,6 +685,31 @@ app.get('/api/debug/clear-orders', async (req, res) => {
     }
     dataCache['orders'] = [];
     res.json({ success: true, message: 'All orders cleared' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Debug endpoint — migrate admin account to techpharma10@gmail.com
+app.get('/api/debug/migrate-admin', async (req, res) => {
+  try {
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const admin = users.find(u => u._id === '1760257427529');
+    if (admin) {
+      admin.email = 'techpharma10@gmail.com';
+      admin.name = 'TechPharma_Admin';
+      admin.password = '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC';
+    }
+    writeJsonFile(usersFile, users);
+    if (mongoDb) {
+      await mongoDb.collection('users').updateOne(
+        { _id: '1760257427529' },
+        { $set: { email: 'techpharma10@gmail.com', name: 'TechPharma_Admin', password: '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC' } }
+      );
+    }
+    dataCache['users'] = users;
+    res.json({ success: true, message: 'Admin account migrated to techpharma10@gmail.com' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
