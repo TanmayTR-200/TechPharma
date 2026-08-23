@@ -118,7 +118,7 @@ export default function OrdersPage() {
             </div>
           </div>
 
-          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 30px; gap: 20px;">
             <div class="section" style="flex: 1;">
               <h3>From</h3>
               <div class="party">
@@ -130,29 +130,26 @@ export default function OrdersPage() {
               </div>
             </div>
             <div class="section" style="flex: 1;">
+              <h3>To / Shipping Address</h3>
+              <div class="party">
+                ${inv.shippingAddress?.name || inv.buyer.name ? '<strong>' + (inv.shippingAddress?.name || inv.buyer.name) + '</strong><br>' : ''}
+                ${inv.shippingAddress?.line1 ? inv.shippingAddress.line1 + '<br>' : ''}
+                ${inv.shippingAddress?.city || inv.shippingAddress?.state ? [inv.shippingAddress?.city, inv.shippingAddress?.state].filter(Boolean).join(', ') + ' ' + (inv.shippingAddress?.pincode || '') + '<br>' : ''}
+                ${inv.shippingAddress?.phone ? 'Phone: ' + inv.shippingAddress.phone + '<br>' : ''}
+                ${inv.buyer.email ? '<br>' + inv.buyer.email : ''}
+              </div>
+            </div>
+            <div class="section" style="flex: 1;">
               <h3>Bill To</h3>
               <div class="party">
                 <strong>${inv.buyer.name}</strong><br>
                 ${inv.buyer.email}
               </div>
-            </div>
-            <div class="section" style="flex: 1; text-align: right;">
-              <h3>Status</h3>
+              <h3 style="margin-top: 16px;">Status</h3>
               <span class="status-badge">${inv.status}</span>
               <p style="margin-top: 8px; font-size: 13px; color: #666;">Payment: ${inv.paymentMethod.toUpperCase()}</p>
             </div>
           </div>
-
-          ${inv.shippingAddress && inv.shippingAddress.line1 ? `
-          <div class="section">
-            <h3>Shipping Address</h3>
-            <div class="party">
-              ${inv.shippingAddress.name || ''}<br>
-              ${inv.shippingAddress.line1 || ''}<br>
-              ${[inv.shippingAddress.city, inv.shippingAddress.state].filter(Boolean).join(', ')} ${inv.shippingAddress.pincode || ''}<br>
-              ${inv.shippingAddress.phone ? 'Phone: ' + inv.shippingAddress.phone : ''}
-            </div>
-          </div>` : ''}
 
           <table>
             <thead>
