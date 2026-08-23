@@ -2077,7 +2077,8 @@ app.use('/api/inventory', inventoryRoutes);
 app.get('/api/notifications', authMiddleware, async (req, res) => {
   try {
     const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-    const userNotifs = all.filter(n => !n.userId || n.userId === req.user._id);
+    const userNotifs = all.filter(n => !n.userId || n.userId === req.user._id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json({ success: true, notifications: userNotifs });
   } catch (error) {
     console.error('Notifications error:', error);
@@ -2088,7 +2089,8 @@ app.get('/api/notifications', authMiddleware, async (req, res) => {
 app.get('/api/notifications/archived', authMiddleware, async (req, res) => {
   try {
     const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-    const archived = all.filter(n => n.userId === req.user._id && n.archived);
+    const archived = all.filter(n => n.userId === req.user._id && n.archived)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json({ success: true, notifications: archived });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching archived notifications' });
