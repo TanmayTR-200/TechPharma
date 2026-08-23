@@ -811,6 +811,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 // ===== OTP for Signup =====
 // In-memory OTP store (survives because Render is a persistent process)
 const signupOtpStore = new Map();
+const verifiedEmails = new Set(); // Track emails that just verified — blocks re-send
 
 // Email sender — tries Gmail API (HTTPS, port 443) → Resend → nodemailer fallback
 const { google } = require('googleapis');
@@ -945,6 +946,11 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'This email is already registered. Please log in.' });
     }
 
+    // Block re-send if OTP was just verified for this email (prevents duplicate OTP during signup)
+    if (verifiedEmails.has(email.toLowerCase())) {
+      return res.status(400).json({ success: false, message: 'Email already verified. Please complete registration.' });
+    }
+
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
@@ -991,6 +997,9 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     }
 
     signupOtpStore.delete(email);
+    verifiedEmails.add(email.toLowerCase());
+    // Auto-clear the verified flag after 5 minutes (in case registration fails and they need to retry)
+    setTimeout(() => verifiedEmails.delete(email.toLowerCase()), 5 * 60 * 1000);
     res.json({ success: true, message: 'OTP verified' });
   } catch (error) {
     console.error('Verify OTP error:', error);
