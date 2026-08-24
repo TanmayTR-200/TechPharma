@@ -468,24 +468,9 @@ app.get('/api/seed', async (req, res) => {
     // Seed orders (from local test data)
     const existingOrders = await mongoDb.collection('orders').countDocuments();
     if (existingOrders === 0) {
-      const seedOrders = [
-        {
-          _id: '1786468117287',
-          trackingId: 'TP17864681ABC',
-          userId: '1760257427529',
-          buyerName: 'Tanmay',
-          buyerEmail: 'techpharma10@gmail.com',
-          items: [{ product: { _id: '1761573298298', name: 'Arduino set' }, quantity: 4, price: 1000, sellerId: '1760360335467' }],
-          totalAmount: 4000,
-          status: 'completed',
-          paymentMethod: 'online',
-          shippingAddress: { name: 'Tanmay', phone: '123456789', line1: 'Basavangudi', city: 'Bengaluru', state: 'Karnataka', pincode: '560019' },
-          createdAt: '2026-08-11T17:08:37.287Z'
-        }
-      ];
-      await mongoDb.collection('orders').insertMany(seedOrders);
-      dataCache['orders'] = seedOrders;
-      results.push(`Seeded ${seedOrders.length} orders`);
+      // No seed orders — start clean. Real orders come from checkout.
+      dataCache['orders'] = [];
+      results.push('No seed orders — starting clean');
     } else {
       results.push(`Orders already exist (${existingOrders})`);
     }
