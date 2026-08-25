@@ -1,11 +1,9 @@
 'use strict';
 
-// Fix SSL/TLS issues on Render (Node 24 OpenSSL 3 vs MongoDB Atlas)
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const helmet = require('helmet');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
@@ -25,7 +23,17 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('FATAL: JWT_SECRET environment variable is required in production');
+    process.exit(1);
+  } else {
+    console.warn('WARNING: JWT_SECRET not set — using insecure dev default');
+  }
+}
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-insecure-secret-change-me';
 
 // Cloudinary configuration
 cloudinary.config({
@@ -34,17 +42,37 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Multer memory storage for file uploads
+// Multer memory storage for file uploads — images only, 5MB max
 const storage = multer.memoryStorage();
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only images (JPEG, PNG, GIF, WebP, BMP) are allowed.'));
+    }
+  }
+});
 
 // Rate limiter for auth endpoints (prevents brute-force)
 const authLimiter = rateLimit({
-  windowMs: 60 * 1000,  // 1 minute
-  max: 10,               // 10 requests per minute per IP
+  windowMs: 60 * 1000,
+  max: 5,
   message: { success: false, message: 'Too many attempts. Please try again in a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
+});
+
+// General API rate limiter — prevents abuse of all endpoints
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please slow down.' },
 });
 
 // ===== Account Lockout System (in-memory) =====
@@ -122,16 +150,17 @@ const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'm
 async function connectMongoDB() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {
-    console.log('⚠️ MONGODB_URI not set, using file storage fallback');
+    console.log('WARNING: MONGODB_URI not set, using file storage fallback');
     return false;
   }
 
-  console.log('🔌 Connecting to MongoDB URI:', uri.substring(0, 35) + '...');
+  console.log('Connecting to MongoDB URI:', uri.substring(0, 35) + '...');
   try {
     // Simplest possible connection — let mongoose/driver handle TLS automatically
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000 });
+    // tlsAllowInvalidCertificates scoped to Mongo only (not global TLS disable)
+    await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000, tlsAllowInvalidCertificates: true });
     mongoDb = mongoose.connection.db;
-    console.log('✅ Connected to MongoDB Atlas via Mongoose');
+    console.log('Connected to MongoDB Atlas via Mongoose');
 
     // Load each collection into cache (merge with existing cache if present)
     for (const col of COLLECTIONS) {
@@ -140,7 +169,7 @@ async function connectMongoDB() {
         const existingIds = new Set((dataCache[col] || []).map(d => d._id));
         const newDocs = docs.filter(d => !existingIds.has(d._id));
         dataCache[col] = [...(dataCache[col] || []), ...newDocs];
-        console.log(`  📂 ${col}: ${newDocs.length} new records merged from MongoDB (${dataCache[col].length} total)`);
+        console.log(`  ${col}: ${newDocs.length} new records merged from MongoDB (${dataCache[col].length} total)`);
       } else {
         // Seed from JSON file if MongoDB is empty
         const filePath = path.join(__dirname, './data', `${col}.json`);
@@ -148,7 +177,7 @@ async function connectMongoDB() {
           const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
           if (fileData.length > 0) {
             await mongoDb.collection(col).insertMany(fileData);
-            console.log(`  🌱 ${col}: seeded ${fileData.length} records from file`);
+            console.log(`  ${col}: seeded ${fileData.length} records from file`);
           }
           dataCache[col] = fileData;
         } else if (col === 'users') {
@@ -175,28 +204,28 @@ async function connectMongoDB() {
           ];
           await mongoDb.collection('users').insertMany(defaultUsers);
           dataCache['users'] = defaultUsers;
-          console.log(`  🌱 users: seeded ${defaultUsers.length} default users`);
+          console.log(`  users: seeded ${defaultUsers.length} default users`);
         } else {
           dataCache[col] = [];
         }
       }
     }
-    console.log('✅ Data loaded into memory cache');
+    console.log('Data loaded into memory cache');
     return true;
   } catch (err) {
     mongoConnectionError = err.message;
-    console.error('❌ MongoDB connection error:', err.message);
-    console.log('⚠️ Falling back to file storage, will retry every 30s...');
+    console.error('MongoDB connection error:', err.message);
+    console.log('Falling back to file storage, will retry every 30s...');
     
     // Retry connection every 30 seconds until success
     const retryInterval = setInterval(async () => {
       try {
         try { await mongoose.disconnect(); } catch(e) {}
         
-        await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
+        await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000, tlsAllowInvalidCertificates: true });
         mongoDb = mongoose.connection.db;
         mongoConnectionError = null;
-        console.log('✅ Connected to MongoDB Atlas on retry!');
+        console.log('Connected to MongoDB Atlas on retry!');
         
         for (const col of COLLECTIONS) {
           const docs = await mongoDb.collection(col).find({}).toArray();
@@ -205,7 +234,7 @@ async function connectMongoDB() {
             const existingIds = new Set((dataCache[col] || []).map(d => d._id));
             const newDocs = docs.filter(d => !existingIds.has(d._id));
             dataCache[col] = [...(dataCache[col] || []), ...newDocs];
-            console.log(`  📂 ${col}: ${newDocs.length} new records merged from MongoDB (${dataCache[col].length} total)`);
+            console.log(`  ${col}: ${newDocs.length} new records merged from MongoDB (${dataCache[col].length} total)`);
           } else {
             // MongoDB empty — seed from file or defaults
             const filePath = path.join(__dirname, './data', `${col}.json`);
@@ -213,7 +242,7 @@ async function connectMongoDB() {
               const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
               if (fileData.length > 0) {
                 await mongoDb.collection(col).insertMany(fileData);
-                console.log(`  🌱 ${col}: seeded ${fileData.length} records from file`);
+                console.log(`  ${col}: seeded ${fileData.length} records from file`);
               }
               dataCache[col] = fileData;
             } else if (col === 'users' && (!dataCache['users'] || dataCache['users'].length === 0)) {
@@ -223,13 +252,13 @@ async function connectMongoDB() {
               ];
               await mongoDb.collection('users').insertMany(defaultUsers);
               dataCache['users'] = defaultUsers;
-              console.log(`  🌱 users: seeded ${defaultUsers.length} default users`);
+              console.log(`  users: seeded ${defaultUsers.length} default users`);
             } else {
               if (!dataCache[col]) dataCache[col] = [];
             }
           }
         }
-        console.log('✅ Data loaded into memory cache');
+        console.log('Data loaded into memory cache');
         clearInterval(retryInterval);
       } catch (retryErr) {
         mongoConnectionError = retryErr.message;
@@ -316,7 +345,7 @@ function initStorage() {
       if (fs.existsSync(filePath)) {
         const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         dataCache[col] = fileData;
-        console.log(`  📄 ${col}: ${fileData.length} records pre-loaded from file`);
+        console.log(`  ${col}: ${fileData.length} records pre-loaded from file`);
       } else {
         // Create empty file if it doesn't exist
         fs.writeFileSync(filePath, '[]');
@@ -324,7 +353,7 @@ function initStorage() {
       }
     }
     
-    console.log('✅ File storage initialized (cache pre-loaded)');
+    console.log('File storage initialized (cache pre-loaded)');
     return true;
   } catch (err) {
     console.error('Storage initialization error:', err);
@@ -340,12 +369,35 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      imgSrc: ["'self'", 'https://res.cloudinary.com', 'data:'],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true,
+  },
+}));
+
 app.use(cors({
   origin: function(origin, callback) {
+    // Allow requests with no Origin header (same-origin, curl, server-to-server)
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(null, true);
+      // Reject unknown origins in production; allow in development for convenience
+      if (process.env.NODE_ENV === 'production') {
+        callback(null, false);
+      } else {
+        callback(null, true);
+      }
     }
   },
   credentials: true,
@@ -364,6 +416,7 @@ app.use(cors({
 // Middleware
 app.use(express.json());
 app.use(morgan('dev'));
+app.use('/api/', apiLimiter);
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -372,6 +425,7 @@ app.get('/api/health', async (req, res) => {
       status: 'ok', 
       timestamp: new Date().toISOString(),
       storage: mongoDb ? 'mongodb-atlas' : 'file-based',
+      inventory: 'sqlite-wal',
       mongoConnected: !!mongoDb,
       mongoUriSet: !!process.env.MONGODB_URI,
       mongoError: mongoConnectionError,
@@ -392,6 +446,13 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Seed endpoint — creates default users + products if MongoDB is empty
+// Block seed endpoint in production — it can overwrite existing data
+if (process.env.NODE_ENV === 'production') {
+  app.use('/api/seed', (req, res) => {
+    res.status(404).json({ success: false, message: 'Not found' });
+  });
+}
+
 app.get('/api/seed', async (req, res) => {
   try {
     if (!mongoDb) {
@@ -522,6 +583,14 @@ app.get('/api/seed', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// Block all /api/debug/* endpoints in production — they expose user data
+// and allow destructive operations (clear products/orders, migrate admin, etc.)
+if (process.env.NODE_ENV === 'production') {
+  app.use('/api/debug', (req, res) => {
+    res.status(404).json({ success: false, message: 'Not found' });
+  });
+}
 
 // Debug endpoint — list all users (emails only, no passwords)
 app.get('/api/debug/users', async (req, res) => {
@@ -711,8 +780,22 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
-    
+    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+
+    // Check if password was changed after this token was issued
+    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const user = users.find(u => u._id === decoded.userId);
+    if (user && user.passwordChangedAt) {
+      const tokenIssuedAt = new Date(decoded.iat * 1000);
+      const passwordChangedAt = new Date(user.passwordChangedAt);
+      if (tokenIssuedAt < passwordChangedAt) {
+        return res.status(401).json({
+          success: false,
+          message: 'Session expired. Please log in again.'
+        });
+      }
+    }
+
     // Set user data in request
     req.user = { 
       _id: decoded.userId,
@@ -794,7 +877,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     });
     writeJsonFile(notifFile, allNotifs);
 
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET);
+    const token = jwt.sign({ userId: user._id }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
 
     res.status(201).json({
       success: true,
@@ -1099,7 +1182,36 @@ app.post('/api/auth/delete-account', async (req, res) => {
   }
 });
 
-const { sendPasswordResetEmail } = require('./src/utils/email');
+// Password reset email — uses the server's multi-provider sendEmail (Gmail API/Resend/nodemailer)
+async function sendPasswordResetEmail(email, resetToken) {
+  const resetLink = `${process.env.FRONTEND_URL || 'https://techpharma.vercel.app'}/auth/reset-password?token=${resetToken}`;
+  const subject = 'Reset Your Password - TechPharma';
+  const text = `You requested a password reset. Click this link to reset your password (expires in 1 hour): ${resetLink}`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h1 style="color: #1a1a1a;">Reset Your Password</h1>
+      <p style="color: #666; font-size: 16px;">You requested to reset your password.</p>
+      <div style="background-color: #f8f8f8; border-radius: 8px; padding: 20px; margin: 20px 0;">
+        <p style="margin-bottom: 20px; color: #333;">Click the button below to reset your password:</p>
+        <a href="${resetLink}"
+           style="display: inline-block; background-color: #4F46E5; color: white; padding: 12px 24px;
+                  text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Reset Password
+        </a>
+        <p style="margin-top: 20px; color: #666; font-size: 14px;">
+          This link will expire in 1 hour for security reasons.
+        </p>
+        <p style="margin-top: 10px; color: #999; font-size: 13px;">
+          If the button doesn't work, copy and paste this link: ${resetLink}
+        </p>
+      </div>
+      <p style="color: #999; font-size: 13px; margin-top: 30px;">
+        If you didn't request this password reset, you can safely ignore this email.
+      </p>
+    </div>
+  `;
+  await sendEmail(email, subject, text, html);
+}
 
 app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
   try {
@@ -1124,7 +1236,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
         userId: user?._id || 'invalid',
         purpose: 'reset'
       },
-      JWT_SECRET,
+      EFFECTIVE_JWT_SECRET,
       { expiresIn: '1h' }
     );
 
@@ -1142,23 +1254,15 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
         
         console.log(`Password reset email sent to ${email}`);
       } catch (emailError) {
-        console.error('Failed to send password reset email:', emailError);
-        // Log the reset link as fallback
-        console.log(`
-=========================================
-🔑 Password Reset Requested (Email Failed)
------------------------------------------
-Email: ${email}
-Reset Link: ${process.env.FRONTEND_URL}/auth/reset-password?token=${resetToken}
-=========================================`);
+        console.error('Failed to send password reset email:', emailError.message);
+        // Token is NOT logged — it would allow anyone with log access to reset passwords
       }
     }
 
     // Always return the same response whether user exists or not
     return res.json({
       success: true,
-      message: 'If an account exists with that email, you will receive password reset instructions.',
-      token: resetToken // Include token in response for development
+      message: 'If an account exists with that email, you will receive password reset instructions.'
     });
   } catch (error) {
     console.error('Password reset error:', error);
@@ -1171,13 +1275,13 @@ Reset Link: ${process.env.FRONTEND_URL}/auth/reset-password?token=${resetToken}
 
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const { token, otp, password } = req.body;
-    if (!token || !otp || !password) {
-      return res.status(400).json({ message: 'All fields are required' });
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ message: 'Token and new password are required' });
     }
 
     // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
     
     // Read users
     const usersFile = path.join(__dirname, './data/users.json');
@@ -1185,18 +1289,24 @@ app.post('/api/auth/reset-password', async (req, res) => {
     
     // Find user
     const user = users.find(u => u._id === decoded.userId);
-    if (!user || !user.resetOtp) {
-      return res.status(400).json({ message: 'Invalid or expired reset code' });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset link' });
     }
 
-    // Verify OTP and expiry
-    if (user.resetOtp.code !== otp || new Date() > new Date(user.resetOtp.expiresAt)) {
-      return res.status(400).json({ message: 'Invalid or expired reset code' });
+    // Check that a reset was actually requested
+    if (!user.resetToken || user.resetToken.token !== token) {
+      return res.status(400).json({ message: 'Invalid or expired reset link' });
+    }
+
+    // Check token expiry
+    if (new Date() > new Date(user.resetToken.expiresAt)) {
+      return res.status(400).json({ message: 'Reset link has expired. Please request a new one.' });
     }
 
     // Update password
     user.password = await bcrypt.hash(password, 10);
-    user.resetOtp = null; // Clear reset OTP
+    user.resetToken = null;
+    user.passwordChangedAt = new Date().toISOString();
     writeJsonFile(usersFile, users);
 
     return res.json({
@@ -1234,6 +1344,7 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 12);
+    user.passwordChangedAt = new Date().toISOString();
     writeJsonFile(usersFile, users);
 
     res.json({ success: true, message: 'Password updated successfully' });
@@ -1281,7 +1392,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       });
     }
 
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET);
+    const token = jwt.sign({ userId: user._id }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
 
     // Clear failed attempts on successful login
     clearAttempts(email);
@@ -1316,8 +1427,8 @@ app.post('/api/auth/refresh', async (req, res) => {
     }
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      const newToken = jwt.sign({ userId: decoded.userId }, JWT_SECRET);
+      const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+      const newToken = jwt.sign({ userId: decoded.userId }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
       res.json({ success: true, token: newToken });
     } catch (err) {
       return res.status(401).json({ success: false, message: 'Invalid or expired token' });
@@ -1556,7 +1667,7 @@ app.get('/api/products/featured', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     let isAuthed = false;
     if (token) {
-      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+      try { jwt.verify(token, EFFECTIVE_JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
     }
 
     const userMap = new Map(users.map(u => [u._id, u]));
@@ -1590,7 +1701,7 @@ app.get('/api/products/all', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     let isAuthed = false;
     if (token) {
-      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+      try { jwt.verify(token, EFFECTIVE_JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
     }
 
     const userMap = new Map(users.map(u => [u._id, u]));
@@ -1661,7 +1772,7 @@ app.get('/api/products', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     let isAuthed = false;
     if (token) {
-      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+      try { jwt.verify(token, EFFECTIVE_JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
     }
 
     // Prebuild a userId -> user map ONCE to avoid N+1 lookups inside the loop
@@ -1749,7 +1860,7 @@ app.get('/api/products/:id', async (req, res) => {
     const token = req.headers.authorization?.split(' ')[1];
     let isAuthed = false;
     if (token) {
-      try { jwt.verify(token, JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
+      try { jwt.verify(token, EFFECTIVE_JWT_SECRET); isAuthed = true; } catch (e) { isAuthed = false; }
     }
     
     res.json({
@@ -1808,6 +1919,9 @@ app.post('/api/products', authMiddleware, async (req, res) => {
     // Save back to file
     writeJsonFile(productsPath, products);
 
+    // Sync to SQLite inventory
+    inventory.upsertProduct(product._id, Number(stock));
+
     res.status(201).json({
       success: true,
       product
@@ -1816,8 +1930,7 @@ app.post('/api/products', authMiddleware, async (req, res) => {
     console.error('Create product error:', error);
     res.status(500).json({
       success: false,
-      message: 'Error creating product',
-      details: error.message
+      message: 'Error creating product'
     });
   }
 });
@@ -1859,6 +1972,10 @@ app.put('/api/products/:id', authMiddleware, async (req, res) => {
     };
 
     writeJsonFile(path.join(__dirname, './data/products.json'), products);
+
+    // Sync stock change to SQLite inventory
+    inventory.upsertProduct(products[index]._id, newStock);
+
     res.json({ success: true, product: products[index] });
   } catch (error) {
     console.error('Update product error:', error);
@@ -1889,6 +2006,9 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
     // Remove product
     const [deletedProduct] = products.splice(index, 1);
     writeJsonFile(path.join(__dirname, './data/products.json'), products);
+
+    // Remove from SQLite inventory
+    inventory.deleteProduct(deletedProduct._id);
 
     res.json({
       success: true,
@@ -2150,7 +2270,7 @@ app.post('/api/notifications/:id/read', authMiddleware, async (req, res) => {
     res.json({ success: true, notification: result.notification });
   } catch (error) {
     const status = error.status || 500;
-    res.status(status).json({ success: false, message: error.message || 'Error marking as read' });
+    res.status(status).json({ success: false, message: (status < 500 ? error.message : 'Internal server error') || 'Error marking as read' });
   }
 });
 
@@ -2531,6 +2651,15 @@ app.get('/api/sold-products', authMiddleware, async (req, res) => {
 // Sold products for a specific seller
 app.get('/api/sold-products/:sellerId', authMiddleware, async (req, res) => {
   try {
+    // Only the seller themselves or an admin can view a seller's sales data
+    if (req.params.sellerId !== req.user._id) {
+      const users = readJsonFile(path.join(__dirname, './data/users.json'));
+      const currentUser = users.find(u => u._id === req.user._id);
+      if (!currentUser || currentUser.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Not authorized to view this seller\'s data' });
+      }
+    }
+
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
     const users = readJsonFile(path.join(__dirname, './data/users.json'));
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
@@ -2666,7 +2795,7 @@ app.post('/api/cart/add', authMiddleware, async (req, res) => {
     res.json({ success: true, cart: result.cart });
   } catch (error) {
     const status = error.status || 500;
-    res.status(status).json({ success: false, message: error.message || 'Error adding to cart' });
+    res.status(status).json({ success: false, message: (status < 500 ? error.message : 'Internal server error') || 'Error adding to cart' });
   }
 });
 
@@ -2716,7 +2845,7 @@ app.put('/api/cart/update/:productId', authMiddleware, async (req, res) => {
     res.json({ success: true, cart: result.cart });
   } catch (error) {
     const status = error.status || 500;
-    res.status(status).json({ success: false, message: error.message || 'Error updating cart' });
+    res.status(status).json({ success: false, message: (status < 500 ? error.message : 'Internal server error') || 'Error updating cart' });
   }
 });
 
@@ -2743,7 +2872,7 @@ app.delete('/api/cart/remove/:productId', authMiddleware, async (req, res) => {
     res.json({ success: true, cart: result.cart });
   } catch (error) {
     const status = error.status || 500;
-    res.status(status).json({ success: false, message: error.message || 'Error removing from cart' });
+    res.status(status).json({ success: false, message: (status < 500 ? error.message : 'Internal server error') || 'Error removing from cart' });
   }
 });
 
@@ -2751,145 +2880,100 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
   try {
     const { paymentMethod, shippingAddress, idempotencyKey } = req.body;
 
-    const result = await withLock(() => {
-      const carts = readJsonFile(getCartFilePath());
-      const cart = carts.find(c => c.userId === req.user._id);
+    // Read cart + buyer outside the SQLite transaction (not inventory-critical)
+    const carts = readJsonFile(getCartFilePath());
+    const cart = carts.find(c => c.userId === req.user._id);
 
-      if (!cart || cart.items.length === 0) {
-        throw { status: 400, message: 'Cart is empty' };
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Cart is empty' });
+    }
+
+    const buyerUser = readJsonFile(path.join(__dirname, './data/users.json')).find(u => u._id === req.user._id) || {};
+
+    // Atomic stock decrement + order creation (SQLite transaction).
+    // If ANY item has insufficient stock, the entire transaction rolls back.
+    const result = inventory.createOrder({
+      userId: req.user._id,
+      cartItems: cart.items,
+      buyerUser,
+      paymentMethod,
+      shippingAddress,
+      idempotencyKey
+    });
+
+    // If idempotent hit, return existing order — no side effects
+    if (result.idempotent) {
+      return res.json({ success: true, order: result.order, idempotent: true });
+    }
+
+    // --- Post-commit side effects (best-effort, not ACID-critical) ---
+
+    // 1. Add order to JSON cache (for existing read paths)
+    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    orders.push(result.order);
+    writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
+
+    // 2. Create seller notifications + low-stock alerts
+    const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const notified = new Set();
+    result.order.items.forEach(item => {
+      if (item.sellerId && !notified.has(item.sellerId)) {
+        notified.add(item.sellerId);
+        const buyerDisplay = buyerUser.company?.name
+          ? `${buyerUser.name || 'a buyer'} (${buyerUser.company.name})`
+          : (buyerUser.name || buyerUser.email || 'a buyer');
+        notifications.push({
+          _id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
+          userId: item.sellerId,
+          title: 'New order received',
+          message: `You have a new order from ${buyerDisplay} for ${item.product.name}.`,
+          type: 'order_placed',
+          read: false,
+          archived: false,
+          createdAt: new Date().toISOString(),
+          metadata: { orderId: result.order._id, productId: item.product._id, buyerId: req.user._id, buyerName: buyerUser.name || '' },
+        });
       }
+    });
 
-      // Idempotency: check if this checkout was already processed
-      const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-      if (idempotencyKey) {
-        const existing = orders.find(o => o.idempotency_key === idempotencyKey);
-        if (existing) {
-          return { order: existing, idempotent: true };
-        }
-      }
-
-      // Validate all products are still active and have sufficient stock
-      const products = readJsonFile(path.join(__dirname, './data/products.json'));
-      for (const item of cart.items) {
-        const product = products.find(p => p._id === item.productId);
-        if (!product) {
-          throw { status: 400, message: `Product no longer exists: ${item.product?.name || item.productId}` };
-        }
-        if (product.status && product.status !== 'active') {
-          throw { status: 400, message: `Product is no longer available: ${product.name}` };
-        }
-        const available = product.available_stock !== undefined ? product.available_stock : product.stock || 0;
-        if (available < item.quantity) {
-          throw { status: 409, message: `Insufficient stock for ${product.name}. Available: ${available}, Requested: ${item.quantity}` };
-        }
-        // Use current product price (fixes stale pricing)
-        if (item.product) {
-          item.product.price = product.price;
-        }
-      }
-
-      // Track sellers per item + increment salesCount (stock already handled by inventory reserve/confirm)
-      const mySellerId = req.user._id
-      cart.items.forEach(item => {
-        const product = products.find(p => p._id === item.productId);
-        if (product) {
-          // Track total units sold per product (used for 'featured = top sold')
-          product.salesCount = (product.salesCount || 0) + item.quantity;
-        }
-      });
-      writeJsonFile(path.join(__dirname, './data/products.json'), products);
-
-      // Build order items with sellerId and resolved buyer info
-      const orderItems = cart.items.map(item => {
-        const product = products.find(p => p._id === item.productId);
-        return {
-          product: { _id: item.product?._id || item.productId, name: item.product?.name || 'Product' },
-          quantity: item.quantity,
-          price: item.product?.price || 0,
-          sellerId: product?.userId || product?.supplierId || null,
-        };
-      });
-
-      // Create order with collision-safe ID
-      const buyerUser = readJsonFile(path.join(__dirname, './data/users.json')).find(u => u._id === req.user._id) || {};
-      const order = {
-        _id: Date.now().toString() + Math.random().toString(36).slice(2, 8),
-        trackingId: 'TP' + Date.now().toString().slice(-8) + Math.random().toString(36).slice(2, 5).toUpperCase(),
-        userId: req.user._id,  // the BUYER
-        buyerName: buyerUser.name || '',
-        buyerEmail: buyerUser.email || '',
-        items: orderItems,
-        totalAmount: cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0),
-        status: 'pending',
-        paymentMethod: paymentMethod || 'cod',
-        shippingAddress: shippingAddress || {},
-        createdAt: new Date().toISOString(),
-        idempotency_key: idempotencyKey || null
-      };
-
-      orders.push(order);
-      writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
-
-      // Notify sellers that they have a new order
-      const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
-      const notified = new Set();
-      orderItems.forEach(item => {
-        if (item.sellerId && !notified.has(item.sellerId)) {
-          notified.add(item.sellerId);
-          const buyerDisplay = buyerUser.company?.name
-            ? `${buyerUser.name || 'a buyer'} (${buyerUser.company.name})`
-            : (buyerUser.name || buyerUser.email || 'a buyer');
+    // Low stock alerts — check each purchased product after stock decrement
+    const LOW_STOCK_THRESHOLD = 5;
+    const purchasedProductIds = new Set(cart.items.map(i => i.productId));
+    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    products.forEach(p => {
+      if (!purchasedProductIds.has(p._id)) return;
+      const currentStock = p.available_stock !== undefined ? p.available_stock : p.stock || 0;
+      if (currentStock > 0 && currentStock <= LOW_STOCK_THRESHOLD) {
+        const sellerId = p.userId || p.supplierId;
+        if (sellerId) {
           notifications.push({
-            _id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
-            userId: item.sellerId,
-            title: 'New order received',
-            message: `You have a new order from ${buyerDisplay} for ${item.product.name}.`,
-            type: 'order_placed',
+            _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + p._id,
+            userId: sellerId,
+            title: 'Low stock alert',
+            message: `"${p.name}" is running low — only ${currentStock} left in stock.`,
+            type: 'stock_update',
             read: false,
             archived: false,
             createdAt: new Date().toISOString(),
-            metadata: { orderId: order._id, productId: item.product._id, buyerId: req.user._id, buyerName: buyerUser.name || '' },
+            metadata: { productId: p._id },
           });
         }
-      });
-
-      // Low stock alerts — check each product after stock decrement
-      const LOW_STOCK_THRESHOLD = 5;
-      products.forEach(p => {
-        const currentStock = p.available_stock !== undefined ? p.available_stock : p.stock || 0;
-        if (currentStock > 0 && currentStock <= LOW_STOCK_THRESHOLD) {
-          const sellerId = p.userId || p.supplierId;
-          if (sellerId) {
-            notifications.push({
-              _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + p._id,
-              userId: sellerId,
-              title: 'Low stock alert',
-              message: `"${p.name}" is running low — only ${currentStock} left in stock.`,
-              type: 'stock_update',
-              read: false,
-              archived: false,
-              createdAt: new Date().toISOString(),
-              metadata: { productId: p._id },
-            });
-          }
-        }
-      });
-
-      if (notifications.length > 0) writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
-
-      // Clear cart
-      cart.items = [];
-      cart.total = 0;
-      cart.version = (cart.version || 0) + 1;
-      writeJsonFile(getCartFilePath(), carts);
-
-      return { order, idempotent: false };
+      }
     });
 
-    res.json({ success: true, order: result.order, idempotent: result.idempotent || false });
+    if (notifications.length > 0) writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
+
+    // 3. Clear cart
+    cart.items = [];
+    cart.total = 0;
+    cart.version = (cart.version || 0) + 1;
+    writeJsonFile(getCartFilePath(), carts);
+
+    res.json({ success: true, order: result.order, idempotent: false });
   } catch (error) {
     const status = error.status || 500;
-    res.status(status).json({ success: false, message: error.message || 'Error during checkout' });
+    const message = (status < 500 ? error.message : 'Internal server error') || 'Error during checkout';
+    res.status(status).json({ success: false, message });
   }
 });
 
@@ -2911,7 +2995,7 @@ const startServer = async () => {
 
     // Connect to MongoDB (don't block server start — data is already in cache from files)
     connectMongoDB().then(connected => {
-      if (connected) console.log('📦 MongoDB connected in background');
+      if (connected) console.log('MongoDB connected in background');
     });
 
     // Migrate product schema to inventory model (total_stock, available_stock, reserved_stock, sold)
@@ -3007,7 +3091,7 @@ You can use these commands to find and stop the process:
 
     console.log(`
 =========================================
-🚀 Backend Server Running
+Backend Server Running
 -----------------------------------------
 • Port: ${PORT}
 • URL: http://localhost:${PORT}

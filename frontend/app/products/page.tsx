@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
 import { Product } from '@/types/product'
 import { motion } from 'framer-motion'
+import { getCategoryDisplayName } from '@/lib/constants'
 
 export default function ProductsPage() {
   const searchParams = useSearchParams()
@@ -141,7 +142,7 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">
-              {category ? category.charAt(0).toUpperCase() + category.slice(1) : search ? 'Search: ' + search : 'All products'}
+              {category ? getCategoryDisplayName(category) : search ? 'Search: ' + search : 'All products'}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {loading ? '' : totalCount + ' product' + (totalCount !== 1 ? 's' : '') + ' available'}

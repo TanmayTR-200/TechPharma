@@ -1,8 +1,8 @@
 # Backend Dockerfile
 FROM node:18-alpine
 
-# Install wget for health checks
-RUN apk add --no-cache wget
+# Install wget for health checks, build tools for native addons (better-sqlite3)
+RUN apk add --no-cache wget python3 make g++
 
 # Set working directory
 WORKDIR /app

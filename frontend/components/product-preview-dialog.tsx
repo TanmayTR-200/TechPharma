@@ -8,6 +8,7 @@ import { Button } from './ui/button';
 import { ShoppingCart } from 'lucide-react';
 import { useCart } from '@/contexts/cart';
 import { useToast } from './ui/use-toast';
+import { getCategoryDisplayName } from '@/lib/constants';
 
 interface ProductPreviewDialogProps {
   product: any | null;
@@ -97,7 +98,7 @@ export function ProductPreviewDialog({ product: propProduct, isOpen, onClose }: 
               <div className="flex-1 space-y-4">
                 <div>
                   <p className="text-sm text-muted-foreground uppercase tracking-wide">Category</p>
-                  <p className="text-foreground">{product.category}</p>
+                  <p className="text-foreground">{getCategoryDisplayName(product.category)}</p>
                 </div>
 
                 <div>

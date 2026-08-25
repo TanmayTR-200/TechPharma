@@ -46,4 +46,11 @@ backend/data/notifications.json
 backend/data/orders.json
 backend/data/reservations.json
 backend/data/users.json
+backend/data/products.json
+backend/data/techpharma.db
+backend/data/techpharma.db-wal
+backend/data/techpharma.db-shm
+backend/data/test_inventory.db
+backend/data/test_inventory.db-wal
+backend/data/test_inventory.db-shm
 

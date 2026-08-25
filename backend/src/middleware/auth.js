@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
 
-// Use the same secret as server.js so tokens are verified consistently
-// (server.js: const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key')
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 
 // In-memory token blacklist (for token invalidation on logout)
 // Note: This is per-process. For multi-instance deployments, use Redis.
@@ -42,6 +42,24 @@ module.exports = async (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Check if password was changed after this token was issued
+    const usersPath = path.join(__dirname, '../../data/users.json');
+    if (fs.existsSync(usersPath)) {
+      const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+      const user = users.find(u => u._id === (decoded.userId || decoded._id));
+      if (user && user.passwordChangedAt) {
+        const tokenIssuedAt = new Date(decoded.iat * 1000);
+        const passwordChangedAt = new Date(user.passwordChangedAt);
+        if (tokenIssuedAt < passwordChangedAt) {
+          return res.status(401).json({
+            success: false,
+            message: 'Session expired. Please log in again.'
+          });
+        }
+      }
+    }
+
     req.user = {
       _id: decoded.userId || decoded._id,
       id: decoded.userId || decoded._id,

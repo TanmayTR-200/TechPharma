@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Product, SupplierInfo } from '@/types/product'
 import { useAuth } from "@/contexts/auth"
+import { getCategoryDisplayName } from '@/lib/constants'
 import { EditProductDialog } from './edit-product-dialog'
 import { ProductSellerActions } from './product-seller-actions'
 import { Button } from './ui/button'
@@ -53,7 +54,7 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
               <div onClick={() => router.push('/products/' + product._id)} className="absolute inset-0 cursor-pointer" />
             </div>
             <div className="absolute top-2 left-2">
-              <Badge className="bg-card border border-border text-foreground text-xs font-medium px-2.5 py-1 capitalize">{product.category}</Badge>
+              <Badge className="bg-card border border-border text-foreground text-xs font-medium px-2.5 py-1">{getCategoryDisplayName(product.category)}</Badge>
             </div>
           </div>
 

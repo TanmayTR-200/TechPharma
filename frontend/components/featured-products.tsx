@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/auth"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Reveal } from "@/components/reveal"
+import { getCategoryDisplayName } from "@/lib/constants"
 
 interface Product {
   _id: string; name: string; price: number; images: string[]
@@ -82,7 +83,7 @@ export function FeaturedProducts() {
                   ) : (
                     <div className="flex items-center justify-center h-full"><Package className="h-8 w-8 text-muted-foreground/30" /></div>
                   )}
-                  <Badge className="absolute top-2 left-2 bg-background/90 text-foreground text-[10px] uppercase tracking-wider border border-border rounded-none">{p.category}</Badge>
+                  <Badge className="absolute top-2 left-2 bg-background/90 text-foreground text-[10px] uppercase tracking-wider border border-border rounded-none">{getCategoryDisplayName(p.category)}</Badge>
                 </div>
                 <div className="p-5">
                   <h3 className="font-display text-base font-semibold text-foreground mb-1">{p.name}</h3>

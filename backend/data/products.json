@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "_id": "test_product_1",
+    "name": "Test Product",
+    "price": 100,
+    "category": "test",
+    "stock": 10,
+    "total_stock": 10,
+    "available_stock": 10,
+    "reserved_stock": 0,
+    "sold": 0,
+    "status": "active",
+    "userId": "test_supplier",
+    "images": [],
+    "salesCount": 0
+  }
+]

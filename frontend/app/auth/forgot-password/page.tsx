@@ -23,10 +23,10 @@ export default function ForgotPasswordPage() {
       const response = await authApi.forgotPassword(email);
       toast({
         title: "Check your email",
-        description: response.message || "Reset instructions have been sent to your email.",
+        description: response.message || "If an account exists with that email, you will receive a reset link shortly.",
       });
       setTimeout(() => {
-        router.push('/auth/reset-password?token=' + response.token);
+        router.push('/auth?mode=login');
       }, 3000);
     } catch (error: any) {
       toast({

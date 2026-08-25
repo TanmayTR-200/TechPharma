@@ -83,7 +83,7 @@ export function CategoryGrid() {
                   return (
                     <Reveal key={cat.name} delay={idx * 0.05} y={20}>
                       <button
-                        onClick={() => navigateToProducts({ category: cat.name, sortBy: 'featured', page: 1 })}
+                        onClick={() => navigateToProducts({ category: cat.key, sortBy: 'featured', page: 1 })}
                         className="group border border-border p-5 text-left w-full hover:border-foreground transition-colors"
                       >
                         <p className="font-display text-lg font-semibold text-foreground mb-1">{cat.name}</p>

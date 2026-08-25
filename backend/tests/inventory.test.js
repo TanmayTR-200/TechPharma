@@ -1,5 +1,5 @@
 /**
- * Concurrency tests for the inventory reservation system.
+ * Concurrency tests for the SQLite-backed inventory reservation system.
  *
  * Run with: node backend/tests/inventory.test.js
  *
@@ -12,19 +12,24 @@
  * 6. Cancel releases stock
  * 7. Concurrent confirm + cancel → only one wins
  * 8. Concurrent expiration + confirmation
+ * 9. MULTI-PROCESS: 20 child processes against 10-stock item → 10 succeed, 10 rejected
  */
 
 const path = require('path');
 const fs = require('fs');
+const { spawnSync } = require('child_process');
 
-// We test the reservation module directly (not via HTTP) for true concurrency
+// Use a dedicated test DB (not the production one)
+process.env.SQLITE_PATH = path.join(__dirname, '../data/test_inventory.db');
+
 const inventory = require('../src/inventory/reservation');
+const { getDb } = require('../src/inventory/store');
 
 const PRODUCTS_FILE = path.join(__dirname, '../data/products.json');
 const RESERVATIONS_FILE = path.join(__dirname, '../data/reservations.json');
 
 function setupTestProduct(stock) {
-  const products = [{
+  const product = {
     _id: 'test_product_1',
     name: 'Test Product',
     price: 100,
@@ -37,26 +42,33 @@ function setupTestProduct(stock) {
     status: 'active',
     userId: 'test_supplier',
     images: []
-  }];
-  fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
+  };
+
+  fs.writeFileSync(PRODUCTS_FILE, JSON.stringify([product], null, 2));
   fs.writeFileSync(RESERVATIONS_FILE, '[]');
+
+  // global.dataCache is needed by createOrder for product metadata
+  global.dataCache = { products: [product] };
+
+  // Reset SQLite tables and seed the product
+  inventory.resetForTesting();
+  inventory.upsertProduct('test_product_1', stock);
 }
 
 function getProduct() {
-  const products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8'));
-  return products.find(p => p._id === 'test_product_1');
-}
-
-function resetReservations() {
-  fs.writeFileSync(RESERVATIONS_FILE, '[]');
+  // Read from SQLite (source of truth) — not products.json — so that
+  // multi-process test results are visible even when child processes
+  // don't sync back to the JSON cache.
+  const db = getDb();
+  return db.prepare('SELECT * FROM inventory_stock WHERE product_id = ?').get('test_product_1');
 }
 
 async function test(name, fn) {
   try {
     await fn();
-    console.log(`  ✓ ${name}`);
+    console.log(`  \u2713 ${name}`);
   } catch (err) {
-    console.error(`  ✗ ${name}: ${err.message}`);
+    console.error(`  \u2717 ${name}: ${err.message}`);
     process.exitCode = 1;
   }
 }
@@ -66,7 +78,7 @@ function assert(condition, message) {
 }
 
 async function runTests() {
-  console.log('\n=== Inventory Concurrency Tests ===\n');
+  console.log('\n=== Inventory Concurrency Tests (SQLite) ===\n');
 
   // Test 1: 100 concurrent users for 10-stock item
   await test('100 concurrent users for 10-stock item → 10 succeed, 90 rejected', async () => {
@@ -205,14 +217,12 @@ async function runTests() {
   // Test 8: Expiration releases stock
   await test('Expiration releases expired reservations', async () => {
     setupTestProduct(10);
-    // Create a reservation with very short TTL by manipulating the data
     const r = await inventory.reserve({ productId: 'test_product_1', quantity: 3, userId: 'user_h', idempotencyKey: 'key_h' });
 
-    // Manually set expires_at to the past
-    const reservations = JSON.parse(fs.readFileSync(RESERVATIONS_FILE, 'utf8'));
-    const res = reservations.find(x => x.reservation_id === r.reservation.reservation_id);
-    res.expires_at = new Date(Date.now() - 1000).toISOString(); // 1 second ago
-    fs.writeFileSync(RESERVATIONS_FILE, JSON.stringify(reservations, null, 2));
+    // Manually set expires_at to the past in SQLite
+    const db = getDb();
+    db.prepare('UPDATE reservations SET expires_at = ? WHERE reservation_id = ?')
+      .run(new Date(Date.now() - 1000).toISOString(), r.reservation.reservation_id);
 
     const result = await inventory.releaseExpired();
     assert(result.released === 1, `Expected 1 released, got ${result.released}`);
@@ -222,8 +232,56 @@ async function runTests() {
     assert(product.reserved_stock === 0, `After expiration: reserved=0, got ${product.reserved_stock}`);
   });
 
+  // Test 9: MULTI-PROCESS concurrency — proves cross-process safety
+  await test('MULTI-PROCESS: 20 child processes for 10-stock item → 10 succeed, 10 rejected', async () => {
+    setupTestProduct(10);
+
+    const workerScript = path.join(__dirname, 'concurrent-worker.js');
+    let success = 0;
+    let failed = 0;
+
+    // Spawn 20 child processes, each trying to reserve 1 unit
+    for (let i = 0; i < 20; i++) {
+      const result = spawnSync('node', [workerScript, 'test_product_1', `proc_${i}`, `proc_key_${i}`], {
+        cwd: path.join(__dirname, '..'),
+        timeout: 10000,
+        encoding: 'utf8'
+      });
+
+      if (result.status === 0 && result.stdout.includes('SUCCESS')) {
+        success++;
+      } else {
+        failed++;
+      }
+    }
+
+    const product = getProduct();
+    assert(success === 10, `Expected 10 successes, got ${success}`);
+    assert(failed === 10, `Expected 10 failures, got ${failed}`);
+    assert(product.available_stock === 0, `Expected available=0, got ${product.available_stock}`);
+    assert(product.reserved_stock === 10, `Expected reserved=10, got ${product.reserved_stock}`);
+    console.log(`    Results: ${success} succeeded, ${failed} rejected (across separate processes)`);
+  });
+
   console.log('\n=== Tests Complete ===\n');
 }
+
+// Cleanup test DB on exit
+process.on('exit', () => {
+  try {
+    const dbPath = process.env.SQLITE_PATH;
+    if (dbPath && fs.existsSync(dbPath)) {
+      // Close connection first
+      const db = getDb();
+      db.close();
+    }
+    [dbPath, dbPath + '-wal', dbPath + '-shm'].forEach(f => {
+      if (f && fs.existsSync(f)) fs.unlinkSync(f);
+    });
+  } catch (e) {
+    // ignore cleanup errors
+  }
+});
 
 // Run tests
 runTests().catch(console.error);

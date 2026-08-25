@@ -1,72 +1,86 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useToast } from './ui/use-toast';
+import { useState, useEffect, useRef } from 'react';
 import { checkServerStatus } from '@/lib/api-config';
 
+type Status = 'connected' | 'disconnected' | 'waking';
+
 export function ServerStatus() {
-  const { toast } = useToast();
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [status, setStatus] = useState<Status>('disconnected');
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    let checkInterval: NodeJS.Timeout;
 
     const checkConnection = async () => {
       try {
-        const status = await checkServerStatus();
-        if (!cancelled) {
-          setIsConnected(status);
-          if (!status) {
-            toast({
-              title: 'Server Connection Error',
-              description: 'Unable to connect to the server. Please ensure the backend server is running.',
-              variant: 'destructive',
-              duration: 5000,
-            });
-          }
+        const ok = await checkServerStatus();
+        if (cancelled) return;
+
+        if (ok) {
+          retryCountRef.current = 0;
+          setStatus('connected');
+        } else {
+          // Health check returned but not ok — genuinely down
+          setStatus('disconnected');
         }
-      } catch (err: any) {
-        if (!cancelled) {
-          setIsConnected(false);
-          // Show more specific error messages
-          const errorMessage = err.message === 'Failed to fetch'
-            ? 'Server is not responding. Please ensure the backend server is running on port 4000.'
-            : err.message.includes('CORS')
-              ? 'CORS error detected. Please check server configuration.'
-              : 'Network error. Please check your connection and the backend server.';
-              
-          toast({
-            title: 'Server Connection Error',
-            description: errorMessage,
-            variant: 'destructive',
-            duration: 5000,
-          });
+      } catch {
+        if (cancelled) return;
+        // Fetch failed — likely Render cold start.
+        // Retry with backoff instead of immediately showing "disconnected".
+        retryCountRef.current += 1;
+
+        if (retryCountRef.current <= 5) {
+          setStatus('waking');
+          const delay = Math.min(2000 * retryCountRef.current, 10000);
+          retryTimerRef.current = setTimeout(checkConnection, delay);
+        } else {
+          setStatus('disconnected');
         }
       }
     };
 
-    // Initial check
     checkConnection();
 
-    // Set up periodic checks every 30 seconds
-    checkInterval = setInterval(checkConnection, 30000);
+    // Periodic check every 60s once connected
+    const checkInterval = setInterval(() => {
+      if (status === 'connected') {
+        retryCountRef.current = 0;
+        checkConnection();
+      }
+    }, 60000);
 
     return () => {
       cancelled = true;
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
       if (checkInterval) clearInterval(checkInterval);
     };
-  }, [toast]);
+  }, []);
 
-  if (isConnected) return null; // Don't show anything when connected
+  if (status === 'connected') return null;
+
+  if (status === 'waking') {
+    return (
+      <div className="fixed bottom-4 right-4 bg-yellow-500/10 text-foreground px-4 py-2 rounded-md shadow-lg z-50 flex items-center space-x-2">
+        <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+        <span>Waking up server...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed bottom-4 right-4 bg-destructive/10 text-foreground px-4 py-2 rounded-md shadow-lg z-50 flex items-center space-x-2">
-      <div className="w-2 h-2 bg-card rounded-full animate-pulse" />
+      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
       <span>Server Disconnected</span>
       <button
         className="ml-4 px-2 py-1 bg-card text-destructive rounded hover:bg-secondary"
-        onClick={() => window.location.reload()}
+        onClick={() => {
+          retryCountRef.current = 0;
+          setStatus('waking');
+          // Force immediate re-check
+          window.location.reload();
+        }}
       >
         Retry
       </button>

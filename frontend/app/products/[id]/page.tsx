@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/auth"
 import { SkeletonLoader } from "@/components/skeleton-loader"
 import { useToast } from "@/hooks/use-toast"
 import { motion } from "framer-motion"
+import { getCategoryDisplayName } from "@/lib/constants"
 
 interface ProductDetail {
   _id: string
@@ -171,7 +172,7 @@ export default function ProductDetailPage() {
           {/* Right: Details */}
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.1 }} className="flex flex-col">
             <div className="flex items-center gap-2 mb-3">
-              <Badge className="bg-secondary text-foreground border-0 text-xs font-medium px-3 py-1 capitalize">{product.category}</Badge>
+              <Badge className="bg-secondary text-foreground border-0 text-xs font-medium px-3 py-1">{getCategoryDisplayName(product.category)}</Badge>
             </div>
 
             <h1 className="font-display text-2xl font-bold text-foreground mb-1">{product.name}</h1>
