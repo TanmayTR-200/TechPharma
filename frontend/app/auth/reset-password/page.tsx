@@ -69,10 +69,10 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       toast({
         title: "Password too short",
-        description: "Password must be at least 6 characters long.",
+        description: "Password must be at least 8 characters long.",
         variant: "destructive",
       });
       return;
@@ -92,7 +92,7 @@ export default function ResetPasswordPage() {
     } catch (error: any) {
       toast({
         title: "Reset failed",
-        description: error.message || "Something went wrong",
+        description: error.response?.data?.message || error.message || "Something went wrong",
         variant: "destructive",
       });
     } finally {

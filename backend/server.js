@@ -75,6 +75,24 @@ const apiLimiter = rateLimit({
   message: { success: false, message: 'Too many requests. Please slow down.' },
 });
 
+// Password reset — one-time links, must not be brute-forced or replayed
+const resetLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many password reset attempts. Please try again in 15 minutes.' },
+});
+
+// Password change (logged-in users)
+const changeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many password change attempts. Please try again later.' },
+});
+
 // ===== Account Lockout System (in-memory) =====
 const loginAttempts = new Map(); // key: email → { count, lockedUntil, lastAttempt }
 
@@ -115,6 +133,41 @@ function recordFailedAttempt(email) {
 
 function clearAttempts(email) {
   loginAttempts.delete(email.toLowerCase());
+}
+
+// ===== Password Reset Email Cooldown =====
+const resetEmailCooldowns = new Map(); // email → last reset-email timestamp
+const RESET_EMAIL_COOLDOWN_MS = 60 * 1000; // min 60s between reset emails per email
+
+// ===== Password History (blocks reuse of recent passwords) =====
+const PASSWORD_HISTORY_LIMIT = 5;
+
+async function isPreviouslyUsedPassword(newPassword, user) {
+  const hashes = [...(user.passwordHistory || [])];
+  if (user.password) hashes.push(user.password);
+  for (const hash of hashes) {
+    if (await bcrypt.compare(newPassword, hash)) return true;
+  }
+  return false;
+}
+
+// Apply a new password: hash + history, invalidate any outstanding reset link,
+// and AWAIT persistence so a process restart can't resurrect the old token/password
+async function applyNewPassword(user, users, usersFile, newPassword) {
+  const history = user.passwordHistory || [];
+  // Legacy users have no history — record the outgoing password so it can't be reused
+  if (user.password && history[history.length - 1] !== user.password) {
+    history.push(user.password);
+  }
+  const newHash = await bcrypt.hash(newPassword, 12);
+  history.push(newHash);
+
+  user.password = newHash;
+  user.passwordHistory = history.slice(-PASSWORD_HISTORY_LIMIT);
+  user.resetToken = null;
+  user.passwordChangedAt = new Date().toISOString();
+  await writeJsonFile(usersFile, users);
+  clearAttempts(user.email);
 }
 
 // ===== Input Sanitization =====
@@ -300,9 +353,10 @@ function writeJsonFile(filePath, data) {
   } catch (err) {
     console.error(`File write error (${filePath}):`, err.message);
   }
-  // Persist to MongoDB in background (fire-and-forget)
+  // Persist to MongoDB — returns a promise so auth-critical handlers can await it;
+  // other callers ignore the return and keep fire-and-forget behavior
   if (mongoDb) {
-    persistToMongo(colName, data).catch(err => {
+    return persistToMongo(colName, data).catch(err => {
       console.error(`MongoDB write error (${colName}):`, err.message);
     });
   }
@@ -754,12 +808,14 @@ app.get('/api/debug/migrate-admin', async (req, res) => {
       admin.email = 'techpharma10@gmail.com';
       admin.name = 'TechPharma_Admin';
       admin.password = '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC';
+      admin.passwordHistory = ['$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC'];
+      admin.passwordChangedAt = new Date().toISOString();
     }
     writeJsonFile(usersFile, users);
     if (mongoDb) {
       await mongoDb.collection('users').updateOne(
         { _id: '1760257427529' },
-        { $set: { email: 'techpharma10@gmail.com', name: 'TechPharma_Admin', password: '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC' } }
+        { $set: { email: 'techpharma10@gmail.com', name: 'TechPharma_Admin', password: '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC', passwordHistory: ['$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC'], passwordChangedAt: new Date().toISOString() } }
       );
     }
     dataCache['users'] = users;
@@ -851,6 +907,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       _id: Date.now().toString(),
       email,
       password: hashedPassword,
+      passwordHistory: [hashedPassword],
       name,
       role: 'member',
       company: companyName ? { name: companyName } : {},
@@ -1237,6 +1294,17 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
       });
     }
 
+    // Per-email cooldown — silently throttled, same generic response (no user enumeration)
+    const emailKey = String(email).toLowerCase();
+    const lastRequest = resetEmailCooldowns.get(emailKey);
+    if (lastRequest && Date.now() - lastRequest < RESET_EMAIL_COOLDOWN_MS) {
+      return res.json({
+        success: true,
+        message: 'If an account exists with that email, you will receive password reset instructions.'
+      });
+    }
+    resetEmailCooldowns.set(emailKey, Date.now());
+
     // Read users from file
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
@@ -1258,24 +1326,17 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
       try {
         // Send password reset email
         await sendPasswordResetEmail(email, resetToken);
-        
-        // Store reset token with user
+        console.log(`Password reset email sent to ${email}`);
+      } catch (emailError) {
+        console.error('Failed to send password reset email:', emailError.message);
+      } finally {
+        // Store reset token with user — even if the email failed, so a manually
+        // shared link still works. Awaited: a restart must not lose the token.
         user.resetToken = {
           token: resetToken,
           expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
         };
-        writeJsonFile(usersFile, users);
-        
-        console.log(`Password reset email sent to ${email}`);
-      } catch (emailError) {
-        console.error('Failed to send password reset email:', emailError.message);
-        // Still store the reset token so the user can reset if they got the link
-        // via another channel (e.g. admin shared it manually)
-        user.resetToken = {
-          token: resetToken,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
-        };
-        writeJsonFile(usersFile, users);
+        await writeJsonFile(usersFile, users);
       }
     }
 
@@ -1302,6 +1363,9 @@ app.get('/api/auth/verify-reset-token', async (req, res) => {
     }
 
     const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    if (decoded.purpose !== 'reset') {
+      return res.status(400).json({ success: false, message: 'Invalid reset link' });
+    }
 
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
@@ -1319,6 +1383,11 @@ app.get('/api/auth/verify-reset-token', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Reset link has expired. Please request a new one.' });
     }
 
+    // Token issued before the last password change → link was already used
+    if (user.passwordChangedAt && decoded.iat * 1000 <= new Date(user.passwordChangedAt).getTime()) {
+      return res.status(400).json({ success: false, message: 'This reset link has already been used. Please request a new one.' });
+    }
+
     return res.json({
       success: true,
       user: { email: user.email, name: user.name }
@@ -1329,20 +1398,27 @@ app.get('/api/auth/verify-reset-token', async (req, res) => {
   }
 });
 
-app.post('/api/auth/reset-password', async (req, res) => {
+app.post('/api/auth/reset-password', resetLimiter, async (req, res) => {
   try {
     const { token, password } = req.body;
     if (!token || !password) {
       return res.status(400).json({ message: 'Token and new password are required' });
     }
 
-    // Verify token
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ message: 'Password must be between 8 and 128 characters' });
+    }
+
+    // Verify token (purpose check — login tokens must not work here)
     const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
-    
+    if (decoded.purpose !== 'reset') {
+      return res.status(400).json({ message: 'Invalid reset link' });
+    }
+
     // Read users
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
-    
+
     // Find user
     const user = users.find(u => u._id === decoded.userId);
     if (!user) {
@@ -1359,11 +1435,17 @@ app.post('/api/auth/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'Reset link has expired. Please request a new one.' });
     }
 
-    // Update password
-    user.password = await bcrypt.hash(password, 10);
-    user.resetToken = null;
-    user.passwordChangedAt = new Date().toISOString();
-    writeJsonFile(usersFile, users);
+    // Single-use: token issued before the last password change was already used
+    if (user.passwordChangedAt && decoded.iat * 1000 <= new Date(user.passwordChangedAt).getTime()) {
+      return res.status(400).json({ message: 'This reset link has already been used. Please request a new one.' });
+    }
+
+    // Block reuse of a recently used password
+    if (await isPreviouslyUsedPassword(password, user)) {
+      return res.status(400).json({ message: 'You cannot reuse a recently used password. Please choose a new one.' });
+    }
+
+    await applyNewPassword(user, users, usersFile, password);
 
     return res.json({
       success: true,
@@ -1371,6 +1453,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
     });
 
   } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(400).json({ success: false, message: 'Reset link has expired. Please request a new one.' });
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(400).json({ success: false, message: 'Invalid reset link' });
+    }
     console.error('Reset password error:', error);
     return res.status(500).json({
       success: false,
@@ -1380,11 +1468,15 @@ app.post('/api/auth/reset-password', async (req, res) => {
 });
 
 // Change password (when logged in)
-app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+app.post('/api/auth/change-password', authMiddleware, changeLimiter, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ success: false, message: 'Current and new passwords are required' });
+    }
+
+    if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 128) {
+      return res.status(400).json({ success: false, message: 'New password must be between 8 and 128 characters' });
     }
 
     const usersFile = path.join(__dirname, './data/users.json');
@@ -1399,9 +1491,11 @@ app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Incorrect email or password' });
     }
 
-    user.password = await bcrypt.hash(newPassword, 12);
-    user.passwordChangedAt = new Date().toISOString();
-    writeJsonFile(usersFile, users);
+    if (await isPreviouslyUsedPassword(newPassword, user)) {
+      return res.status(400).json({ success: false, message: 'You cannot reuse a recently used password. Please choose a new one.' });
+    }
+
+    await applyNewPassword(user, users, usersFile, newPassword);
 
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
