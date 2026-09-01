@@ -936,6 +936,8 @@ function getResend() {
 }
 
 async function sendEmail(to, subject, text, html) {
+  const errors = [];
+
   // 1. Try Gmail API first (sends from techpharma10@gmail.com, uses HTTPS port 443)
   if (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_REFRESH_TOKEN) {
     try {
@@ -962,7 +964,7 @@ async function sendEmail(to, subject, text, html) {
       return;
     } catch (err) {
       console.error('[Email] Gmail API failed:', err.code || '', err.message);
-      if (err.errors) console.error('[Email] Gmail API error details:', JSON.stringify(err.errors));
+      errors.push(`Gmail API: ${err.message}`);
     }
   }
 
@@ -980,25 +982,37 @@ async function sendEmail(to, subject, text, html) {
       console.log('[Email] Resend result:', JSON.stringify(result));
       if (result.error) {
         console.error('[Email] Resend API error:', result.error.message);
+        errors.push(`Resend: ${result.error.message}`);
       } else {
         console.log('[Email] Sent via Resend to', to, 'ID:', result.data?.id);
+        return;
       }
-      return;
     } catch (err) {
       console.error('[Email] Resend failed:', err.message);
+      errors.push(`Resend: ${err.message}`);
     }
   }
 
   // 3. Fallback: nodemailer SMTP (works locally only, blocked on Render free tier)
-  const nodemailer = require('nodemailer');
-  const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
-    requireTLS: true,
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_APP_PASSWORD }
-  });
-  await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text, html });
+  try {
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_APP_PASSWORD }
+    });
+    await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text, html });
+    console.log('[Email] Sent via nodemailer SMTP to', to);
+    return;
+  } catch (err) {
+    console.error('[Email] nodemailer SMTP failed:', err.message);
+    errors.push(`nodemailer: ${err.message}`);
+  }
+
+  // All providers failed — throw so the caller knows the email wasn't sent
+  throw new Error(`All email providers failed: ${errors.join('; ')}`);
 }
 
 // Check if email is already registered
@@ -1255,7 +1269,13 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
         console.log(`Password reset email sent to ${email}`);
       } catch (emailError) {
         console.error('Failed to send password reset email:', emailError.message);
-        // Token is NOT logged — it would allow anyone with log access to reset passwords
+        // Still store the reset token so the user can reset if they got the link
+        // via another channel (e.g. admin shared it manually)
+        user.resetToken = {
+          token: resetToken,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+        };
+        writeJsonFile(usersFile, users);
       }
     }
 
@@ -1270,6 +1290,42 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
       success: false,
       message: 'Error processing password reset request'
     });
+  }
+});
+
+// Verify reset token and return user info (email, name)
+app.get('/api/auth/verify-reset-token', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Token is required' });
+    }
+
+    const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+
+    const usersFile = path.join(__dirname, './data/users.json');
+    const users = readJsonFile(usersFile);
+    const user = users.find(u => u._id === decoded.userId);
+
+    if (!user) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset link' });
+    }
+
+    if (!user.resetToken || user.resetToken.token !== token) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired reset link' });
+    }
+
+    if (new Date() > new Date(user.resetToken.expiresAt)) {
+      return res.status(400).json({ success: false, message: 'Reset link has expired. Please request a new one.' });
+    }
+
+    return res.json({
+      success: true,
+      user: { email: user.email, name: user.name }
+    });
+  } catch (error) {
+    console.error('Verify reset token error:', error);
+    return res.status(400).json({ success: false, message: 'Invalid or expired reset link' });
   }
 });
 

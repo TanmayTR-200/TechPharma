@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { authApi } from '@/lib/api';
 
@@ -15,8 +16,25 @@ export default function ResetPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [userInfo, setUserInfo] = useState<{ email: string; name: string } | null>(null);
 
   const token = searchParams.get('token');
+
+  useEffect(() => {
+    if (!token) return;
+
+    authApi.verifyResetToken(token)
+      .then((data) => {
+        if (data.success && data.user) {
+          setUserInfo(data.user);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to verify reset token:', error);
+      });
+  }, [token]);
 
   if (!token) {
     return (
@@ -116,9 +134,15 @@ export default function ResetPasswordPage() {
         <div className="w-full max-w-md space-y-6 rounded-lg border border-border bg-card p-8">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Set a new password</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Enter your new password below.
-            </p>
+            {userInfo ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Resetting password for <span className="font-medium text-foreground">{userInfo.name}</span> ({userInfo.email})
+              </p>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Enter your new password below.
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -127,34 +151,52 @@ export default function ResetPasswordPage() {
                 <label htmlFor="password" className="block text-sm font-medium text-foreground">
                   New password
                 </label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1.5"
-                  placeholder="••••••••"
-                  disabled={isLoading}
-                />
+                <div className="relative mt-1.5">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pr-10"
+                    placeholder="••••••••"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground">
                   Confirm new password
                 </label>
-                <Input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="mt-1.5"
-                  placeholder="••••••••"
-                  disabled={isLoading}
-                />
+                <div className="relative mt-1.5">
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="pr-10"
+                    placeholder="••••••••"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 

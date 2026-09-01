@@ -66,6 +66,11 @@ export const authApi = {
     const response = await api.post('/auth/reset-password', { token, password });
     return response.data;
   },
+
+  verifyResetToken: async (token: string) => {
+    const response = await api.get('/auth/verify-reset-token', { params: { token } });
+    return response.data;
+  },
 };
 
 // Product APIs
