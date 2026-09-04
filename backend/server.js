@@ -267,7 +267,7 @@ async function connectMongoDB() {
             {
               _id: '1760257427529',
               email: 'techpharma10@gmail.com',
-              password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
+              password: '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC',
               name: 'TechPharma_Admin',
               role: 'admin',
               createdAt: new Date().toISOString(),
@@ -279,6 +279,15 @@ async function connectMongoDB() {
               password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De',
               name: 'Tanmay T',
               company: { name: 'BCD' },
+              role: 'buyer',
+              createdAt: new Date().toISOString()
+            },
+            {
+              _id: '1787500000000',
+              email: 'tanmaytr05@gmail.com',
+              password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
+              name: 'Tanmay T R',
+              company: { name: 'ABC' },
               role: 'buyer',
               createdAt: new Date().toISOString()
             }
@@ -328,8 +337,9 @@ async function connectMongoDB() {
               dataCache[col] = fileData;
             } else if (col === 'users' && (!dataCache['users'] || dataCache['users'].length === 0)) {
               const defaultUsers = [
-                { _id: '1760257427529', email: 'techpharma10@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'TechPharma_Admin', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' }, phone: '+91 800-123-4567' },
-                { _id: '1760360335467', email: 'tanmaytalanki.cs23@bmsce.ac.in', password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De', name: 'Tanmay T', company: { name: 'BCD' }, role: 'buyer', createdAt: new Date().toISOString(), phone: '+91 900-123-4567' }
+                { _id: '1760257427529', email: 'techpharma10@gmail.com', password: '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC', name: 'TechPharma_Admin', role: 'admin', createdAt: new Date().toISOString(), company: { name: 'ABC' }, phone: '+91 800-123-4567' },
+                { _id: '1760360335467', email: 'tanmaytalanki.cs23@bmsce.ac.in', password: '$2a$10$VF/J280U3qhLSrs.Fwnp4OlKCa8nM2MqQzCi9YqsRi6pOwJCKz/De', name: 'Tanmay T', company: { name: 'BCD' }, role: 'buyer', createdAt: new Date().toISOString(), phone: '+91 900-123-4567' },
+                { _id: '1787500000000', email: 'tanmaytr05@gmail.com', password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki', name: 'Tanmay T R', company: { name: 'ABC' }, role: 'buyer', createdAt: new Date().toISOString(), phone: '+91 800-123-4567' }
               ];
               await mongoDb.collection('users').insertMany(defaultUsers);
               dataCache['users'] = defaultUsers;
@@ -550,7 +560,7 @@ app.get('/api/seed', async (req, res) => {
         {
           _id: '1760257427529',
           email: 'techpharma10@gmail.com',
-          password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
+          password: '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC',
           name: 'TechPharma_Admin',
           role: 'admin',
           createdAt: '2025-09-15T08:23:47.529Z',
@@ -566,6 +576,16 @@ app.get('/api/seed', async (req, res) => {
           role: 'buyer',
           createdAt: '2025-10-13T12:58:55.467Z',
           phone: '+91 900-123-4567'
+        },
+        {
+          _id: '1787500000000',
+          email: 'tanmaytr05@gmail.com',
+          password: '$2b$10$GOmHIYxLgWQ5btaZcLMT0u20AQWfqIvzlmfNmg8oCN2gYtoh2Otki',
+          name: 'Tanmay T R',
+          company: { name: 'ABC' },
+          role: 'buyer',
+          createdAt: '2026-09-02T10:00:00.000Z',
+          phone: '+91 800-123-4567'
         }
       ];
       await mongoDb.collection('users').insertMany(defaultUsers);
