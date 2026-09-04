@@ -902,10 +902,11 @@ const authMiddleware = async (req, res, next) => {
       }
     }
 
-    // Set user data in request
+    // Set user data in request — role comes from the DB record, never the request
     req.user = { 
       _id: decoded.userId,
-      id: decoded.userId // Include both id formats for compatibility
+      id: decoded.userId, // Include both id formats for compatibility
+      role: user ? user.role : undefined
     };
     
     next();
@@ -2292,14 +2293,22 @@ app.get('/api/supplier/:id', async (req, res) => {
   }
 });
 
-// User routes
+// User routes — self or admin only (id comes from the JWT session, not the request)
 app.get('/api/users/:id', authMiddleware, async (req, res) => {
   try {
+    // Authorization: user can only view their own profile, unless admin
+    if (req.params.id !== req.user._id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this user'
+      });
+    }
+
     const users = readJsonFile(path.join(__dirname, './data/users.json'));
     const user = users.find(u => u._id === req.params.id);
 
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     res.json({
