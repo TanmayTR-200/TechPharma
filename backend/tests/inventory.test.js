@@ -1,10 +1,10 @@
 /**
  * Concurrency tests for the SQLite-backed inventory reservation system.
  *
- * Run with: node backend/tests/inventory.test.js
+ * Run with: npm test   (jest, in-band with the rest of the suite)
  *
  * Tests:
- * 1. 100 concurrent users for 10-stock item → 10 succeed, 90 rejected, 0 oversold
+ * 1.  100 concurrent users for 10-stock item → 10 succeed, 90 rejected, 0 oversold
  * 2. Two users for the last item simultaneously
  * 3. Multiple-unit reservation (qty > available)
  * 4. Duplicate idempotency key → same reservation returned
@@ -17,6 +17,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { spawnSync } = require('child_process');
 
 // Use a dedicated test DB (not the production one)
@@ -25,8 +26,17 @@ process.env.SQLITE_PATH = path.join(__dirname, '../data/test_inventory.db');
 const inventory = require('../src/inventory/reservation');
 const { getDb } = require('../src/inventory/store');
 
-const PRODUCTS_FILE = path.join(__dirname, '../data/products.json');
-const RESERVATIONS_FILE = path.join(__dirname, '../data/reservations.json');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
+const RESERVATIONS_FILE = path.join(DATA_DIR, 'reservations.json');
+
+// This suite overwrites products.json / reservations.json — back them up first
+const BACKUP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'tp-inventory-test-'));
+for (const f of ['products.json', 'reservations.json']) {
+  if (fs.existsSync(path.join(DATA_DIR, f))) {
+    fs.copyFileSync(path.join(DATA_DIR, f), path.join(BACKUP_DIR, f));
+  }
+}
 
 function setupTestProduct(stock) {
   const product = {
@@ -63,25 +73,31 @@ function getProduct() {
   return db.prepare('SELECT * FROM inventory_stock WHERE product_id = ?').get('test_product_1');
 }
 
-async function test(name, fn) {
-  try {
-    await fn();
-    console.log(`  \u2713 ${name}`);
-  } catch (err) {
-    console.error(`  \u2717 ${name}: ${err.message}`);
-    process.exitCode = 1;
-  }
-}
-
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-async function runTests() {
-  console.log('\n=== Inventory Concurrency Tests (SQLite) ===\n');
+afterAll(() => {
+  // Remove the test SQLite DB
+  try {
+    const dbPath = process.env.SQLITE_PATH;
+    if (dbPath && fs.existsSync(dbPath)) {
+      try { getDb().close(); } catch (e) { /* already closed */ }
+      [dbPath, dbPath + '-wal', dbPath + '-shm'].forEach(f => {
+        if (fs.existsSync(f)) fs.unlinkSync(f);
+      });
+    }
+  } catch (e) { /* ignore cleanup errors */ }
 
-  // Test 1: 100 concurrent users for 10-stock item
-  await test('100 concurrent users for 10-stock item → 10 succeed, 90 rejected', async () => {
+  // Restore the data files this suite overwrote
+  for (const f of fs.readdirSync(BACKUP_DIR)) {
+    fs.copyFileSync(path.join(BACKUP_DIR, f), path.join(DATA_DIR, f));
+  }
+  fs.rmSync(BACKUP_DIR, { recursive: true, force: true });
+});
+
+describe('Inventory concurrency (SQLite)', () => {
+  test('100 concurrent users for 10-stock item → 10 succeed, 90 rejected', async () => {
     setupTestProduct(10);
     const results = [];
     const promises = [];
@@ -109,11 +125,9 @@ async function runTests() {
     assert(product.available_stock === 0, `Expected available_stock=0, got ${product.available_stock}`);
     assert(product.reserved_stock === 10, `Expected reserved_stock=10, got ${product.reserved_stock}`);
     assert(product.sold === 0, `Expected sold=0, got ${product.sold}`);
-    console.log(`    Results: ${succeeded} succeeded, ${failed} rejected, available=${product.available_stock}, reserved=${product.reserved_stock}`);
   });
 
-  // Test 2: Two users for the last item simultaneously
-  await test('Two users for last item → 1 succeeds, 1 rejected', async () => {
+  test('Two users for last item → 1 succeeds, 1 rejected', async () => {
     setupTestProduct(1);
     const results = [];
 
@@ -135,8 +149,7 @@ async function runTests() {
     assert(product.reserved_stock === 1, `Expected reserved=1, got ${product.reserved_stock}`);
   });
 
-  // Test 3: Multiple-unit reservation exceeds available
-  await test('Multiple-unit reservation (qty=5 when stock=3) → rejected', async () => {
+  test('Multiple-unit reservation (qty=5 when stock=3) → rejected', async () => {
     setupTestProduct(3);
     let error = null;
     try {
@@ -150,8 +163,7 @@ async function runTests() {
     assert(product.available_stock === 3, `Stock should be unchanged (3), got ${product.available_stock}`);
   });
 
-  // Test 4: Duplicate idempotency key → same reservation returned
-  await test('Duplicate idempotency key → same reservation returned', async () => {
+  test('Duplicate idempotency key → same reservation returned', async () => {
     setupTestProduct(10);
     const key = 'duplicate_key_123';
 
@@ -166,8 +178,7 @@ async function runTests() {
     assert(product.reserved_stock === 2, `Reserved should be 2, got ${product.reserved_stock}`);
   });
 
-  // Test 5: Cancel releases stock
-  await test('Cancel reservation releases stock back to available', async () => {
+  test('Cancel reservation releases stock back to available', async () => {
     setupTestProduct(10);
     const r = await inventory.reserve({ productId: 'test_product_1', quantity: 3, userId: 'user_e', idempotencyKey: 'key_e' });
 
@@ -182,8 +193,7 @@ async function runTests() {
     assert(product.reserved_stock === 0, `After cancel: reserved=0, got ${product.reserved_stock}`);
   });
 
-  // Test 6: Confirm moves reserved → sold
-  await test('Confirm reservation moves stock from reserved to sold', async () => {
+  test('Confirm reservation moves stock from reserved to sold', async () => {
     setupTestProduct(10);
     const r = await inventory.reserve({ productId: 'test_product_1', quantity: 2, userId: 'user_f', idempotencyKey: 'key_f' });
 
@@ -195,8 +205,7 @@ async function runTests() {
     assert(product.sold === 2, `After confirm: sold=2, got ${product.sold}`);
   });
 
-  // Test 7: Concurrent confirm + cancel → only one wins
-  await test('Concurrent confirm + cancel on same reservation → only one succeeds', async () => {
+  test('Concurrent confirm + cancel on same reservation → only one succeeds', async () => {
     setupTestProduct(10);
     const r = await inventory.reserve({ productId: 'test_product_1', quantity: 1, userId: 'user_g', idempotencyKey: 'key_g' });
 
@@ -214,8 +223,7 @@ async function runTests() {
     assert(okCount === 1, `Expected exactly 1 success, got ${okCount} (${results.join(', ')})`);
   });
 
-  // Test 8: Expiration releases stock
-  await test('Expiration releases expired reservations', async () => {
+  test('Expiration releases expired reservations', async () => {
     setupTestProduct(10);
     const r = await inventory.reserve({ productId: 'test_product_1', quantity: 3, userId: 'user_h', idempotencyKey: 'key_h' });
 
@@ -232,8 +240,7 @@ async function runTests() {
     assert(product.reserved_stock === 0, `After expiration: reserved=0, got ${product.reserved_stock}`);
   });
 
-  // Test 9: MULTI-PROCESS concurrency — proves cross-process safety
-  await test('MULTI-PROCESS: 20 child processes for 10-stock item → 10 succeed, 10 rejected', async () => {
+  test('MULTI-PROCESS: 20 child processes for 10-stock item → 10 succeed, 10 rejected', async () => {
     setupTestProduct(10);
 
     const workerScript = path.join(__dirname, 'concurrent-worker.js');
@@ -260,28 +267,5 @@ async function runTests() {
     assert(failed === 10, `Expected 10 failures, got ${failed}`);
     assert(product.available_stock === 0, `Expected available=0, got ${product.available_stock}`);
     assert(product.reserved_stock === 10, `Expected reserved=10, got ${product.reserved_stock}`);
-    console.log(`    Results: ${success} succeeded, ${failed} rejected (across separate processes)`);
   });
-
-  console.log('\n=== Tests Complete ===\n');
-}
-
-// Cleanup test DB on exit
-process.on('exit', () => {
-  try {
-    const dbPath = process.env.SQLITE_PATH;
-    if (dbPath && fs.existsSync(dbPath)) {
-      // Close connection first
-      const db = getDb();
-      db.close();
-    }
-    [dbPath, dbPath + '-wal', dbPath + '-shm'].forEach(f => {
-      if (f && fs.existsSync(f)) fs.unlinkSync(f);
-    });
-  } catch (e) {
-    // ignore cleanup errors
-  }
 });
-
-// Run tests
-runTests().catch(console.error);

@@ -60,7 +60,7 @@ const upload = multer({
 // Rate limiter for auth endpoints (prevents brute-force)
 const authLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 5,
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 5,
   message: { success: false, message: 'Too many attempts. Please try again in a minute.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -69,7 +69,7 @@ const authLimiter = rateLimit({
 // General API rate limiter — prevents abuse of all endpoints
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 100,
+  max: Number(process.env.API_RATE_LIMIT_MAX) || 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests. Please slow down.' },
@@ -78,7 +78,7 @@ const apiLimiter = rateLimit({
 // Password reset — one-time links, must not be brute-forced or replayed
 const resetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: Number(process.env.RESET_RATE_LIMIT_MAX) || 5,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many password reset attempts. Please try again in 15 minutes.' },
@@ -87,7 +87,7 @@ const resetLimiter = rateLimit({
 // Password change (logged-in users)
 const changeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: Number(process.env.CHANGE_RATE_LIMIT_MAX) || 10,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many password change attempts. Please try again later.' },
@@ -136,8 +136,7 @@ function clearAttempts(email) {
 }
 
 // ===== Password Reset Email Cooldown =====
-const resetEmailCooldowns = new Map(); // email → last reset-email timestamp
-const RESET_EMAIL_COOLDOWN_MS = 60 * 1000; // min 60s between reset emails per email
+const RESET_EMAIL_COOLDOWN_MS = 60 * 1000; // min 60s between reset emails per email (persisted on user doc)
 
 // ===== Password History (blocks reuse of recent passwords) =====
 const PASSWORD_HISTORY_LIMIT = 5;
@@ -149,6 +148,32 @@ async function isPreviouslyUsedPassword(newPassword, user) {
     if (await bcrypt.compare(newPassword, hash)) return true;
   }
   return false;
+}
+
+// ===== OTP Store (persistent — survives restarts/deploys) =====
+// Stored in data/otps.json (persisted to MongoDB via the 'otps' collection),
+// because signup OTPs belong to emails that don't have a user document yet.
+const OTPS_FILE = path.join(__dirname, './data/otps.json');
+
+function getOtpEntry(email, purpose) {
+  const key = String(email).toLowerCase();
+  const entries = readJsonFile(OTPS_FILE).filter(e => e.expiresAt > Date.now());
+  return entries.find(e => e.email === key && e.purpose === purpose) || null;
+}
+
+function setOtpEntry(email, purpose, otp, ttlMs) {
+  const key = String(email).toLowerCase();
+  // Drop this email/purpose's old entry and any expired entries
+  const entries = readJsonFile(OTPS_FILE).filter(e =>
+    !(e.email === key && e.purpose === purpose) && e.expiresAt > Date.now()
+  );
+  entries.push({ _id: `${key}__${purpose}`, email: key, purpose, otp, expiresAt: Date.now() + ttlMs });
+  writeJsonFile(OTPS_FILE, entries);
+}
+
+function deleteOtpEntry(email, purpose) {
+  const key = String(email).toLowerCase();
+  writeJsonFile(OTPS_FILE, readJsonFile(OTPS_FILE).filter(e => !(e.email === key && e.purpose === purpose)));
 }
 
 // Apply a new password: hash + history, invalidate any outstanding reset link,
@@ -166,6 +191,9 @@ async function applyNewPassword(user, users, usersFile, newPassword) {
   user.passwordHistory = history.slice(-PASSWORD_HISTORY_LIMIT);
   user.resetToken = null;
   user.passwordChangedAt = new Date().toISOString();
+  // A successful reset proves account ownership — clear any lockout
+  user.failedAttempts = 0;
+  user.lockedUntil = null;
   await writeJsonFile(usersFile, users);
   clearAttempts(user.email);
 }
@@ -198,7 +226,7 @@ let mongoDb = null;
 let mongoConnectionError = null;
 const dataCache = {};
 global.dataCache = dataCache; // Expose cache for route modules (dashboard.js etc)
-const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'messages', 'conversations', 'reservations'];
+const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'messages', 'conversations', 'reservations', 'otps'];
 
 async function connectMongoDB() {
   const uri = process.env.MONGODB_URI;
@@ -838,13 +866,15 @@ const authMiddleware = async (req, res, next) => {
 
     const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
 
-    // Check if password was changed after this token was issued
+    // Check if password was changed after this token was issued.
+    // 1s grace: JWT iat is truncated to whole seconds, so a token issued right
+    // after a password change would otherwise compare as "older" than the change.
     const users = readJsonFile(path.join(__dirname, './data/users.json'));
     const user = users.find(u => u._id === decoded.userId);
     if (user && user.passwordChangedAt) {
       const tokenIssuedAt = new Date(decoded.iat * 1000);
       const passwordChangedAt = new Date(user.passwordChangedAt);
-      if (tokenIssuedAt < passwordChangedAt) {
+      if (tokenIssuedAt.getTime() < passwordChangedAt.getTime() - 1000) {
         return res.status(401).json({
           success: false,
           message: 'Session expired. Please log in again.'
@@ -959,9 +989,9 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 });
 
 // ===== OTP for Signup =====
-// In-memory OTP store (survives because Render is a persistent process)
-const signupOtpStore = new Map();
-const verifiedEmails = new Set(); // Track emails that just verified — blocks re-send
+// Verified-email flag (5-min re-send guard) — in-memory only; losing it on a
+// restart just means the user can re-request an OTP, which is harmless.
+const verifiedEmails = new Set();
 
 // Email sender — tries Gmail API (HTTPS, port 443) → Resend → nodemailer fallback
 const { google } = require('googleapis');
@@ -1115,10 +1145,9 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email already verified. Please complete registration.' });
     }
 
-    // Generate 6-digit OTP
+    // Generate 6-digit OTP (persisted — survives restarts mid-signup)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
-    signupOtpStore.set(email, { otp, expiresAt });
+    setOtpEntry(email, 'signup', otp, 5 * 60 * 1000);
 
     // Respond immediately — send email in background (don't block the request)
     res.json({ success: true, message: 'OTP sent successfully' });
@@ -1146,13 +1175,13 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and OTP are required' });
     }
 
-    const entry = signupOtpStore.get(email);
+    const entry = getOtpEntry(email, 'signup');
     if (!entry) {
       return res.status(400).json({ success: false, message: 'No OTP requested for this email' });
     }
 
     if (Date.now() > entry.expiresAt) {
-      signupOtpStore.delete(email);
+      deleteOtpEntry(email, 'signup');
       return res.status(400).json({ success: false, message: 'OTP expired' });
     }
 
@@ -1160,7 +1189,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid OTP' });
     }
 
-    signupOtpStore.delete(email);
+    deleteOtpEntry(email, 'signup');
     verifiedEmails.add(email.toLowerCase());
     // Auto-clear the verified flag after 5 minutes (in case registration fails and they need to retry)
     setTimeout(() => verifiedEmails.delete(email.toLowerCase()), 5 * 60 * 1000);
@@ -1172,7 +1201,6 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 });
 
 // ===== Delete Account with OTP =====
-const deleteOtpStore = new Map();
 
 // Send OTP for account deletion
 app.post('/api/auth/send-delete-otp', async (req, res) => {
@@ -1190,8 +1218,7 @@ app.post('/api/auth/send-delete-otp', async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1000;
-    deleteOtpStore.set(email, { otp, expiresAt });
+    setOtpEntry(email, 'delete', otp, 5 * 60 * 1000);
 
     // Respond immediately — send email in background
     res.json({ success: true, message: 'OTP sent successfully' });
@@ -1218,13 +1245,13 @@ app.post('/api/auth/delete-account', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and OTP are required' });
     }
 
-    const entry = deleteOtpStore.get(email);
+    const entry = getOtpEntry(email, 'delete');
     if (!entry) {
       return res.status(400).json({ success: false, message: 'No OTP requested for this email' });
     }
 
     if (Date.now() > entry.expiresAt) {
-      deleteOtpStore.delete(email);
+      deleteOtpEntry(email, 'delete');
       return res.status(400).json({ success: false, message: 'OTP expired' });
     }
 
@@ -1232,7 +1259,7 @@ app.post('/api/auth/delete-account', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid OTP' });
     }
 
-    deleteOtpStore.delete(email);
+    deleteOtpEntry(email, 'delete');
 
     // Delete user
     const usersFile = path.join(__dirname, './data/users.json');
@@ -1294,23 +1321,22 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
       });
     }
 
-    // Per-email cooldown — silently throttled, same generic response (no user enumeration)
-    const emailKey = String(email).toLowerCase();
-    const lastRequest = resetEmailCooldowns.get(emailKey);
-    if (lastRequest && Date.now() - lastRequest < RESET_EMAIL_COOLDOWN_MS) {
-      return res.json({
-        success: true,
-        message: 'If an account exists with that email, you will receive password reset instructions.'
-      });
-    }
-    resetEmailCooldowns.set(emailKey, Date.now());
-
     // Read users from file
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
 
     // Find user
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+    // Persistent per-email cooldown (survives restarts) — silently throttled,
+    // same generic response (no user enumeration)
+    if (user && user.lastResetEmailAt && Date.now() - new Date(user.lastResetEmailAt).getTime() < RESET_EMAIL_COOLDOWN_MS) {
+      return res.json({
+        success: true,
+        message: 'If an account exists with that email, you will receive password reset instructions.'
+      });
+    }
+    if (user) user.lastResetEmailAt = new Date().toISOString();
     
     // Generate reset token whether user exists or not (for security)
     const resetToken = jwt.sign(
@@ -1509,7 +1535,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     const email = sanitize(req.body.email || '').toLowerCase();
     const password = req.body.password || '';
 
-    // Check account lockout
+    // In-memory throttle (covers unknown emails, which have no user doc to persist to)
     const lockout = checkLockout(email);
     if (lockout.locked) {
       console.warn(`[SECURITY] Login blocked for locked account: ${email}`);
@@ -1533,9 +1559,33 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       });
     }
 
+    // Persistent lockout — state lives on the user doc, so it survives restarts/deploys
+    if (user.lockedUntil) {
+      if (Date.now() < new Date(user.lockedUntil).getTime()) {
+        console.warn(`[SECURITY] Login blocked for locked account: ${email}`);
+        return res.status(401).json({
+          success: false,
+          message: 'Incorrect email or password'
+        });
+      }
+      // Lockout expired — reset the failure counter
+      user.failedAttempts = 0;
+      user.lockedUntil = null;
+      await writeJsonFile(usersFile, users);
+    }
+
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      recordFailedAttempt(email);
+      // Persist the failure count on the user doc
+      user.failedAttempts = (user.failedAttempts || 0) + 1;
+      user.lastFailedAt = new Date().toISOString();
+      if (user.failedAttempts >= 5) {
+        // Progressive lockout: 5th = 15min, 6th = 30min, etc.
+        const lockoutMultiplier = Math.max(1, user.failedAttempts - 4);
+        user.lockedUntil = new Date(Date.now() + (15 * 60 * 1000 * lockoutMultiplier)).toISOString();
+        console.warn(`[SECURITY] Account locked: ${email} after ${user.failedAttempts} failed attempts. Locked for ${15 * lockoutMultiplier} min.`);
+      }
+      await writeJsonFile(usersFile, users);
       return res.status(401).json({
         success: false,
         message: 'Incorrect email or password'
@@ -1546,6 +1596,11 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 
     // Clear failed attempts on successful login
     clearAttempts(email);
+    if (user.failedAttempts || user.lockedUntil) {
+      user.failedAttempts = 0;
+      user.lockedUntil = null;
+      await writeJsonFile(usersFile, users);
+    }
 
     res.json({
       success: true,
@@ -3272,3 +3327,6 @@ Backend Server Running
 };
 
 startServer();
+
+// Export for integration tests (supertest) — does not affect production startup
+module.exports = app;

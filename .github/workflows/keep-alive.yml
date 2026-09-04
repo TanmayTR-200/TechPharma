@@ -1,11 +1,11 @@
 name: Keep Render Alive
 on:
   schedule:
-    # Run at off-peak minutes (3,13,23,33,43,53) to avoid GitHub Actions delays.
+    # Every 5 minutes (off the :00/:05 marks to avoid GitHub Actions delays).
     # Note: GitHub Actions cron can still be delayed 5-15 min during high load.
     # For production reliability, also use an external monitor like UptimeRobot
     # (free, pings every 5 min with no delay).
-    - cron: "3,13,23,33,43,53 * * * *"
+    - cron: "4,9,14,19,24,29,34,39,44,49,54,59 * * * *"
 jobs:
   ping:
     runs-on: ubuntu-latest
