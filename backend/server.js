@@ -1123,29 +1123,6 @@ async function sendEmail(to, subject, text, html) {
   throw new Error(`All email providers failed: ${errors.join('; ')}`);
 }
 
-// Check if email is already registered
-app.post('/api/auth/check-email', async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ success: false, message: 'Email is required' });
-    }
-
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const exists = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-    if (exists) {
-      return res.status(400).json({ success: false, message: 'Unable to process this request.' });
-    }
-
-    res.json({ success: true, message: 'Email available', exists: false });
-  } catch (error) {
-    console.error('Check email error:', error);
-    res.status(500).json({ success: false, message: 'Failed to check email' });
-  }
-});
-
 // Send OTP for signup verification
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
@@ -1154,11 +1131,13 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    // Check if email is already registered
+    // Check if email is already registered — respond identically either way
+    // (no account-existence oracle); registered emails silently get no OTP
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
     if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      return res.status(400).json({ success: false, message: 'This email is already registered. Please log in.' });
+      console.log('[OTP] Suppressed send for already-registered email');
+      return res.json({ success: true, message: 'OTP sent successfully' });
     }
 
     // Block re-send if OTP was just verified for this email (prevents duplicate OTP during signup)
