@@ -3,7 +3,7 @@ export interface User {
   id?: string;
   name: string;
   email: string;
-  role: 'admin' | 'buyer' | 'supplier';
+  role: 'admin' | 'user';
   phone?: string;
   state?: string;
   address?: string;
