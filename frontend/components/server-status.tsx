@@ -9,11 +9,14 @@ export function ServerStatus() {
   const [status, setStatus] = useState<Status>('disconnected');
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const inFlightRef = useRef(false); // prevent overlapping checks
 
   useEffect(() => {
     let cancelled = false;
 
     const checkConnection = async () => {
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
       try {
         const ok = await checkServerStatus();
         if (cancelled) return;
@@ -38,23 +41,32 @@ export function ServerStatus() {
         } else {
           setStatus('disconnected');
         }
+      } finally {
+        inFlightRef.current = false;
       }
     };
 
     checkConnection();
 
-    // Periodic check every 60s once connected
+    // Periodic check every 30s — REGARDLESS of current status, so the
+    // indicator recovers on its own once the server is back up.
     const checkInterval = setInterval(() => {
-      if (status === 'connected') {
-        retryCountRef.current = 0;
-        checkConnection();
-      }
-    }, 60000);
+      retryCountRef.current = 0;
+      checkConnection();
+    }, 30000);
+
+    // Re-check when the tab regains focus (cold starts happen in the background)
+    const onFocus = () => {
+      retryCountRef.current = 0;
+      checkConnection();
+    };
+    window.addEventListener('focus', onFocus);
 
     return () => {
       cancelled = true;
       if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-      if (checkInterval) clearInterval(checkInterval);
+      clearInterval(checkInterval);
+      window.removeEventListener('focus', onFocus);
     };
   }, []);
 
