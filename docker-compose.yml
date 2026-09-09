@@ -18,7 +18,7 @@ services:
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
       - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
       - EMAIL_USER=${EMAIL_USER:-}
-      - EMAIL_PASS=${EMAIL_PASS:-}
+      - EMAIL_APP_PASSWORD=${EMAIL_APP_PASSWORD:-${EMAIL_PASS:-}}
       - FRONTEND_URL=http://localhost:3000
     volumes:
       - backend-data:/app/data

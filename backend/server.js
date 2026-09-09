@@ -1129,7 +1129,7 @@ async function sendEmail(to, subject, text, html) {
       port: 587,
       secure: false,
       requireTLS: true,
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_APP_PASSWORD }
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS }
     });
     await transporter.sendMail({ from: process.env.EMAIL_USER, to, subject, text, html });
     console.log('[Email] Sent via nodemailer SMTP to', to);
