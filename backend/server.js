@@ -1096,7 +1096,46 @@ async function sendEmail(to, subject, text, html) {
     }
   }
 
-  // 2. Try Resend (HTTPS API, works on Render)
+  // 2. Try Brevo (HTTPS API on port 443 — works on Render free tier, no SMTP port block;
+  //    free tier needs only a verified sender email, no domain required)
+  if (process.env.BREVO_API_KEY) {
+    try {
+      // Sender: use EMAIL_FROM if set (may be "Name <email>"), else EMAIL_USER
+      const fromRaw = process.env.EMAIL_FROM || process.env.EMAIL_USER || '';
+      const fromMatch = fromRaw.match(/^(.*?)\s*<([^>]+)>$/);
+      const sender = fromMatch
+        ? { name: (fromMatch[1].trim() || 'TechPharma'), email: fromMatch[2] }
+        : { name: 'TechPharma', email: fromRaw };
+      const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          sender,
+          to: [{ email: to }],
+          subject,
+          textContent: text,
+          htmlContent: html
+        })
+      });
+      const brevoData = await brevoRes.json().catch(() => ({}));
+      if (!brevoRes.ok || !brevoData.messageId) {
+        console.error('[Email] Brevo API error:', brevoRes.status, brevoData.message || JSON.stringify(brevoData));
+        errors.push(`Brevo: ${brevoRes.status} ${brevoData.message || 'unknown error'}`);
+      } else {
+        console.log('[Email] Sent via Brevo to', to, 'ID:', brevoData.messageId);
+        return;
+      }
+    } catch (err) {
+      console.error('[Email] Brevo failed:', err.message);
+      errors.push(`Brevo: ${err.message}`);
+    }
+  }
+
+  // 3. Try Resend (HTTPS API, works on Render)
   if (process.env.RESEND_API_KEY) {
     try {
       const resend = getResend();
@@ -1121,7 +1160,7 @@ async function sendEmail(to, subject, text, html) {
     }
   }
 
-  // 3. Fallback: nodemailer SMTP (works locally only, blocked on Render free tier)
+  // 4. Fallback: nodemailer SMTP (works locally only, blocked on Render free tier)
   try {
     const nodemailer = require('nodemailer');
     const transporter = nodemailer.createTransport({
