@@ -103,7 +103,11 @@ router.get('/:userId', authenticate, async (req, res) => {
     });
     writeJsonFile(getMessagesFilePath(), updated);
 
-    res.json({ success: true, messages: thread });
+    // Include the conversation partner's name so the chat UI can show
+    // it without calling the restricted GET /api/users/:id endpoint
+    const partner = users.find(u => u._id === userId);
+
+    res.json({ success: true, messages: thread, partner: partner ? { _id: partner._id, name: partner.name } : null });
   } catch (error) {
     console.error('Error fetching messages:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch messages' });

@@ -85,11 +85,14 @@ export default function ChatPage() {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        const response = await fetcher(API_ENDPOINTS.users.get(params.id as string), {
+        // GET /api/users/:id is restricted to self-or-admin; instead, the
+        // messages thread response carries the partner's name.
+        const response = await fetcher(API_ENDPOINTS.messages.list(params.id as string), {
           headers: { 'Authorization': `Bearer ${token}` },
+          cache: 'no-store' as any,
         });
-        if (response.user && response.user.name) {
-          setSeller({ name: response.user.name });
+        if (response.partner && response.partner.name) {
+          setSeller({ name: response.partner.name });
         } else {
           setSeller({ name: 'Unknown Seller' });
         }
