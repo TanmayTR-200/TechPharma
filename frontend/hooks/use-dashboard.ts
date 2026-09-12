@@ -31,6 +31,19 @@ interface Order {
 interface DashboardData {
   stats: DashboardStats;
   orders: Order[];
+  activity: Activity[];
+}
+
+interface Activity {
+  id: string;
+  type: 'purchase' | 'sale';
+  title: string;
+  product: string;
+  itemCount: number;
+  amount: number;
+  status: string;
+  counterparty?: string;
+  createdAt: string;
 }
 
 const dashboardFetcher: Fetcher<DashboardData, string> = async (url) => {
@@ -80,9 +93,11 @@ const dashboardFetcher: Fetcher<DashboardData, string> = async (url) => {
       data?: {
         stats?: DashboardStats;
         orders?: Order[];
+        activity?: Activity[];
       };
       stats?: DashboardStats;
       orders?: Order[];
+      activity?: Activity[];
     }
 
     const isValidResponse = (data: unknown): data is ApiResponse => {
@@ -103,6 +118,9 @@ const dashboardFetcher: Fetcher<DashboardData, string> = async (url) => {
       },
       orders: (data?.data?.orders ?? data?.orders ?? []).filter((order): order is Order => {
         return Boolean(order && typeof order === 'object');
+      }),
+      activity: (data?.data?.activity ?? data?.activity ?? []).filter((a): a is Activity => {
+        return Boolean(a && typeof a === 'object');
       })
     };
 

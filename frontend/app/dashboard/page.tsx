@@ -4,7 +4,6 @@ import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useDashboard } from "@/hooks/use-dashboard"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { AddProductDialog } from "@/components/add-product-dialog"
 import { EditProfileDialog } from "@/components/edit-profile-dialog"
@@ -14,7 +13,7 @@ import { splitName } from "@/types/user"
 import { SkeletonLoader } from "@/components/skeleton-loader"
 import DashboardLayout from '@/components/dashboard-layout'
 import { formatDateShort } from '@/lib/formatDate'
-import { Package, Eye, ShoppingCart, IndianRupee, ArrowUpRight } from "lucide-react"
+import { Package, Eye, ShoppingCart, IndianRupee, TrendingUp } from "lucide-react"
 import { motion } from "framer-motion"
 
 function StatSkeleton() {
@@ -32,7 +31,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const { data, error, isLoading, mutate } = useDashboard()
   const stats = data?.stats || { totalProducts: 0, productViews: 0, recentOrders: 0, revenue: 0 }
-  const orders = (data?.orders || []).slice(0, 5)
+  const activity = (data?.activity || []).slice(0, 6)
 
   useEffect(() => { if (!user) router.push('/auth?mode=login') }, [user, router])
 
@@ -76,7 +75,7 @@ export default function DashboardPage() {
   const tiles = [
     { icon: Package, label: 'Products', value: stats.totalProducts, variant: 'bg-foreground text-background', text: 'text-background' },
     { icon: Eye, label: 'Views', value: stats.productViews, variant: 'bg-foreground text-background', text: 'text-background' },
-    { icon: ShoppingCart, label: 'Orders', value: orders.length, variant: 'bg-foreground text-background', text: 'text-background' },
+    { icon: ShoppingCart, label: 'Orders', value: stats.recentOrders, variant: 'bg-foreground text-background', text: 'text-background' },
     { icon: IndianRupee, label: 'Revenue', value: stats.revenue > 0 ? '\u20B9' + stats.revenue.toLocaleString('en-IN') : '\u20B90', variant: 'bg-foreground text-background', text: 'text-background' },
   ]
 
@@ -123,24 +122,33 @@ export default function DashboardPage() {
               </div>
             </motion.div>
 
-            {orders.length > 0 && (
+            {activity.length > 0 && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-medium text-foreground">Recent orders</h3>
-                  <Button variant="ghost" size="sm" onClick={() => router.push('/orders')} className="text-primary text-xs h-7">View all <ArrowUpRight className="ml-1 h-3 w-3" /></Button>
+                  <h3 className="text-sm font-medium text-foreground">Recent notifications</h3>
                 </div>
                 <div className="divide-y divide-border">
-                  {orders.map((o) => (
-                    <div key={o._id} className="flex items-center justify-between py-3 hover:bg-secondary/30 rounded-md px-2 -mx-2 transition-colors">
+                  {activity.map((n) => (
+                    <button
+                      key={n.id + '-' + n.type}
+                      onClick={() => router.push(n.type === 'sale' ? '/sales' : '/orders')}
+                      className="w-full text-left flex items-center justify-between py-3 hover:bg-secondary/30 rounded-md px-2 -mx-2 transition-colors"
+                    >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary flex-shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                        <div className={'flex h-8 w-8 items-center justify-center rounded-md flex-shrink-0 ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-sky-500/15 text-sky-600')}>
+                          {n.type === 'sale' ? <TrendingUp className="h-3.5 w-3.5" /> : <ShoppingCart className="h-3.5 w-3.5" />}
+                        </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2"><span className="text-sm font-medium text-foreground truncate">#{o._id}</span><Badge variant="secondary" className="text-xs">{o.status}</Badge></div>
-                          <p className="text-xs text-muted-foreground truncate">{o.items?.[0]?.product?.name}</p>
+                          <span className={'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mb-1 ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-sky-500/15 text-sky-600')}>{n.type === 'sale' ? 'New sale' : 'Order placed'}</span>
+                          <p className="text-sm font-medium text-foreground truncate">{n.product}{n.itemCount > 1 ? ' (+' + (n.itemCount - 1) + ' more)' : ''}</p>
+                          <p className="text-xs text-muted-foreground truncate">{n.type === 'sale' && n.counterparty ? 'From ' + n.counterparty : 'Your purchase'}</p>
                         </div>
                       </div>
-                      <div className="text-right flex-shrink-0"><p className="text-sm font-medium text-foreground">{'\u20B9' + o.totalAmount}</p><p className="text-xs text-muted-foreground">{formatDateShort(o.createdAt)}</p></div>
-                    </div>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <p className="text-sm font-medium text-foreground">{'\u20B9' + Number(n.amount || 0).toLocaleString('en-IN')}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateShort(n.createdAt)}</p>
+                      </div>
+                    </button>
                   ))}
                 </div>
               </motion.div>
