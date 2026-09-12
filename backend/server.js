@@ -310,6 +310,23 @@ async function connectMongoDB() {
       }
     }
     console.log('Data loaded into memory cache');
+
+    // After the Mongo merge, make sure every cached product exists in the SQLite
+    // inventory store — otherwise reserve/checkout 404s for products that were
+    // never present in products.json (e.g. MongoDB-only products on Render).
+    try {
+      const cachedProducts = dataCache['products'] || [];
+      let synced = 0;
+      for (const p of cachedProducts) {
+        const stock = p.total_stock !== undefined ? p.total_stock : (p.stock || 0);
+        inventory.upsertProduct(p._id, stock);
+        synced++;
+      }
+      console.log(`[inventory] Synced ${synced} products from cache to SQLite inventory`);
+    } catch (syncErr) {
+      console.error('[inventory] Product sync to SQLite failed:', syncErr.message);
+    }
+
     return true;
   } catch (err) {
     mongoConnectionError = err.message;
