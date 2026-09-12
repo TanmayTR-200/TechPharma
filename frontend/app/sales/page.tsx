@@ -68,7 +68,7 @@ export default function SalesPage() {
       const dash = await fetcher(API_ENDPOINTS.dashboard.base, {
         headers: { 'Authorization': `Bearer ${token}` },
       })
-      setSellerOrders(dash?.data?.orders || [])
+      setSellerOrders(dash?.data?.sellerOrders || dash?.data?.orders || [])
     } catch (err) {
       // Silent fail
     } finally {

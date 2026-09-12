@@ -2403,7 +2403,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     const userOrders = orders.filter(o => 
       (o.items || []).some(item => String(item.sellerId || '') === String(userId))
     );
-    // Buyer's orders = orders they placed
+    // Buyer's orders = orders they placed (shown under "Recent orders")
     const buyerOrders = orders.filter(o => String(o.userId) === String(userId));
 
     let totalRevenue = 0;
@@ -2415,6 +2415,30 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
       });
     });
 
+    const byNewest = (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+
+    // Sellers see the orders they received (used by the Sales page)
+    const sellerOrderView = (order) => ({
+      _id: order._id || order.id,
+      user: order.buyerName || order.userName || 'Anonymous',
+      items: (order.items || []).filter(item => String(item.sellerId || '') === String(userId)),
+      totalAmount: (order.items || []).filter(item => String(item.sellerId || '') === String(userId)).reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0),
+      status: order.status || 'pending',
+      createdAt: order.createdAt || new Date().toISOString(),
+      paymentDetails: order.paymentDetails || { status: 'pending', method: 'unknown' }
+    });
+
+    // Users see the orders they placed (shown under "Recent orders")
+    const buyerOrderView = (order) => ({
+      _id: order._id || order.id,
+      user: order.buyerName || order.userName || 'Anonymous',
+      items: order.items || [],
+      totalAmount: order.totalAmount || 0,
+      status: order.status || 'pending',
+      createdAt: order.createdAt || new Date().toISOString(),
+      paymentDetails: order.paymentDetails || { status: 'pending', method: 'unknown' }
+    });
+
     res.json({
       success: true,
       data: {
@@ -2424,15 +2448,8 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
           recentOrders: userOrders.length,
           revenue: totalRevenue
         },
-        orders: userOrders.slice(0, 10).map(order => ({
-          _id: order._id || order.id,
-          user: order.buyerName || order.userName || 'Anonymous',
-          items: (order.items || []).filter(item => String(item.sellerId || '') === String(userId)),
-          totalAmount: (order.items || []).filter(item => String(item.sellerId || '') === String(userId)).reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0),
-          status: order.status || 'pending',
-          createdAt: order.createdAt || new Date().toISOString(),
-          paymentDetails: order.paymentDetails || { status: 'pending', method: 'unknown' }
-        }))
+        orders: buyerOrders.slice().sort(byNewest).slice(0, 10).map(buyerOrderView),
+        sellerOrders: userOrders.slice().sort(byNewest).slice(0, 10).map(sellerOrderView)
       }
     });
   } catch (error) {
