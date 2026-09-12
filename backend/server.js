@@ -2406,6 +2406,40 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     // Buyer's orders = orders they placed (shown under "Recent orders")
     const buyerOrders = orders.filter(o => String(o.userId) === String(userId));
 
+    // Admin detection: role from users.json, with email fallback for safety
+    const allUsers = readJsonFile(path.join(__dirname, './data/users.json'));
+    const currentUser = allUsers.find(u => String(u._id) === String(userId));
+    const isAdmin = !!(currentUser && (currentUser.role === 'admin' || String(currentUser.email || '').toLowerCase() === 'techpharma10@gmail.com'));
+
+    // Admin-only view data (platform-wide overview)
+    let adminData = null;
+    if (isAdmin) {
+      const platformRevenue = orders.reduce((sum, o) => {
+        (o.items || []).forEach(item => { sum += (item.price || 0) * (item.quantity || 1); });
+        return sum;
+      }, 0);
+
+      adminData = {
+        stats: {
+          totalUsers: allUsers.length,
+          totalProducts: products.length,
+          totalOrders: orders.length,
+          platformRevenue
+        },
+        recentUsers: allUsers
+          .map(u => ({
+            _id: u._id,
+            name: u.name || 'User',
+            email: u.email || '',
+            role: u.role || 'user',
+            company: (u.company && u.company.name) || '',
+            createdAt: u.createdAt || new Date().toISOString()
+          }))
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+          .slice(0, 8)
+      };
+    }
+
     let totalRevenue = 0;
     userOrders.forEach(order => {
       (order.items || []).forEach(item => {
@@ -2477,6 +2511,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
           revenue: totalRevenue
         },
         activity,
+        admin: adminData,
         orders: buyerOrders.slice().sort(byNewest).slice(0, 10).map(buyerOrderView),
         sellerOrders: userOrders.slice().sort(byNewest).slice(0, 10).map(sellerOrderView)
       }

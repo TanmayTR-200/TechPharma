@@ -32,6 +32,28 @@ interface DashboardData {
   stats: DashboardStats;
   orders: Order[];
   activity: Activity[];
+  admin?: AdminData | null;
+}
+
+interface AdminStats {
+  totalUsers: number;
+  totalProducts: number;
+  totalOrders: number;
+  platformRevenue: number;
+}
+
+interface UserSummary {
+  _id: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'user';
+  company: string;
+  createdAt: string;
+}
+
+interface AdminData {
+  stats?: AdminStats;
+  recentUsers?: UserSummary[];
 }
 
 interface Activity {
@@ -94,10 +116,12 @@ const dashboardFetcher: Fetcher<DashboardData, string> = async (url) => {
         stats?: DashboardStats;
         orders?: Order[];
         activity?: Activity[];
+        admin?: AdminData | null;
       };
       stats?: DashboardStats;
       orders?: Order[];
       activity?: Activity[];
+      admin?: AdminData | null;
     }
 
     const isValidResponse = (data: unknown): data is ApiResponse => {
@@ -121,7 +145,8 @@ const dashboardFetcher: Fetcher<DashboardData, string> = async (url) => {
       }),
       activity: (data?.data?.activity ?? data?.activity ?? []).filter((a): a is Activity => {
         return Boolean(a && typeof a === 'object');
-      })
+      }),
+      admin: data?.data?.admin ?? data?.admin ?? null
     };
 
     // Get cache info from headers

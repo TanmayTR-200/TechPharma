@@ -13,7 +13,7 @@ import { splitName } from "@/types/user"
 import { SkeletonLoader } from "@/components/skeleton-loader"
 import DashboardLayout from '@/components/dashboard-layout'
 import { formatDateShort } from '@/lib/formatDate'
-import { Package, Eye, ShoppingCart, IndianRupee, TrendingUp } from "lucide-react"
+import { Package, Eye, ShoppingCart, IndianRupee, TrendingUp, Users, ShieldCheck } from "lucide-react"
 import { motion } from "framer-motion"
 
 function StatSkeleton() {
@@ -32,6 +32,10 @@ export default function DashboardPage() {
   const { data, error, isLoading, mutate } = useDashboard()
   const stats = data?.stats || { totalProducts: 0, productViews: 0, recentOrders: 0, revenue: 0 }
   const activity = (data?.activity || []).slice(0, 6)
+
+  const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
+  const adminStats = data?.admin?.stats
+  const recentUsers = data?.admin?.recentUsers || []
 
   useEffect(() => { if (!user) router.push('/auth?mode=login') }, [user, router])
 
@@ -72,19 +76,28 @@ export default function DashboardPage() {
     )
   }
 
-  const tiles = [
-    { icon: Package, label: 'Products', value: stats.totalProducts, variant: 'bg-foreground text-background', text: 'text-background' },
-    { icon: Eye, label: 'Views', value: stats.productViews, variant: 'bg-foreground text-background', text: 'text-background' },
-    { icon: ShoppingCart, label: 'Orders', value: stats.recentOrders, variant: 'bg-foreground text-background', text: 'text-background' },
-    { icon: IndianRupee, label: 'Revenue', value: stats.revenue > 0 ? '\u20B9' + stats.revenue.toLocaleString('en-IN') : '\u20B90', variant: 'bg-foreground text-background', text: 'text-background' },
-  ]
+  const tiles = isAdmin && adminStats
+    ? [
+        { icon: Users, label: 'Users', value: adminStats.totalUsers, variant: 'bg-foreground text-background', text: 'text-background' },
+        { icon: Package, label: 'Products', value: adminStats.totalProducts, variant: 'bg-foreground text-background', text: 'text-background' },
+        { icon: ShoppingCart, label: 'Orders', value: adminStats.totalOrders, variant: 'bg-foreground text-background', text: 'text-background' },
+        { icon: IndianRupee, label: 'Revenue', value: '\u20B9' + adminStats.platformRevenue.toLocaleString('en-IN'), variant: 'bg-foreground text-background', text: 'text-background' },
+      ]
+    : [
+        { icon: Package, label: 'Products', value: stats.totalProducts, variant: 'bg-foreground text-background', text: 'text-background' },
+        { icon: Eye, label: 'Views', value: stats.productViews, variant: 'bg-foreground text-background', text: 'text-background' },
+        { icon: ShoppingCart, label: 'Orders', value: stats.recentOrders, variant: 'bg-foreground text-background', text: 'text-background' },
+        { icon: IndianRupee, label: 'Revenue', value: stats.revenue > 0 ? '\u20B9' + stats.revenue.toLocaleString('en-IN') : '\u20B90', variant: 'bg-foreground text-background', text: 'text-background' },
+      ]
 
   return (
     <DashboardLayout>
       <div className="w-full space-y-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
-          <h1 className="font-display text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Welcome back, {user?.name?.split(' ')[0] || 'User'}</p>
+          <h1 className="font-display text-2xl font-bold text-foreground flex items-center gap-3">Dashboard
+            {isAdmin && <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium"><ShieldCheck className="h-3 w-3" />Admin</span>}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Welcome back, {isAdmin ? 'Admin' : user?.name?.split(' ')[0] || 'User'}</p>
         </motion.div>
 
         {/* Stat cards */}
@@ -153,6 +166,31 @@ export default function DashboardPage() {
                 </div>
               </motion.div>
             )}
+
+            {isAdmin && recentUsers.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="border border-border p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-foreground">Recent users</h3>
+                  <span className="text-xs text-muted-foreground">Platform</span>
+                </div>
+                <div className="divide-y divide-border">
+                  {recentUsers.map((u) => (
+                    <div key={u._id} className="flex items-center justify-between py-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar className="h-8 w-8"><AvatarFallback className="bg-secondary text-muted-foreground text-xs">{(() => { const { firstName, lastName } = splitName(u.name); return (firstName[0] || '') + (lastName[0] || '') })()}</AvatarFallback></Avatar>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{u.name}{u.company ? <span className="text-xs text-muted-foreground"> · {u.company}</span> : null}</p>
+                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <span className={'inline-flex items-center text-xs px-2 py-0.5 rounded-full ' + (u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>{u.role === 'admin' ? 'Admin' : 'User'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
 
           {/* Right */}
@@ -161,7 +199,7 @@ export default function DashboardPage() {
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Profile</p>
               <div className="flex items-center gap-3 mb-4">
                 <Avatar className="h-9 w-9"><AvatarFallback className="bg-primary/10 text-primary font-semibold text-sm">{user ? (() => { const { firstName, lastName } = splitName(user.name); return (firstName[0] + (lastName[0] || '')).toUpperCase() })() : 'U'}</AvatarFallback></Avatar>
-                <div className="min-w-0"><p className="text-sm font-medium text-foreground truncate">{user?.name || 'User'}</p><p className="text-xs text-muted-foreground truncate">{user?.company?.name || 'Company not set'}</p></div>
+                <div className="min-w-0"><p className="text-sm font-medium text-foreground truncate">{user?.name || 'User'}{isAdmin && <span className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium"><ShieldCheck className="h-2.5 w-2.5" />Admin</span>}</p><p className="text-xs text-muted-foreground truncate">{user?.company?.name || 'Company not set'}</p></div>
               </div>
               <Button asChild variant="outline" size="sm" className="w-full rounded-md text-xs"><a href="/settings">Manage profile</a></Button>
             </motion.div>
