@@ -11,6 +11,8 @@ interface Order {
   _id: string
   orderNumber?: string
   trackingId?: string
+  buyerName?: string
+  buyerEmail?: string
   items: { product?: { _id: string; name: string }; name?: string; quantity: number; price: number; supplierName?: string; sellerId?: string }[]
   total: number
   totalAmount?: number
@@ -36,6 +38,7 @@ const statusConfig: Record<string, { color: string; icon: any }> = {
 
 export default function OrdersPage() {
   const { user } = useAuth()
+  const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -206,7 +209,7 @@ export default function OrdersPage() {
       <div className="w-full space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Orders</h1>
-          <p className="mt-1 text-muted-foreground">Track and manage all your orders</p>
+          <p className="mt-1 text-muted-foreground">{isAdmin ? 'Track and manage all transactions on the platform' : 'Track and manage all your orders'}</p>
         </div>
 
         {loading ? (
@@ -219,7 +222,7 @@ export default function OrdersPage() {
           <div className="rounded-lg border border-dashed border-border bg-card p-10 text-center mx-auto" style={{ maxWidth: 512 }}>
             <ShoppingBag className="mx-auto h-10 w-10 text-muted-foreground/40" />
             <h3 className="mt-4 text-base font-medium text-foreground">No orders yet</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Orders will appear here once you start selling.</p>
+            <p className="mt-1 text-sm text-muted-foreground">{isAdmin ? 'No transactions have taken place on the platform yet.' : 'Orders will appear here once you start selling.'}</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -227,6 +230,7 @@ export default function OrdersPage() {
               <thead className="border-b border-border bg-secondary/50">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Order</th>
+                  {isAdmin && <th className="px-4 py-3 text-left font-medium text-muted-foreground">Buyer</th>}
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Items</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Total</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
@@ -244,6 +248,12 @@ export default function OrdersPage() {
                       <td className="px-4 py-3 font-medium text-foreground">
                         #{order.orderNumber || order._id.slice(-6)}
                       </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {order.buyerName || '-'}
+                          {order.buyerEmail && <span className="block text-xs text-muted-foreground/70">{order.buyerEmail}</span>}
+                        </td>
+                      )}
                       <td className="px-4 py-3 text-muted-foreground">
                         {order.items?.length || 0} item(s)
                       </td>

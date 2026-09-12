@@ -407,6 +407,14 @@ function readJsonFile(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+// Admin identity: role 'admin' in users.json, with exact-email fallback.
+// Mirrors the gate used by /api/sold-products/:sellerId.
+function isAdminUserId(userId) {
+  const users = readJsonFile(path.join(__dirname, './data/users.json'));
+  const user = users.find(u => String(u._id) === String(userId));
+  return !!(user && (user.role === 'admin' || String(user.email || '').toLowerCase() === 'techpharma10@gmail.com'));
+}
+
 // Helper to write data (update cache immediately + persist to MongoDB in background)
 function writeJsonFile(filePath, data) {
   const colName = getCollectionName(filePath);
@@ -2408,8 +2416,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 
     // Admin detection: role from users.json, with email fallback for safety
     const allUsers = readJsonFile(path.join(__dirname, './data/users.json'));
-    const currentUser = allUsers.find(u => String(u._id) === String(userId));
-    const isAdmin = !!(currentUser && (currentUser.role === 'admin' || String(currentUser.email || '').toLowerCase() === 'techpharma10@gmail.com'));
+    const isAdmin = isAdminUserId(userId);
 
     // Admin-only view data (platform-wide overview)
     let adminData = null;
@@ -2436,7 +2443,20 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
             createdAt: u.createdAt || new Date().toISOString()
           }))
           .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .slice(0, 8)
+          .slice(0, 8),
+        recentTransactions: orders
+          .slice()
+          .sort(byNewest)
+          .slice(0, 10)
+          .map(o => ({
+            id: o._id || o.id,
+            product: (o.items || [])[0]?.product?.name || 'Product',
+            itemCount: (o.items || []).length,
+            buyer: o.buyerName || 'Buyer',
+            amount: o.totalAmount || 0,
+            status: o.status || 'pending',
+            createdAt: o.createdAt || new Date().toISOString()
+          }))
       };
     }
 
@@ -2464,6 +2484,17 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 
     // Users see the orders they placed (shown under "Recent orders")
     const buyerOrderView = (order) => ({
+      _id: order._id || order.id,
+      user: order.buyerName || order.userName || 'Anonymous',
+      items: order.items || [],
+      totalAmount: order.totalAmount || 0,
+      status: order.status || 'pending',
+      createdAt: order.createdAt || new Date().toISOString(),
+      paymentDetails: order.paymentDetails || { status: 'pending', method: 'unknown' }
+    });
+
+    // Platform-wide view of any order (admin): keeps every item + buyer
+    const platformOrderView = (order) => ({
       _id: order._id || order.id,
       user: order.buyerName || order.userName || 'Anonymous',
       items: order.items || [],
@@ -2513,7 +2544,9 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
         activity,
         admin: adminData,
         orders: buyerOrders.slice().sort(byNewest).slice(0, 10).map(buyerOrderView),
-        sellerOrders: userOrders.slice().sort(byNewest).slice(0, 10).map(sellerOrderView)
+        sellerOrders: isAdmin
+          ? orders.slice().sort(byNewest).slice(0, 10).map(platformOrderView)
+          : userOrders.slice().sort(byNewest).slice(0, 10).map(sellerOrderView)
       }
     });
   } catch (error) {
@@ -2525,13 +2558,17 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 app.get('/api/dashboard/analytics', authMiddleware, async (req, res) => {
   try {
     const userId = String(req.user._id || req.user.id);
+    const isAdmin = isAdminUserId(req.user._id);
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
     const productMap = new Map(products.map(p => [p._id, p]));
 
-    const userProducts = products.filter(p =>
-      String(p.userId || p.supplierId || '') === userId && (!p.status || p.status === 'active')
-    );
+    // Admins see platform-wide analytics; sellers see their own
+    const userProducts = isAdmin
+      ? products
+      : products.filter(p =>
+          String(p.userId || p.supplierId || '') === userId && (!p.status || p.status === 'active')
+        );
 
     let totalSales = 0;
     let sellerOrders = 0;
@@ -2542,7 +2579,7 @@ app.get('/api/dashboard/analytics', authMiddleware, async (req, res) => {
       (order.items || []).forEach(item => {
         const product = productMap.get(item.product?._id || item.productId);
         const sellerId = String(item.sellerId || product?.userId || product?.supplierId || '');
-        if (sellerId === userId) {
+        if (isAdmin || sellerId === userId) {
           const amount = (item.price > 0 ? item.price : (product?.price || 0)) * (item.quantity || 1);
           const name = item.product?.name && item.product?.name !== 'Product' ? item.product.name : (product?.name || 'Product');
           totalSales += amount;
@@ -2704,8 +2741,10 @@ app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    // Orders page = buyer's purchases only
-    const userOrders = orders.filter(o => String(o.userId) === String(req.user._id));
+    // Orders page = buyer's purchases only; admins see every order on the platform
+    const userOrders = isAdminUserId(req.user._id)
+      ? orders
+      : orders.filter(o => String(o.userId) === String(req.user._id));
 
     // Resolve product details for each order item
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
@@ -2752,6 +2791,8 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
       _id: o._id,
       orderNumber: o.orderNumber || o._id.slice(-6),
       trackingId: o.trackingId || null,
+      buyerName: o.buyerName || null,
+      buyerEmail: o.buyerEmail || null,
       items: o.items.map(item => ({
         product: item.product,
         name: item.product?.name,
@@ -2953,7 +2994,7 @@ app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
 });
 
 // Helper: build sold-products aggregation for a given sellerId
-function buildSoldProducts(orders, users, products, sellerId) {
+function buildSoldProducts(orders, users, products, sellerId, includeAll = false) {
   const userMap = new Map(users.map(u => [u._id, u]));
   const productMap = new Map(products.map(p => [p._id, p]));
   const sales = [];
@@ -2969,7 +3010,7 @@ function buildSoldProducts(orders, users, products, sellerId) {
         price: item.price > 0 ? item.price : (product?.price ?? 0),
         sellerId: item.sellerId || product?.userId || product?.supplierId || null,
       };
-      if (realItem.sellerId === sellerId) {
+      if (realItem.sellerId === sellerId || includeAll) {
         sales.push({
           orderId: order._id,
           productId: realItem.productId,
@@ -3010,7 +3051,7 @@ app.get('/api/sold-products', authMiddleware, async (req, res) => {
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
     const users = readJsonFile(path.join(__dirname, './data/users.json'));
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const { products: sold, sales } = buildSoldProducts(orders, users, products, req.user._id);
+    const { products: sold, sales } = buildSoldProducts(orders, users, products, req.user._id, isAdminUserId(req.user._id));
     res.json({ success: true, products: sold, sales });
   } catch (error) {
     console.error('Sold products error:', error);
@@ -3044,7 +3085,7 @@ app.get('/api/sold-products/:sellerId', authMiddleware, async (req, res) => {
 app.get('/api/orders/stats', authMiddleware, async (req, res) => {
   try {
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const userOrders = orders.filter(o => o.userId === req.user._id);
+    const userOrders = isAdminUserId(req.user._id) ? orders : orders.filter(o => o.userId === req.user._id);
     res.json({
       success: true,
       stats: {

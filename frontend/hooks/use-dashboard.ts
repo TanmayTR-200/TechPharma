@@ -51,9 +51,20 @@ interface UserSummary {
   createdAt: string;
 }
 
+interface RecentTransaction {
+  id: string;
+  product: string;
+  itemCount: number;
+  buyer: string;
+  amount: number;
+  status: string;
+  createdAt: string;
+}
+
 interface AdminData {
   stats?: AdminStats;
   recentUsers?: UserSummary[];
+  recentTransactions?: RecentTransaction[];
 }
 
 interface Activity {

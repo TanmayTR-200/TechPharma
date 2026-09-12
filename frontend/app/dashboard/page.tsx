@@ -36,6 +36,7 @@ export default function DashboardPage() {
   const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
   const adminStats = data?.admin?.stats
   const recentUsers = data?.admin?.recentUsers || []
+  const recentTransactions = data?.admin?.recentTransactions || []
 
   useEffect(() => { if (!user) router.push('/auth?mode=login') }, [user, router])
 
@@ -135,7 +136,7 @@ export default function DashboardPage() {
               </div>
             </motion.div>
 
-            {activity.length > 0 && (
+            {!isAdmin && activity.length > 0 && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
                 <div className="flex items-center justify-between mb-4 lg:shrink-0">
                   <h3 className="text-sm font-medium text-foreground">Recent notifications</h3>
@@ -160,6 +161,37 @@ export default function DashboardPage() {
                       <div className="text-right flex-shrink-0 ml-3">
                         <p className="text-sm font-medium text-foreground">{'\u20B9' + Number(n.amount || 0).toLocaleString('en-IN')}</p>
                         <p className="text-xs text-muted-foreground">{formatDateShort(n.createdAt)}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {isAdmin && recentTransactions.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+                <div className="flex items-center justify-between mb-4 lg:shrink-0">
+                  <h3 className="text-sm font-medium text-foreground">Recent transactions</h3>
+                  <button onClick={() => router.push('/orders')} className="text-xs text-primary hover:underline">View all</button>
+                </div>
+                <div className="divide-y divide-border overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
+                  {recentTransactions.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => router.push('/orders')}
+                      className="w-full text-left flex items-center justify-between py-3 hover:bg-secondary/30 rounded-md px-2 -mx-2 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary flex-shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{t.product}{t.itemCount > 1 ? ' (+' + (t.itemCount - 1) + ' more)' : ''}</p>
+                          <p className="text-xs text-muted-foreground truncate">By {t.buyer}</p>
+                          <span className={'inline-flex items-center text-xs px-2 py-0.5 rounded-full mt-1 ' + (t.status === 'pending' ? 'bg-secondary text-muted-foreground' : 'bg-emerald-500/15 text-emerald-600')}>{t.status}</span>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <p className="text-sm font-medium text-foreground">{'\u20B9' + Number(t.amount || 0).toLocaleString('en-IN')}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateShort(t.createdAt)}</p>
                       </div>
                     </button>
                   ))}
