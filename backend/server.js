@@ -3181,7 +3181,7 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
 
     // Atomic stock decrement + order creation (SQLite transaction).
     // If ANY item has insufficient stock, the entire transaction rolls back.
-    const result = inventory.createOrder({
+    const result = await inventory.createOrder({
       userId: req.user._id,
       cartItems: cart.items,
       buyerUser,
