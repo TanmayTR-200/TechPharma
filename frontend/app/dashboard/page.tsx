@@ -140,7 +140,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-medium text-foreground">Recent notifications</h3>
                 </div>
-                <div className="divide-y divide-border max-h-80 overflow-y-auto pr-1">
+                <div className="divide-y divide-border h-72 overflow-y-auto pr-1">
                   {activity.map((n) => (
                     <button
                       key={n.id + '-' + n.type}
@@ -173,7 +173,7 @@ export default function DashboardPage() {
                   <h3 className="text-sm font-medium text-foreground">Recent users</h3>
                   <span className="text-xs text-muted-foreground">Platform</span>
                 </div>
-                <div className="divide-y divide-border max-h-72 overflow-y-auto pr-1">
+                <div className="divide-y divide-border h-56 overflow-y-auto pr-1">
                   {recentUsers.map((u) => (
                     <div key={u._id} className="flex items-center justify-between py-2.5">
                       <div className="flex items-center gap-3 min-w-0">
