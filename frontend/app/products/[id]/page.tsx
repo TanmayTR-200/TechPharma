@@ -78,8 +78,10 @@ export default function ProductDetailPage() {
 
   const isOwner = user && (product.userId === user._id || product.supplier?._id === user._id)
   const validImages = (product.images || []).filter(img => typeof img === "string" && img.startsWith("http"))
+
   const supplierName = product.supplier?.name || product.supplierName || 'Supplier'
   const supplierState = (product.supplier as any)?.state || ''
+  const supplierId = product.supplier?._id || product.supplierId || null
   const listedDate = product.createdAt ? new Date(product.createdAt).toLocaleDateString('en-GB') : ''
 
   const handleContactSeller = () => {
@@ -209,8 +211,19 @@ export default function ProductDetailPage() {
                     {supplierName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{isOwner ? 'You' : supplierName}</p>
+                    {isOwner || !supplierId ? (
+                      <p className="text-sm font-medium text-foreground">{isOwner ? 'You' : supplierName}</p>
+                    ) : (
+                      <button
+                        onClick={() => router.push('/products?seller=' + supplierId)}
+                        className="text-sm font-medium text-foreground hover:text-primary hover:underline text-left"
+                        title={'View all products from ' + supplierName}
+                      >
+                        {supplierName} <ArrowRight className="inline h-3 w-3 ml-0.5 align-middle" />
+                      </button>
+                    )}
                     {supplierState && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" /> {supplierState}</p>}
+                    {!isOwner && supplierId && <p className="text-[11px] text-muted-foreground">Click the name to view all their products</p>}
                   </div>
                 </div>
                 {listedDate && (

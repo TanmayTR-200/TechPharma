@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Footer } from '@/components/footer'
 import { ProductGrid } from '@/components/product-grid'
 import { ProductFilters } from '@/components/product-filters'
@@ -17,6 +17,7 @@ import { getCategoryDisplayName } from '@/lib/constants'
 
 export default function ProductsPage() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [products, setProducts] = useState<Product[]>([])
@@ -28,6 +29,7 @@ export default function ProductsPage() {
   const category = searchParams.get('category')
   const search = searchParams.get('search')
   const stateFilter = searchParams.get('state')
+  const sellerFilter = searchParams.get('seller')
   const page = parseInt(searchParams.get('page') || '1')
   const sort = searchParams.get('sort') || 'featured'
 
@@ -38,6 +40,7 @@ export default function ProductsPage() {
       if (category) filters.category = category.toLowerCase()
       if (search) filters.search = search
       if (stateFilter) filters.state = stateFilter
+      if (sellerFilter) filters.sellerId = sellerFilter
       const params = new URLSearchParams(window.location.search)
       if (params.get('priceMin')) filters.priceMin = params.get('priceMin')!
       if (params.get('priceMax')) filters.priceMax = params.get('priceMax')!
@@ -106,7 +109,7 @@ export default function ProductsPage() {
 
   useEffect(() => {
     fetchProducts()
-  }, [category, search, stateFilter, page, sort])
+  }, [category, search, stateFilter, sellerFilter, page, sort])
 
   useEffect(() => {
     const handleProductAdded = () => {
@@ -142,7 +145,7 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">
-              {category ? getCategoryDisplayName(category) : search ? 'Search: ' + search : 'All products'}
+              {sellerFilter ? 'Products from this seller' : category ? getCategoryDisplayName(category) : search ? 'Search: ' + search : 'All products'}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {loading ? '' : totalCount + ' product' + (totalCount !== 1 ? 's' : '') + ' available'}
@@ -153,6 +156,18 @@ export default function ProductsPage() {
             <ChevronDown className={'h-3 w-3 transition-transform ' + (showFilters ? 'rotate-180' : '')} />
           </Button>
         </div>
+
+        {sellerFilter && (
+          <div className="flex items-center justify-between border border-border bg-card rounded-md px-4 py-2.5">
+            <p className="text-sm text-muted-foreground">Showing products from one seller</p>
+            <button
+              onClick={() => router.push('/products')}
+              className="text-xs text-primary hover:underline"
+            >
+              Show all products
+            </button>
+          </div>
+        )}
 
         {showFilters && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mb-6">

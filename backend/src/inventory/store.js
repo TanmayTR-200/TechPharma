@@ -12,6 +12,25 @@ const fs = require('fs');
 
 let db = null;
 
+// Optional hook: lets the server persist stock changes to MongoDB (the only
+// durable store on ephemeral containers). Registered from server.js.
+let mongoStockSyncer = null;
+
+function setMongoStockSyncer(fn) {
+  mongoStockSyncer = fn;
+}
+
+function pushStockToMongo(productId, stock) {
+  if (!mongoStockSyncer) return;
+  try {
+    Promise.resolve(mongoStockSyncer(productId, stock)).catch(err => {
+      console.error('[store] Mongo stock sync failed:', err.message);
+    });
+  } catch (err) {
+    console.error('[store] Mongo stock sync failed:', err.message);
+  }
+}
+
 const PRODUCTS_FILE = path.join(__dirname, '../../data/products.json');
 
 function getDb() {
@@ -99,6 +118,8 @@ function syncProductToCache(productId) {
       } catch (err) {
         console.error('[store] products.json sync failed:', err.message);
       }
+      // Keep MongoDB's copy of the stock in sync (durable across containers)
+      pushStockToMongo(productId, stock);
     }
   }
 }
@@ -153,6 +174,17 @@ function deleteProduct(productId) {
   database.prepare('DELETE FROM inventory_stock WHERE product_id = ?').run(productId);
 }
 
+// Startup-only seeding: insert the product's stock row if absent, never
+// overwrite an existing row (SQLite is the source of truth once seeded).
+// upsertProduct stays reserved for explicit stock edits.
+function ensureProductSeeded(productId, stock) {
+  const database = getDb();
+  database.prepare(`
+    INSERT OR IGNORE INTO inventory_stock (product_id, total_stock, available_stock, reserved_stock, sold, sales_count)
+    VALUES (?, ?, ?, 0, 0, 0)
+  `).run(productId, stock, stock);
+}
+
 // Clear all tables — for testing only
 function resetForTesting() {
   const database = getDb();
@@ -167,6 +199,8 @@ module.exports = {
   syncProductToCache,
   syncAllProductsToCache,
   upsertProduct,
+  ensureProductSeeded,
+  setMongoStockSyncer,
   deleteProduct,
   resetForTesting,
   PRODUCTS_FILE,

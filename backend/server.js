@@ -224,6 +224,9 @@ function validateName(name) {
 let mongoClient = null;
 let mongoDb = null;
 let mongoConnectionError = null;
+// Collections written while MongoDB was unreachable — flushed to Mongo on the
+// next successful (re)connect so no data is silently lost on ephemeral disks.
+const pendingMongoWrites = new Set();
 const dataCache = {};
 global.dataCache = dataCache; // Expose cache for route modules (dashboard.js etc)
 const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'messages', 'conversations', 'reservations', 'otps'];
@@ -318,14 +321,23 @@ async function connectMongoDB() {
       const cachedProducts = dataCache['products'] || [];
       let synced = 0;
       for (const p of cachedProducts) {
-        const stock = p.total_stock !== undefined ? p.total_stock : (p.stock || 0);
-        inventory.upsertProduct(p._id, stock);
+        // Seed from the SELLABLE count (available_stock/stock), never total_stock —
+        // total_stock is the lifetime figure and would silently re-add sold units
+        // on every restart. Existing SQLite rows are never overwritten (source of truth).
+        const stock = p.available_stock !== undefined
+          ? p.available_stock
+          : (p.stock !== undefined ? p.stock : (p.total_stock || 0));
+        inventory.ensureProductSeeded(p._id, stock);
         synced++;
       }
       console.log(`[inventory] Synced ${synced} products from cache to SQLite inventory`);
     } catch (syncErr) {
       console.error('[inventory] Product sync to SQLite failed:', syncErr.message);
     }
+
+    // Stock changes are persisted to MongoDB by the hook registered at startup;
+    // also flush anything written while Mongo was unreachable.
+    flushPendingMongoWrites();
 
     return true;
   } catch (err) {
@@ -377,6 +389,7 @@ async function connectMongoDB() {
           }
         }
         console.log('Data loaded into memory cache');
+        flushPendingMongoWrites();
         clearInterval(retryInterval);
       } catch (retryErr) {
         mongoConnectionError = retryErr.message;
@@ -431,6 +444,24 @@ function writeJsonFile(filePath, data) {
   if (mongoDb) {
     return persistToMongo(colName, data).catch(err => {
       console.error(`MongoDB write error (${colName}):`, err.message);
+      pendingMongoWrites.add(colName);
+    });
+  }
+  // Mongo unreachable — remember the collection so we can flush it on reconnect
+  pendingMongoWrites.add(colName);
+}
+
+// Push any collections that changed during a Mongo outage to MongoDB
+function flushPendingMongoWrites() {
+  if (!mongoDb || pendingMongoWrites.size === 0) return;
+  const cols = [...pendingMongoWrites];
+  pendingMongoWrites.clear();
+  for (const colName of cols) {
+    const data = dataCache[colName];
+    if (data === undefined) continue;
+    persistToMongo(colName, data).catch(err => {
+      console.error(`MongoDB flush error (${colName}):`, err.message);
+      pendingMongoWrites.add(colName);
     });
   }
 }
@@ -2069,6 +2100,7 @@ app.get('/api/products', async (req, res) => {
 
     // Parse query params for filtering
     const filterCategory = req.query.category ? String(req.query.category).toLowerCase() : null;
+    const filterSeller = req.query.sellerId ? String(req.query.sellerId) : null;
     const filterState = req.query.state ? String(req.query.state) : null;
     const filterStates = filterState ? filterState.split(',').map(s => s.trim()) : null;
     const filterSearch = req.query.search ? String(req.query.search).toLowerCase() : null;
@@ -2079,6 +2111,8 @@ app.get('/api/products', async (req, res) => {
     let activeProducts = products
       .filter(p => !p.status || p.status === 'active')
       .filter(p => {
+        // Seller filter (view all products from one supplier)
+        if (filterSeller && String(p.userId || p.supplierId || '') !== filterSeller) return false;
         // Category filter
         if (filterCategory) {
           const cats = filterCategory.split(',').map(c => c.trim());
@@ -3407,6 +3441,22 @@ const startServer = async () => {
     // Connect to MongoDB (don't block server start — data is already in cache from files)
     connectMongoDB().then(connected => {
       if (connected) console.log('MongoDB connected in background');
+    });
+
+    // Persist inventory stock changes (checkout, reservations, edits) to MongoDB —
+    // without this, fresh containers would re-seed stale stock from Mongo.
+    inventory.setMongoStockSyncer(async (productId, stock) => {
+      if (!mongoDb) return;
+      await mongoDb.collection('products').updateOne(
+        { _id: productId },
+        { $set: {
+          stock: stock.available_stock,
+          available_stock: stock.available_stock,
+          total_stock: stock.total_stock,
+          reserved_stock: stock.reserved_stock,
+          sold: stock.sold
+        } }
+      );
     });
 
     // Migrate product schema to inventory model (total_stock, available_stock, reserved_stock, sold)

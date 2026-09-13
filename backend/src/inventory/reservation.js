@@ -18,6 +18,8 @@ const {
   syncProductToCache,
   syncAllProductsToCache,
   upsertProduct,
+  ensureProductSeeded,
+  setMongoStockSyncer,
   deleteProduct,
   resetForTesting,
   PRODUCTS_FILE,
@@ -89,7 +91,11 @@ function migrateProducts() {
 
   if (jsonChanged) {
     fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
-    if (global.dataCache) global.dataCache.products = products;
+    // Only seed an empty cache — never replace one that already holds more
+    // data (e.g. documents merged from MongoDB before this ran).
+    if (global.dataCache && (!Array.isArray(global.dataCache.products) || global.dataCache.products.length === 0)) {
+      global.dataCache.products = products;
+    }
   }
 
   return products;
@@ -453,6 +459,8 @@ module.exports = {
   startExpirationJob,
   createOrder,
   upsertProduct,
+  ensureProductSeeded,
+  setMongoStockSyncer,
   deleteProduct,
   resetForTesting,
   syncProductToCache,
