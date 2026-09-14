@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { TrendingUp, Package, IndianRupee, ShoppingCart, ChevronDown, Truck, Clock, CheckCircle, Link as LinkIcon } from 'lucide-react'
 import DashboardLayout from '@/components/dashboard-layout'
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config'
+import { useAuth } from '@/contexts/auth'
 import Link from 'next/link'
 
 interface SoldProduct {
@@ -35,6 +36,8 @@ const statusConfig: Record<string, { color: string; icon: any }> = {
 const orderSteps = ['pending', 'processing', 'shipped', 'delivered']
 
 export default function SalesPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
   const [totalRevenue, setTotalRevenue] = useState(0)
   const [totalOrders, setTotalOrders] = useState(0)
   const [avgOrderValue, setAvgOrderValue] = useState(0)
@@ -99,7 +102,7 @@ export default function SalesPage() {
       <div className="w-full space-y-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-foreground">Sales</h1>
-          <p className="mt-1 text-muted-foreground">Track your revenue, manage orders, and update delivery status</p>
+          <p className="mt-1 text-muted-foreground">{isAdmin ? 'Track platform-wide revenue and manage every order' : 'Track your revenue, manage orders, and update delivery status'}</p>
         </div>
 
         {/* Stats grid */}

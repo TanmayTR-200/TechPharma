@@ -35,8 +35,6 @@ export default function DashboardPage() {
 
   const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
   const adminStats = data?.admin?.stats
-  const recentUsers = data?.admin?.recentUsers || []
-  const recentTransactions = data?.admin?.recentTransactions || []
 
   useEffect(() => { if (!user) router.push('/auth?mode=login') }, [user, router])
 
@@ -140,6 +138,7 @@ export default function DashboardPage() {
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
                 <div className="flex items-center justify-between mb-4 lg:shrink-0">
                   <h3 className="text-sm font-medium text-foreground">Recent notifications</h3>
+                  {isAdmin && <button onClick={() => router.push('/orders')} className="text-xs text-primary hover:underline">View all</button>}
                 </div>
                 <div className="divide-y divide-border overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
                   {activity.map((n) => (
@@ -167,62 +166,6 @@ export default function DashboardPage() {
                 </div>
               </motion.div>
             )}
-
-            {isAdmin && recentTransactions.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
-                <div className="flex items-center justify-between mb-4 lg:shrink-0">
-                  <h3 className="text-sm font-medium text-foreground">Recent transactions</h3>
-                  <button onClick={() => router.push('/orders')} className="text-xs text-primary hover:underline">View all</button>
-                </div>
-                <div className="divide-y divide-border overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
-                  {recentTransactions.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => router.push('/orders')}
-                      className="w-full text-left flex items-center justify-between py-3 hover:bg-secondary/30 rounded-md px-2 -mx-2 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-secondary flex-shrink-0"><Package className="h-3.5 w-3.5 text-muted-foreground" /></div>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{t.product}{t.itemCount > 1 ? ' (+' + (t.itemCount - 1) + ' more)' : ''}</p>
-                          <p className="text-xs text-muted-foreground truncate">By {t.buyer}</p>
-                          <span className={'inline-flex items-center text-xs px-2 py-0.5 rounded-full mt-1 ' + (t.status === 'pending' ? 'bg-secondary text-muted-foreground' : 'bg-emerald-500/15 text-emerald-600')}>{t.status}</span>
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0 ml-3">
-                        <p className="text-sm font-medium text-foreground">{'\u20B9' + Number(t.amount || 0).toLocaleString('en-IN')}</p>
-                        <p className="text-xs text-muted-foreground">{formatDateShort(t.createdAt)}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-
-            {isAdmin && recentUsers.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
-                <div className="flex items-center justify-between mb-4 lg:shrink-0">
-                  <h3 className="text-sm font-medium text-foreground">Recent users</h3>
-                  <span className="text-xs text-muted-foreground">Platform</span>
-                </div>
-                <div className="divide-y divide-border overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
-                  {recentUsers.map((u) => (
-                    <div key={u._id} className="flex items-center justify-between py-2.5">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Avatar className="h-8 w-8"><AvatarFallback className="bg-secondary text-muted-foreground text-xs">{(() => { const { firstName, lastName } = splitName(u.name); return (firstName[0] || '') + (lastName[0] || '') })()}</AvatarFallback></Avatar>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">{u.name}{u.company ? <span className="text-xs text-muted-foreground"> · {u.company}</span> : null}</p>
-                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0 ml-3">
-                        <span className={'inline-flex items-center text-xs px-2 py-0.5 rounded-full ' + (u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>{u.role === 'admin' ? 'Admin' : 'User'}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            )}
           </div>
 
           {/* Right */}
@@ -237,12 +180,22 @@ export default function DashboardPage() {
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="border border-border p-5">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Revenue</p>
-              <p className="text-2xl font-bold text-foreground font-display">{'\u20B9' + stats.revenue.toLocaleString('en-IN')}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{stats.revenue > 0 ? 'From completed orders' : 'No revenue yet'}</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">{isAdmin ? 'Platform revenue' : 'Revenue'}</p>
+              <p className="text-2xl font-bold text-foreground font-display">{'\u20B9' + (isAdmin && adminStats ? adminStats.platformRevenue : stats.revenue).toLocaleString('en-IN')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{isAdmin ? 'Across the entire marketplace' : (stats.revenue > 0 ? 'From completed orders' : 'No revenue yet')}</p>
               <div className="mt-3 pt-3 border-t border-border space-y-2">
-                <div className="flex justify-between text-xs"><span className="text-muted-foreground">Active products</span><span className="font-medium text-foreground">{stats.totalProducts}</span></div>
-                <div className="flex justify-between text-xs"><span className="text-muted-foreground">Monthly views</span><span className="font-medium text-foreground">{stats.productViews}</span></div>
+                {isAdmin && adminStats ? (
+                  <>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Registered users</span><span className="font-medium text-foreground">{adminStats.totalUsers}</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Products listed</span><span className="font-medium text-foreground">{adminStats.totalProducts}</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Orders placed</span><span className="font-medium text-foreground">{adminStats.totalOrders}</span></div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Active products</span><span className="font-medium text-foreground">{stats.totalProducts}</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Monthly views</span><span className="font-medium text-foreground">{stats.productViews}</span></div>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>

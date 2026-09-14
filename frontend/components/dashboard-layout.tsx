@@ -28,6 +28,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
+  // Admins manage the whole platform — make the scope visible in the nav
+  const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
+  const navItems = sidebarItems.map(item =>
+    item.href === '/orders' ? { ...item, label: isAdmin ? 'All orders' : item.label }
+    : item.href === '/sales' ? { ...item, label: isAdmin ? 'All sales' : item.label }
+    : item
+  )
+
   return (
     <div className="min-h-screen relative z-10">
       <button
@@ -41,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <aside className={"fixed inset-y-0 left-0 z-40 w-56 bg-card border-r border-border transition-transform duration-200 lg:translate-x-0 " + (mobileOpen ? 'translate-x-0' : '-translate-x-full') + " pt-14"}>
         <nav className="px-3 py-4 space-y-0.5">
-          {sidebarItems.map((item) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/orders' && pathname.startsWith(item.href))
             return (
               <Link
