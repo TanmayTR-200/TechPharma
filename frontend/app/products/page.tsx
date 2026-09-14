@@ -24,6 +24,7 @@ export default function ProductsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
+  const [sellerName, setSellerName] = useState('')
   const fetchProductsRef = useRef<(() => void) | null>(null)
 
   const category = searchParams.get('category')
@@ -99,6 +100,10 @@ export default function ProductsPage() {
       })
 
       setProducts(transformedProducts)
+      if (sellerFilter) {
+        const name = (transformedProducts.find((p: any) => p.supplier?.name)?.supplier as any)?.name
+        setSellerName(name || '')
+      }
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to load products.', variant: 'destructive' })
     } finally {
@@ -145,7 +150,7 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">
-              {sellerFilter ? 'Products from this seller' : category ? getCategoryDisplayName(category) : search ? 'Search: ' + search : 'All products'}
+              {sellerFilter ? 'Products from ' + (sellerName || 'this seller') : category ? getCategoryDisplayName(category) : search ? 'Search: ' + search : 'All products'}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               {loading ? '' : totalCount + ' product' + (totalCount !== 1 ? 's' : '') + ' available'}
@@ -159,7 +164,9 @@ export default function ProductsPage() {
 
         {sellerFilter && (
           <div className="flex items-center justify-between border border-border bg-card rounded-md px-4 py-2.5">
-            <p className="text-sm text-muted-foreground">Showing products from one seller</p>
+            <p className="text-sm text-muted-foreground">
+              Showing products from <span className="font-medium text-foreground">{sellerName || 'this seller'}</span>
+            </p>
             <button
               onClick={() => router.push('/products')}
               className="text-xs text-primary hover:underline"

@@ -136,7 +136,7 @@ export default function DashboardPage() {
               </div>
             </motion.div>
 
-            {!isAdmin && activity.length > 0 && (
+            {activity.length > 0 && (
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
                 <div className="flex items-center justify-between mb-4 lg:shrink-0">
                   <h3 className="text-sm font-medium text-foreground">Recent notifications</h3>
