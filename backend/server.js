@@ -2452,6 +2452,9 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     const allUsers = readJsonFile(path.join(__dirname, './data/users.json'));
     const isAdmin = isAdminUserId(userId);
 
+    // Newest-first comparator — must be declared before adminData/activity use it
+    const byNewest = (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+
     // Admin-only view data (platform-wide overview)
     let adminData = null;
     if (isAdmin) {
@@ -2502,8 +2505,6 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
         }
       });
     });
-
-    const byNewest = (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
 
     // Sellers see the orders they received (used by the Sales page)
     const sellerOrderView = (order) => ({
