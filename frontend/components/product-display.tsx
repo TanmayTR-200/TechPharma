@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Product, SupplierInfo } from '@/types/product'
 import { useAuth } from "@/contexts/auth"
 import { getCategoryDisplayName } from '@/lib/constants'
+import { productHref } from '@/lib/product-url'
 import { EditProductDialog } from './edit-product-dialog'
 import { ProductSellerActions } from './product-seller-actions'
 import { Button } from './ui/button'
@@ -40,6 +41,8 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
     : null
 
   const isOwner = user && isSupplierInfo(product.supplier) && user._id === product.supplier._id
+  // Admins browse the marketplace without buying
+  const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
 
   const validImages = Array.isArray(product.images) ? product.images.filter(img => typeof img === 'string' && img.startsWith('http')) : []
   const imageSrc = validImages.length > 0 ? validImages[0] : '/placeholder.svg'
@@ -51,14 +54,14 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
           <div className="relative group">
             <div className="relative w-full h-44 bg-secondary overflow-hidden">
               <img src={imageSrc} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { const target = e.target as HTMLImageElement; target.onerror = null; target.src = '/placeholder.svg' }} />
-              <div onClick={() => router.push('/products/' + product._id)} className="absolute inset-0 cursor-pointer" />
+              <div onClick={() => router.push(productHref(product))} className="absolute inset-0 cursor-pointer" />
             </div>
             <div className="absolute top-2 left-2">
               <Badge className="bg-card border border-border text-foreground text-xs font-medium px-2.5 py-1">{getCategoryDisplayName(product.category)}</Badge>
             </div>
           </div>
 
-          <div className="p-4 cursor-pointer" onClick={() => router.push('/products/' + product._id)}>
+          <div className="p-4 cursor-pointer" onClick={() => router.push(productHref(product))}>
             <div className="mb-3 pb-3 border-b border-border">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground mb-0.5">Sold by</p>
@@ -89,9 +92,10 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
               <ProductSellerActions productId={product.id} onEdit={() => setIsEditDialogOpen(true)} onDeleted={onDeleted} />
             ) : (
               <>
-                <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-xs" onClick={() => router.push('/products/' + product._id)}>
+                <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-xs" onClick={() => router.push(productHref(product))}>
                   View details
                 </Button>
+                {!isAdmin && (
                 <Button
                   variant="outline"
                   className="w-full border-border text-foreground hover:bg-secondary rounded-md text-xs"
@@ -113,6 +117,7 @@ export function ProductDisplay({ product, onAddToCart, onDeleted }: ProductDispl
                 >
                   {product.stock === 0 ? 'Out of stock' : addingToCart ? 'Adding...' : 'Add to cart'}
                 </Button>
+                )}
               </>
             )}
           </div>

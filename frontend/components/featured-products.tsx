@@ -9,6 +9,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Reveal } from "@/components/reveal"
 import { getCategoryDisplayName } from "@/lib/constants"
+import { productHref } from "@/lib/product-url"
 
 interface Product {
   _id: string; name: string; price: number; images: string[]
@@ -93,11 +94,11 @@ export function FeaturedProducts() {
                   <div className="flex items-center justify-between">
                     <span className="font-display text-lg font-bold text-foreground">{fmt(p.price)}</span>
                     {user && (p.userId === user._id || p.supplierId === user._id) ? (
-                      <Button size="sm" variant="outline" className="rounded-none border-foreground text-foreground hover:bg-foreground hover:text-background text-xs" onClick={() => router.push('/products/' + p._id)}>
+                      <Button size="sm" variant="outline" className="rounded-none border-foreground text-foreground hover:bg-foreground hover:text-background text-xs" onClick={() => router.push(productHref(p))}>
                         Manage
                       </Button>
                     ) : (
-                      <Button size="sm" className="rounded-none bg-foreground text-background hover:bg-foreground/90 text-xs" onClick={() => router.push('/products/' + p._id)} disabled={p.stock === 0}>
+                      <Button size="sm" className="rounded-none bg-foreground text-background hover:bg-foreground/90 text-xs" onClick={() => router.push(productHref(p))} disabled={p.stock === 0}>
                         {p.stock === 0 ? 'Sold out' : 'View details'}
                       </Button>
                     )}

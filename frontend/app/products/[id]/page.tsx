@@ -10,6 +10,7 @@ import { SkeletonLoader } from "@/components/skeleton-loader"
 import { useToast } from "@/hooks/use-toast"
 import { motion } from "framer-motion"
 import { getCategoryDisplayName } from "@/lib/constants"
+import { productIdFromSlug } from "@/lib/product-url"
 
 interface ProductDetail {
   _id: string
@@ -40,7 +41,8 @@ export default function ProductDetailPage() {
     const fetchProduct = async () => {
       try {
         const token = localStorage.getItem("token")
-        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + "/api/products/" + params.id, {
+        const realId = productIdFromSlug(String(params.id))
+        const res = await fetch((process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000') + "/api/products/" + realId, {
           headers: token ? { 'Authorization': 'Bearer ' + token } : {}
         })
         const data = await res.json()
@@ -77,6 +79,7 @@ export default function ProductDetailPage() {
   }
 
   const isOwner = user && (product.userId === user._id || product.supplier?._id === user._id)
+  const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
   const validImages = (product.images || []).filter(img => typeof img === "string" && img.startsWith("http"))
 
   const supplierName = product.supplier?.name || product.supplierName || 'Supplier'
@@ -232,25 +235,27 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="space-y-2">
-              {!isOwner ? (
-                <>
-                  <Button className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-md h-11 text-sm font-medium" onClick={handleAddToCart} disabled={product.stock === 0}>
-                    <ShoppingCart className="h-4 w-4 mr-2" />
-                    {product.stock === 0 ? 'Out of stock' : 'Add to cart'}
+            {/* Actions — admins don't buy or contact sellers */}
+            {!isAdmin && (
+              <div className="space-y-2">
+                {!isOwner ? (
+                  <>
+                    <Button className="w-full bg-foreground hover:bg-foreground/90 text-background rounded-md h-11 text-sm font-medium" onClick={handleAddToCart} disabled={product.stock === 0}>
+                      <ShoppingCart className="h-4 w-4 mr-2" />
+                      {product.stock === 0 ? 'Out of stock' : 'Add to cart'}
+                    </Button>
+                    <Button variant="outline" className="w-full border-border text-foreground hover:bg-secondary rounded-md h-11 text-sm" onClick={handleContactSeller}>
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Contact seller
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" className="w-full border-border text-foreground hover:bg-secondary rounded-md h-11 text-sm" onClick={() => router.push('/dashboard')}>
+                    Manage in dashboard
                   </Button>
-                  <Button variant="outline" className="w-full border-border text-foreground hover:bg-secondary rounded-md h-11 text-sm" onClick={handleContactSeller}>
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Contact seller
-                  </Button>
-                </>
-              ) : (
-                <Button variant="outline" className="w-full border-border text-foreground hover:bg-secondary rounded-md h-11 text-sm" onClick={() => router.push('/dashboard')}>
-                  Manage in dashboard
-                </Button>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </motion.div>
         </div>
       </div>

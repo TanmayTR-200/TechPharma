@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Package, MapPin, Mail, Building, Search } from "lucide-react"
+import { productHref } from "@/lib/product-url"
 
 interface SupplierProduct {
   _id: string
@@ -122,7 +123,7 @@ export default function SupplierProfilePage() {
             {supplier.products.map(product => (
               <Link
                 key={product._id}
-                href={'/products/' + product._id}
+                href={productHref(product)}
                 className="border border-border bg-card overflow-hidden hover:border-foreground transition-colors group"
               >
                 <div className="aspect-[4/3] overflow-hidden bg-secondary">

@@ -128,7 +128,7 @@ export default function DashboardPage() {
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="border border-border p-5 lg:shrink-0">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick actions</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <AddProductDialog />
+                {!isAdmin && <AddProductDialog />}
                 <EditProfileDialog />
                 <AnalyticsDialog />
               </div>
@@ -138,7 +138,7 @@ export default function DashboardPage() {
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
                 <div className="flex items-center justify-between mb-4 lg:shrink-0">
                   <h3 className="text-sm font-medium text-foreground">Recent notifications</h3>
-                  {isAdmin && <button onClick={() => router.push('/orders')} className="text-xs text-primary hover:underline">View all</button>}
+                  {isAdmin && <button onClick={() => router.push('/sales')} className="text-xs text-primary hover:underline">View all</button>}
                 </div>
                 <div className="divide-y divide-border overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
                   {activity.map((n) => (

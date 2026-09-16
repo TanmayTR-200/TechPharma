@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useParams } from 'next/navigation';
 import { ProductPreviewDialog } from '@/components/product-preview-dialog';
 import { API_ENDPOINTS, fetcher } from '@/lib/api-config';
+import { productSlug } from '@/lib/product-url';
 import DashboardLayout from '@/components/dashboard-layout';
 import { ArrowLeft } from 'lucide-react';
 
@@ -40,7 +41,7 @@ const parseMessageContent = (content: string, productInfo?: ProductInfo) => {
   }
   return content.replace(
     productInfo.name,
-    `<a href="/products/${productInfo.id}" class="text-primary hover:text-primary underline">${productInfo.name}</a>`
+    `<a href="/products/${productSlug(productInfo.name)}-${productInfo.id}" class="text-primary hover:text-primary underline">${productInfo.name}</a>`
   );
 };
 
