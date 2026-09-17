@@ -69,7 +69,7 @@ interface AdminData {
 
 interface Activity {
   id: string;
-  type: 'purchase' | 'sale';
+  type: 'purchase' | 'sale' | 'order';
   title: string;
   product: string;
   itemCount: number;

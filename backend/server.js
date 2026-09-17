@@ -2542,11 +2542,16 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     // Combined recent activity (orders placed + sales received), newest first.
     // Admins see every platform sale as their activity feed (they have no
     // personal orders), so the "Recent notifications" box stays populated.
+    // Combined recent activity, newest first.
+    // Admins see every platform order as a neutral 'New order' event (they
+    // personally never buy or sell). Sellers see 'New sale' only for orders
+    // placed by OTHER buyers — an order you placed yourself is not a sale
+    // you received, so self-purchases are excluded from sale events.
     const activity = isAdmin
       ? orders.slice().sort(byNewest).slice(0, 8).map(order => ({
           id: order._id || order.id,
-          type: 'sale',
-          title: 'New sale received',
+          type: 'order',
+          title: 'New order',
           product: (order.items || [])[0]?.product?.name || 'Product',
           itemCount: (order.items || []).length,
           amount: order.totalAmount || 0,
@@ -2565,20 +2570,22 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
             status: order.status || 'pending',
             createdAt: order.createdAt || new Date().toISOString()
           })),
-          ...userOrders.map(order => {
-            const items = (order.items || []).filter(item => String(item.sellerId || '') === String(userId));
-            return {
-              id: order._id || order.id,
-              type: 'sale',
-              title: 'New sale received',
-              product: items[0]?.product?.name || 'Product',
-              itemCount: items.length,
-              amount: items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0),
-              status: order.status || 'pending',
-              counterparty: order.buyerName || order.userName || 'Anonymous buyer',
-              createdAt: order.createdAt || new Date().toISOString()
-            };
-          })
+          ...userOrders
+            .filter(order => String(order.userId || '') !== String(userId))
+            .map(order => {
+              const items = (order.items || []).filter(item => String(item.sellerId || '') === String(userId));
+              return {
+                id: order._id || order.id,
+                type: 'sale',
+                title: 'New sale received',
+                product: items[0]?.product?.name || 'Product',
+                itemCount: items.length,
+                amount: items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0),
+                status: order.status || 'pending',
+                counterparty: order.buyerName || order.userName || 'Anonymous buyer',
+                createdAt: order.createdAt || new Date().toISOString()
+              };
+            })
         ].sort(byNewest).slice(0, 8);
 
     res.json({

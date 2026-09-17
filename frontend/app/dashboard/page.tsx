@@ -148,13 +148,13 @@ export default function DashboardPage() {
                       className="w-full text-left flex items-center justify-between py-3 hover:bg-secondary/30 rounded-md px-2 -mx-2 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className={'flex h-8 w-8 items-center justify-center rounded-md flex-shrink-0 ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-sky-500/15 text-sky-600')}>
-                          {n.type === 'sale' ? <TrendingUp className="h-3.5 w-3.5" /> : <ShoppingCart className="h-3.5 w-3.5" />}
+                        <div className={'flex h-8 w-8 items-center justify-center rounded-md flex-shrink-0 ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : n.type === 'order' ? 'bg-amber-500/15 text-amber-600' : 'bg-sky-500/15 text-sky-600')}>
+                          {n.type === 'sale' ? <TrendingUp className="h-3.5 w-3.5" /> : n.type === 'order' ? <Package className="h-3.5 w-3.5" /> : <ShoppingCart className="h-3.5 w-3.5" />}
                         </div>
                         <div className="min-w-0">
-                          <span className={'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mb-1 ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-sky-500/15 text-sky-600')}>{n.type === 'sale' ? 'New sale' : 'Order placed'}</span>
+                          <span className={'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mb-1 ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : n.type === 'order' ? 'bg-amber-500/15 text-amber-600' : 'bg-sky-500/15 text-sky-600')}>{n.type === 'sale' ? 'New sale' : n.type === 'order' ? 'New order' : 'Order placed'}</span>
                           <p className="text-sm font-medium text-foreground truncate">{n.product}{n.itemCount > 1 ? ' (+' + (n.itemCount - 1) + ' more)' : ''}</p>
-                          <p className="text-xs text-muted-foreground truncate">{n.type === 'sale' && n.counterparty ? 'From ' + n.counterparty : 'Your purchase'}</p>
+                          <p className="text-xs text-muted-foreground truncate">{n.type === 'sale' && n.counterparty ? 'From ' + n.counterparty : n.type === 'order' && n.counterparty ? 'By ' + n.counterparty : 'Your purchase'}</p>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0 ml-3">
