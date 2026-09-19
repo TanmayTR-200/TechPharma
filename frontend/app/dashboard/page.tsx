@@ -109,7 +109,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="w-full space-y-6">
+      <div className="w-full space-y-6 lg:h-[calc(100vh-112px)] lg:overflow-hidden lg:flex lg:flex-col">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
           <h1 className="font-display text-2xl font-bold text-foreground flex items-center gap-3">Dashboard
             {isAdmin && <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium"><ShieldCheck className="h-3 w-3" />Admin</span>}
@@ -118,7 +118,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:shrink-0">
           {tiles.map((t, idx) => (
             <motion.div
               key={t.label}
@@ -140,10 +140,10 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-5">
+        <div className="grid lg:grid-cols-3 gap-5 lg:flex-1 lg:min-h-0">
           {/* Left */}
-          <div className="lg:col-span-2 space-y-5">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="border border-border p-5">
+          <div className="lg:col-span-2 space-y-5 lg:min-h-0 lg:flex lg:flex-col">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="border border-border p-5 lg:shrink-0">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Quick actions</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {!isAdmin && <AddProductDialog />}
@@ -153,12 +153,12 @@ export default function DashboardPage() {
             </motion.div>
 
             {activity.length > 0 && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5">
-                <div className="flex items-center justify-between mb-4">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="border border-border p-5 lg:flex-1 lg:min-h-0 lg:flex lg:flex-col">
+                <div className="flex items-center justify-between mb-4 lg:shrink-0">
                   <h3 className="text-sm font-medium text-foreground">Recent notifications</h3>
                   {isAdmin && <button onClick={() => router.push('/sales')} className="text-xs text-primary hover:underline">View all</button>}
                 </div>
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-border overflow-y-auto pr-1 lg:flex-1 lg:min-h-0">
                   {activity.map((n) => (
                     <button
                       key={n.id + '-' + n.type}
