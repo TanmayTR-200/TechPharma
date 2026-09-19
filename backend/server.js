@@ -3069,7 +3069,8 @@ app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
         invoiceNumber: 'INV-' + (order.trackingId || order._id.slice(-8)),
         orderId: order._id,
         trackingId: order.trackingId || null,
-        date: order.createdAt,
+        // Invoice date = when it is issued (generated/downloaded), not when the order was placed
+        date: new Date().toISOString(),
         status: order.status || 'pending',
         paymentMethod: order.paymentMethod || 'cod',
         from: {
