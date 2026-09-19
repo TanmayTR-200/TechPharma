@@ -200,7 +200,7 @@ export default function ProductDetailPage() {
                   {stockLevel === 'out' ? 'Out of stock' : `${product.stock} in stock`}
                 </span>
                 {stockLevel === 'low' && product.stock > 0 && (
-                  <span className="text-xs text-amber-500">— selling fast</span>
+                  <span className="text-xs text-amber-500">- selling fast</span>
                 )}
               </div>
             </div>
@@ -235,7 +235,7 @@ export default function ProductDetailPage() {
               </div>
             </div>
 
-            {/* Actions — admins don't buy or contact sellers */}
+            {/* Actions - admins don't buy or contact sellers */}
             {!isAdmin && (
               <div className="space-y-2">
                 {!isOwner ? (

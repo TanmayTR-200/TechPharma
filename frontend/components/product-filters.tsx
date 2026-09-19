@@ -196,7 +196,7 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
               placeholder="Min ₹"
               className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground focus:border-foreground focus:outline-none"
             />
-            <span className="text-muted-foreground text-xs">—</span>
+            <span className="text-muted-foreground text-xs">-</span>
             <input
               type="number"
               value={priceMax}
@@ -241,7 +241,7 @@ export function ProductFilters({ selectedCategory, selectedSort = 'featured' }: 
               onClick={() => updateUrl({ priceMin: undefined, priceMax: undefined })}
               className="flex items-center gap-1.5 bg-secondary text-foreground text-xs px-3 py-1 rounded-full hover:bg-foreground hover:text-background transition-colors"
             >
-              ₹{searchParams.get('priceMin') || '0'} — ₹{searchParams.get('priceMax') || '∞'} <X className="h-3 w-3" />
+              ₹{searchParams.get('priceMin') || '0'} - ₹{searchParams.get('priceMax') || '∞'} <X className="h-3 w-3" />
             </button>
           )}
           <button

@@ -194,7 +194,7 @@ export default function OrdersPage() {
           </div>
 
           <div class="footer">
-            TechPharma — B2B Industrial Marketplace<br>
+            TechPharma - B2B Industrial Marketplace<br>
             This is a computer-generated invoice and does not require a signature.
           </div>
         </body></html>`
@@ -354,7 +354,7 @@ export default function OrdersPage() {
               )}
             </div>
 
-            {/* Update status — seller only (admins are read-only) */}
+            {/* Update status - seller only (admins are read-only) */}
             {!isAdmin && selectedOrder.status && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && user && selectedOrder.items?.some(item => String(item.sellerId) === String(user._id)) && (
               <div className="border-t border-border pt-4 mb-4">
                 <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Update status</h3>
@@ -406,14 +406,14 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Addresses — From (seller) + To (delivery) */}
+            {/* Addresses - From (seller) + To (delivery) */}
             {(selectedOrder.shippingAddress || selectedOrder.sellerAddress) && (
               <div className="border-t border-border pt-4">
                 <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Addresses</h3>
                 <div className={`grid ${selectedOrder.sellerAddress ? 'sm:grid-cols-2' : ''} gap-4`}>
                   {selectedOrder.sellerAddress && (
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">From — Seller</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">From - Seller</p>
                       <div className="text-sm text-muted-foreground space-y-0.5">
                         {selectedOrder.sellerAddress.name && <p className="text-foreground font-medium">{selectedOrder.sellerAddress.name}</p>}
                         {selectedOrder.sellerAddress.company && <p>{selectedOrder.sellerAddress.company}</p>}
@@ -425,7 +425,7 @@ export default function OrdersPage() {
                   )}
                   {selectedOrder.shippingAddress && (
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">To — Delivery</p>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">To - Delivery</p>
                       <div className="text-sm text-muted-foreground space-y-0.5">
                         <p className="text-foreground">{selectedOrder.shippingAddress.name || ''}</p>
                         <p>{selectedOrder.shippingAddress.line1 || ''}</p>

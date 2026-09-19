@@ -179,7 +179,7 @@ export default function SalesPage() {
           {loading ? (
             <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => (<div key={i} className="h-16 shimmer" />))}</div>
           ) : viewMode === 'orders' ? (
-            /* Order-wise breakdown — each order as its own card */
+            /* Order-wise breakdown - each order as its own card */
             sellerOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground">No orders yet. When buyers purchase your products, they'll appear here.</p>
             ) : (
@@ -276,7 +276,7 @@ export default function SalesPage() {
               </div>
             )
           ) : (
-            /* Product-wise breakdown — grouped by product */
+            /* Product-wise breakdown - grouped by product */
             soldProducts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No sales yet. Your sold items will appear here.</p>
             ) : (

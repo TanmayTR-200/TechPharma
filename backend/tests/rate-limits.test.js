@@ -1,5 +1,5 @@
 /**
- * Rate-limit tests — runs a SEPARATE server instance with DEFAULT limiter
+ * Rate-limit tests - runs a SEPARATE server instance with DEFAULT limiter
  * values (no env overrides) and verifies 429 behavior:
  *   - authLimiter:   5 logins/min          (shared across login/register/forgot)
  *   - resetLimiter:  5 resets / 15 min
@@ -69,7 +69,7 @@ beforeAll(async () => {
   authToken = jwt.sign({ userId: SEED.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 }, 120000);
 
-describe('authLimiter — POST /api/auth/login', () => {
+describe('authLimiter - POST /api/auth/login', () => {
   test('6th login within a minute → 429 Too many attempts', async () => {
     // 5 unknown-email logins are allowed (401s), the 6th is rate-limited
     for (let i = 0; i < 5; i++) {
@@ -88,7 +88,7 @@ describe('authLimiter — POST /api/auth/login', () => {
   });
 });
 
-describe('resetLimiter — POST /api/auth/reset-password', () => {
+describe('resetLimiter - POST /api/auth/reset-password', () => {
   test('6th reset attempt within 15 min → 429', async () => {
     for (let i = 0; i < 5; i++) {
       const res = await request(app)
@@ -106,7 +106,7 @@ describe('resetLimiter — POST /api/auth/reset-password', () => {
   });
 });
 
-describe('changeLimiter — POST /api/auth/change-password', () => {
+describe('changeLimiter - POST /api/auth/change-password', () => {
   test('11th change attempt within 15 min → 429', async () => {
     // Wrong current password → 400s; the limiter counts every request
     for (let i = 0; i < 10; i++) {

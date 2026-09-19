@@ -78,7 +78,7 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
     return null
   }
 
-  // Sanitize CSS content — escape any closing tag sequences
+  // Sanitize CSS content - escape any closing tag sequences
   const cssContent = Object.entries(THEMES)
     .map(
       ([theme, prefix]) => `

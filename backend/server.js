@@ -30,7 +30,7 @@ if (!JWT_SECRET) {
     console.error('FATAL: JWT_SECRET environment variable is required in production');
     process.exit(1);
   } else {
-    console.warn('WARNING: JWT_SECRET not set — using insecure dev default');
+    console.warn('WARNING: JWT_SECRET not set - using insecure dev default');
   }
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-insecure-secret-change-me';
@@ -42,7 +42,7 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Multer memory storage for file uploads — images only, 5MB max
+// Multer memory storage for file uploads - images only, 5MB max
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -66,7 +66,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// General API rate limiter — prevents abuse of all endpoints
+// General API rate limiter - prevents abuse of all endpoints
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: Number(process.env.API_RATE_LIMIT_MAX) || 100,
@@ -75,7 +75,7 @@ const apiLimiter = rateLimit({
   message: { success: false, message: 'Too many requests. Please slow down.' },
 });
 
-// Password reset — one-time links, must not be brute-forced or replayed
+// Password reset - one-time links, must not be brute-forced or replayed
 const resetLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: Number(process.env.RESET_RATE_LIMIT_MAX) || 5,
@@ -105,7 +105,7 @@ function checkLockout(email) {
     return { locked: true, remainingMs };
   }
 
-  // Lockout expired — reset
+  // Lockout expired - reset
   if (record.lockedUntil && Date.now() >= record.lockedUntil) {
     loginAttempts.delete(email.toLowerCase());
     return { locked: false };
@@ -150,7 +150,7 @@ async function isPreviouslyUsedPassword(newPassword, user) {
   return false;
 }
 
-// ===== OTP Store (persistent — survives restarts/deploys) =====
+// ===== OTP Store (persistent - survives restarts/deploys) =====
 // Stored in data/otps.json (persisted to MongoDB via the 'otps' collection),
 // because signup OTPs belong to emails that don't have a user document yet.
 const OTPS_FILE = path.join(__dirname, './data/otps.json');
@@ -180,7 +180,7 @@ function deleteOtpEntry(email, purpose) {
 // and AWAIT persistence so a process restart can't resurrect the old token/password
 async function applyNewPassword(user, users, usersFile, newPassword) {
   const history = user.passwordHistory || [];
-  // Legacy users have no history — record the outgoing password so it can't be reused
+  // Legacy users have no history - record the outgoing password so it can't be reused
   if (user.password && history[history.length - 1] !== user.password) {
     history.push(user.password);
   }
@@ -191,7 +191,7 @@ async function applyNewPassword(user, users, usersFile, newPassword) {
   user.passwordHistory = history.slice(-PASSWORD_HISTORY_LIMIT);
   user.resetToken = null;
   user.passwordChangedAt = new Date().toISOString();
-  // A successful reset proves account ownership — clear any lockout
+  // A successful reset proves account ownership - clear any lockout
   user.failedAttempts = 0;
   user.lockedUntil = null;
   await writeJsonFile(usersFile, users);
@@ -224,7 +224,7 @@ function validateName(name) {
 let mongoClient = null;
 let mongoDb = null;
 let mongoConnectionError = null;
-// Collections written while MongoDB was unreachable — flushed to Mongo on the
+// Collections written while MongoDB was unreachable - flushed to Mongo on the
 // next successful (re)connect so no data is silently lost on ephemeral disks.
 const pendingMongoWrites = new Set();
 const dataCache = {};
@@ -240,7 +240,7 @@ async function connectMongoDB() {
 
   console.log('Connecting to MongoDB URI:', uri.substring(0, 35) + '...');
   try {
-    // Simplest possible connection — let mongoose/driver handle TLS automatically
+    // Simplest possible connection - let mongoose/driver handle TLS automatically
     // tlsAllowInvalidCertificates scoped to Mongo only (not global TLS disable)
     await mongoose.connect(uri, { serverSelectionTimeoutMS: 15000, tlsAllowInvalidCertificates: true });
     mongoDb = mongoose.connection.db;
@@ -315,13 +315,13 @@ async function connectMongoDB() {
     console.log('Data loaded into memory cache');
 
     // After the Mongo merge, make sure every cached product exists in the SQLite
-    // inventory store — otherwise reserve/checkout 404s for products that were
+    // inventory store - otherwise reserve/checkout 404s for products that were
     // never present in products.json (e.g. MongoDB-only products on Render).
     try {
       const cachedProducts = dataCache['products'] || [];
       let synced = 0;
       for (const p of cachedProducts) {
-        // Seed from the SELLABLE count (available_stock/stock), never total_stock —
+        // Seed from the SELLABLE count (available_stock/stock), never total_stock -
         // total_stock is the lifetime figure and would silently re-add sold units
         // on every restart. Existing SQLite rows are never overwritten (source of truth).
         const stock = p.available_stock !== undefined
@@ -364,7 +364,7 @@ async function connectMongoDB() {
             dataCache[col] = [...(dataCache[col] || []), ...newDocs];
             console.log(`  ${col}: ${newDocs.length} new records merged from MongoDB (${dataCache[col].length} total)`);
           } else {
-            // MongoDB empty — seed from file or defaults
+            // MongoDB empty - seed from file or defaults
             const filePath = path.join(__dirname, './data', `${col}.json`);
             if (fs.existsSync(filePath)) {
               const fileData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -439,7 +439,7 @@ function writeJsonFile(filePath, data) {
   } catch (err) {
     console.error(`File write error (${filePath}):`, err.message);
   }
-  // Persist to MongoDB — returns a promise so auth-critical handlers can await it;
+  // Persist to MongoDB - returns a promise so auth-critical handlers can await it;
   // other callers ignore the return and keep fire-and-forget behavior
   if (mongoDb) {
     return persistToMongo(colName, data).catch(err => {
@@ -447,7 +447,7 @@ function writeJsonFile(filePath, data) {
       pendingMongoWrites.add(colName);
     });
   }
-  // Mongo unreachable — remember the collection so we can flush it on reconnect
+  // Mongo unreachable - remember the collection so we can flush it on reconnect
   pendingMongoWrites.add(colName);
 }
 
@@ -603,8 +603,8 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Seed endpoint — creates default users + products if MongoDB is empty
-// Block seed endpoint in production — it can overwrite existing data
+// Seed endpoint - creates default users + products if MongoDB is empty
+// Block seed endpoint in production - it can overwrite existing data
 if (process.env.NODE_ENV === 'production') {
   app.use('/api/seed', (req, res) => {
     res.status(404).json({ success: false, message: 'Not found' });
@@ -707,14 +707,14 @@ app.get('/api/seed', async (req, res) => {
     // Seed orders (from local test data)
     const existingOrders = await mongoDb.collection('orders').countDocuments();
     if (existingOrders === 0) {
-      // No seed orders — start clean. Real orders come from checkout.
+      // No seed orders - start clean. Real orders come from checkout.
       dataCache['orders'] = [];
-      results.push('No seed orders — starting clean');
+      results.push('No seed orders - starting clean');
     } else {
       results.push(`Orders already exist (${existingOrders})`);
     }
 
-    // Messages and conversations are NOT seeded — they should only appear when real users message each other
+    // Messages and conversations are NOT seeded - they should only appear when real users message each other
     // Clear any previously seeded fake messages
     const existingMessages = await mongoDb.collection('messages').countDocuments();
     if (existingMessages > 0) {
@@ -762,7 +762,7 @@ app.get('/api/seed', async (req, res) => {
   }
 });
 
-// Block all /api/debug/* endpoints in production — they expose user data
+// Block all /api/debug/* endpoints in production - they expose user data
 // and allow destructive operations (clear products/orders, migrate admin, etc.)
 if (process.env.NODE_ENV === 'production') {
   app.use('/api/debug', (req, res) => {
@@ -770,7 +770,7 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Debug endpoint — list all users (emails only, no passwords)
+// Debug endpoint - list all users (emails only, no passwords)
 app.get('/api/debug/users', async (req, res) => {
   try {
     const users = readJsonFile(path.join(__dirname, './data/users.json'));
@@ -784,7 +784,7 @@ app.get('/api/debug/users', async (req, res) => {
   }
 });
 
-// Debug endpoint — check cache state
+// Debug endpoint - check cache state
 app.get('/api/debug/cache', (req, res) => {
   const result = {};
   for (const col of COLLECTIONS) {
@@ -801,7 +801,7 @@ app.get('/api/debug/cache', (req, res) => {
   res.json(result);
 });
 
-// One-time migration — add phone to existing users
+// One-time migration - add phone to existing users
 app.get('/api/debug/migrate-phones', async (req, res) => {
   try {
     const usersFile = path.join(__dirname, './data/users.json');
@@ -822,7 +822,7 @@ app.get('/api/debug/migrate-phones', async (req, res) => {
   }
 });
 
-// Debug endpoint — inspect orders to see why they don't show
+// Debug endpoint - inspect orders to see why they don't show
 app.get('/api/debug/orders', (req, res) => {
   const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
   res.json({
@@ -842,7 +842,7 @@ app.get('/api/debug/orders', (req, res) => {
   });
 });
 
-// Debug endpoint — clear old products from MongoDB
+// Debug endpoint - clear old products from MongoDB
 app.get('/api/debug/clear-products', async (req, res) => {
   try {
     const productsFile = path.join(__dirname, './data/products.json');
@@ -857,7 +857,7 @@ app.get('/api/debug/clear-products', async (req, res) => {
   }
 });
 
-// Debug endpoint — clear all notifications
+// Debug endpoint - clear all notifications
 app.get('/api/debug/clear-notifications', async (req, res) => {
   try {
     const notifFile = path.join(__dirname, './data/notifications.json');
@@ -872,7 +872,7 @@ app.get('/api/debug/clear-notifications', async (req, res) => {
   }
 });
 
-// Debug endpoint — fix product stock to match total_stock
+// Debug endpoint - fix product stock to match total_stock
 app.get('/api/debug/fix-stock', async (req, res) => {
   try {
     const productsFile = path.join(__dirname, './data/products.json');
@@ -891,7 +891,7 @@ app.get('/api/debug/fix-stock', async (req, res) => {
         p.available_stock = p.total_stock - sold - reserved;
         p.stock = p.available_stock;
       } else {
-        // No inventory migration yet — reset to original stock
+        // No inventory migration yet - reset to original stock
         p.stock = p.stock || 0;
       }
     });
@@ -907,7 +907,7 @@ app.get('/api/debug/fix-stock', async (req, res) => {
   }
 });
 
-// Debug endpoint — clear all orders
+// Debug endpoint - clear all orders
 app.get('/api/debug/clear-orders', async (req, res) => {
   try {
     const ordersFile = path.join(__dirname, './data/orders.json');
@@ -922,7 +922,7 @@ app.get('/api/debug/clear-orders', async (req, res) => {
   }
 });
 
-// Debug endpoint — migrate admin account to techpharma10@gmail.com
+// Debug endpoint - migrate admin account to techpharma10@gmail.com
 app.get('/api/debug/migrate-admin', async (req, res) => {
   try {
     const usersFile = path.join(__dirname, './data/users.json');
@@ -978,7 +978,7 @@ const authMiddleware = async (req, res, next) => {
       }
     }
 
-    // Set user data in request — role comes from the DB record, never the request
+    // Set user data in request - role comes from the DB record, never the request
     req.user = { 
       _id: decoded.userId,
       id: decoded.userId, // Include both id formats for compatibility
@@ -1086,11 +1086,11 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 });
 
 // ===== OTP for Signup =====
-// Verified-email flag (5-min re-send guard) — in-memory only; losing it on a
+// Verified-email flag (5-min re-send guard) - in-memory only; losing it on a
 // restart just means the user can re-request an OTP, which is harmless.
 const verifiedEmails = new Set();
 
-// Email sender — tries Gmail API (HTTPS, port 443) → Resend → nodemailer fallback
+// Email sender - tries Gmail API (HTTPS, port 443) → Resend → nodemailer fallback
 const { google } = require('googleapis');
 
 let gmailClient = null;
@@ -1152,7 +1152,7 @@ async function sendEmail(to, subject, text, html) {
     }
   }
 
-  // 2. Try Brevo (HTTPS API on port 443 — works on Render free tier, no SMTP port block;
+  // 2. Try Brevo (HTTPS API on port 443 - works on Render free tier, no SMTP port block;
   //    free tier needs only a verified sender email, no domain required)
   if (process.env.BREVO_API_KEY) {
     try {
@@ -1234,7 +1234,7 @@ async function sendEmail(to, subject, text, html) {
     errors.push(`nodemailer: ${err.message}`);
   }
 
-  // All providers failed — throw so the caller knows the email wasn't sent
+  // All providers failed - throw so the caller knows the email wasn't sent
   throw new Error(`All email providers failed: ${errors.join('; ')}`);
 }
 
@@ -1246,7 +1246,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    // Check if email is already registered — respond identically either way
+    // Check if email is already registered - respond identically either way
     // (no account-existence oracle); registered emails silently get no OTP
     const usersFile = path.join(__dirname, './data/users.json');
     const users = readJsonFile(usersFile);
@@ -1260,11 +1260,11 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email already verified. Please complete registration.' });
     }
 
-    // Generate 6-digit OTP (persisted — survives restarts mid-signup)
+    // Generate 6-digit OTP (persisted - survives restarts mid-signup)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     setOtpEntry(email, 'signup', otp, 5 * 60 * 1000);
 
-    // Respond immediately — send email in background (don't block the request)
+    // Respond immediately - send email in background (don't block the request)
     res.json({ success: true, message: 'OTP sent successfully' });
 
     // Send email in background (fire-and-forget)
@@ -1335,7 +1335,7 @@ app.post('/api/auth/send-delete-otp', async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     setOtpEntry(email, 'delete', otp, 5 * 60 * 1000);
 
-    // Respond immediately — send email in background
+    // Respond immediately - send email in background
     res.json({ success: true, message: 'OTP sent successfully' });
 
     sendEmail(
@@ -1395,7 +1395,7 @@ app.post('/api/auth/delete-account', async (req, res) => {
   }
 });
 
-// Password reset email — uses the server's multi-provider sendEmail (Gmail API/Resend/nodemailer)
+// Password reset email - uses the server's multi-provider sendEmail (Gmail API/Resend/nodemailer)
 async function sendPasswordResetEmail(email, resetToken) {
   const resetLink = `${process.env.FRONTEND_URL || 'https://techpharma.vercel.app'}/auth/reset-password?token=${resetToken}`;
   const subject = 'Reset Your Password - TechPharma';
@@ -1443,7 +1443,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     // Find user
     const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-    // Persistent per-email cooldown (survives restarts) — silently throttled,
+    // Persistent per-email cooldown (survives restarts) - silently throttled,
     // same generic response (no user enumeration)
     if (user && user.lastResetEmailAt && Date.now() - new Date(user.lastResetEmailAt).getTime() < RESET_EMAIL_COOLDOWN_MS) {
       return res.json({
@@ -1471,7 +1471,7 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
       } catch (emailError) {
         console.error('Failed to send password reset email:', emailError.message);
       } finally {
-        // Store reset token with user — even if the email failed, so a manually
+        // Store reset token with user - even if the email failed, so a manually
         // shared link still works. Awaited: a restart must not lose the token.
         user.resetToken = {
           token: resetToken,
@@ -1550,7 +1550,7 @@ app.post('/api/auth/reset-password', resetLimiter, async (req, res) => {
       return res.status(400).json({ message: 'Password must be between 8 and 128 characters' });
     }
 
-    // Verify token (purpose check — login tokens must not work here)
+    // Verify token (purpose check - login tokens must not work here)
     const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
     if (decoded.purpose !== 'reset') {
       return res.status(400).json({ message: 'Invalid reset link' });
@@ -1674,7 +1674,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       });
     }
 
-    // Persistent lockout — state lives on the user doc, so it survives restarts/deploys
+    // Persistent lockout - state lives on the user doc, so it survives restarts/deploys
     if (user.lockedUntil) {
       if (Date.now() < new Date(user.lockedUntil).getTime()) {
         console.warn(`[SECURITY] Login blocked for locked account: ${email}`);
@@ -1683,7 +1683,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
           message: 'Incorrect email or password'
         });
       }
-      // Lockout expired — reset the failure counter
+      // Lockout expired - reset the failure counter
       user.failedAttempts = 0;
       user.lockedUntil = null;
       await writeJsonFile(usersFile, users);
@@ -1948,7 +1948,7 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   }
 });
 
-// Logout — invalidate token
+// Logout - invalidate token
 app.post('/api/auth/logout', authMiddleware, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -2390,7 +2390,7 @@ app.get('/api/supplier/:id', async (req, res) => {
   }
 });
 
-// User routes — self or admin only (id comes from the JWT session, not the request)
+// User routes - self or admin only (id comes from the JWT session, not the request)
 app.get('/api/users/:id', authMiddleware, async (req, res) => {
   try {
     // Authorization: user can only view their own profile, unless admin
@@ -2426,7 +2426,7 @@ app.get('/api/users/:id', authMiddleware, async (req, res) => {
 // Import routes
 const messagesRoutes = require('./src/routes/messages');
 
-// Dashboard route (inline — uses server.js authMiddleware, not separate middleware)
+// Dashboard route (inline - uses server.js authMiddleware, not separate middleware)
 app.get('/api/dashboard', authMiddleware, async (req, res) => {
   try {
     const userId = req.user._id || req.user.id;
@@ -2452,7 +2452,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     const allUsers = readJsonFile(path.join(__dirname, './data/users.json'));
     const isAdmin = isAdminUserId(userId);
 
-    // Newest-first comparator — must be declared before adminData/activity use it
+    // Newest-first comparator - must be declared before adminData/activity use it
     const byNewest = (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
 
     // Admin-only view data (platform-wide overview)
@@ -2545,7 +2545,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     // Combined recent activity, newest first.
     // Admins see every platform order as a neutral 'New order' event (they
     // personally never buy or sell). Sellers see 'New sale' only for orders
-    // placed by OTHER buyers — an order you placed yourself is not a sale
+    // placed by OTHER buyers - an order you placed yourself is not a sale
     // you received, so self-purchases are excluded from sale events.
     const activity = isAdmin
       ? orders.slice().sort(byNewest).slice(0, 8).map(order => ({
@@ -2918,7 +2918,7 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
     const order = orders.find(o => o._id === req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    // Admins are read-only — they cannot update order status
+    // Admins are read-only - they cannot update order status
     if (isAdminUserId(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Admins cannot update order status' });
     }
@@ -2968,7 +2968,7 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
   }
 });
 
-// Track order by tracking ID (public — no auth required)
+// Track order by tracking ID (public - no auth required)
 // If admin token provided, also return seller (from) address
 app.get('/api/orders/track/:trackingId', async (req, res) => {
   try {
@@ -3430,7 +3430,7 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
       idempotencyKey
     });
 
-    // If idempotent hit, return existing order — no side effects
+    // If idempotent hit, return existing order - no side effects
     if (result.idempotent) {
       return res.json({ success: true, order: result.order, idempotent: true });
     }
@@ -3465,7 +3465,7 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
       }
     });
 
-    // Low stock alerts — check each purchased product after stock decrement
+    // Low stock alerts - check each purchased product after stock decrement
     const LOW_STOCK_THRESHOLD = 5;
     const purchasedProductIds = new Set(cart.items.map(i => i.productId));
     const products = readJsonFile(path.join(__dirname, './data/products.json'));
@@ -3479,7 +3479,7 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
             _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + p._id,
             userId: sellerId,
             title: 'Low stock alert',
-            message: `"${p.name}" is running low — only ${currentStock} left in stock.`,
+            message: `"${p.name}" is running low - only ${currentStock} left in stock.`,
             type: 'stock_update',
             read: false,
             archived: false,
@@ -3518,16 +3518,16 @@ app.use((err, req, res, next) => {
 // Start server
 const startServer = async () => {
   try {
-    // Initialize storage FIRST — pre-loads products.json into cache synchronously
+    // Initialize storage FIRST - pre-loads products.json into cache synchronously
     // This ensures products are available from second 0, even before MongoDB connects
     initStorage();
 
-    // Connect to MongoDB (don't block server start — data is already in cache from files)
+    // Connect to MongoDB (don't block server start - data is already in cache from files)
     connectMongoDB().then(connected => {
       if (connected) console.log('MongoDB connected in background');
     });
 
-    // Persist inventory stock changes (checkout, reservations, edits) to MongoDB —
+    // Persist inventory stock changes (checkout, reservations, edits) to MongoDB -
     // without this, fresh containers would re-seed stale stock from Mongo.
     inventory.setMongoStockSyncer(async (productId, stock) => {
       if (!mongoDb) return;
@@ -3551,7 +3551,7 @@ const startServer = async () => {
     inventory.startExpirationJob(60000);
     console.log('[inventory] Expiration job started (60s interval)');
 
-    // Start weekly summary job — runs every 7 days
+    // Start weekly summary job - runs every 7 days
     const WEEKLY_INTERVAL = 7 * 24 * 60 * 60 * 1000;
     const generateWeeklySummary = () => {
       try {
@@ -3668,5 +3668,5 @@ Backend Server Running
 
 startServer();
 
-// Export for integration tests (supertest) — does not affect production startup
+// Export for integration tests (supertest) - does not affect production startup
 module.exports = app;

@@ -182,7 +182,7 @@ export default function TrackOrderPage() {
                 <div className={`grid ${data.sellerAddress ? 'sm:grid-cols-2' : ''} gap-6`}>
                   {data.sellerAddress && (
                     <div>
-                      <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-2">From — Seller</h3>
+                      <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-2">From - Seller</h3>
                       <div className="text-sm text-muted-foreground space-y-1">
                         {data.sellerAddress.name && <p className="text-foreground font-medium">{data.sellerAddress.name}</p>}
                         {data.sellerAddress.company && <p>{data.sellerAddress.company}</p>}
@@ -194,7 +194,7 @@ export default function TrackOrderPage() {
                   )}
                   {data.shippingAddress && (
                     <div>
-                      <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-2">To — Delivery Address</h3>
+                      <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-2">To - Delivery Address</h3>
                       <div className="text-sm text-muted-foreground space-y-1">
                         {data.shippingAddress.name && <p className="text-foreground font-medium">{data.shippingAddress.name}</p>}
                         <p>{[data.shippingAddress.city, data.shippingAddress.state].filter(Boolean).join(', ')}</p>

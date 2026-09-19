@@ -1,5 +1,5 @@
 // Worker process for multi-process concurrency testing.
-// Spawned by inventory.test.js — each instance tries to reserve 1 unit.
+// Spawned by inventory.test.js - each instance tries to reserve 1 unit.
 // Proves that SQLite's transaction + conditional UPDATE prevents overselling
 // across separate Node processes (not just within a single event loop).
 

@@ -72,7 +72,7 @@ export function ProductCarousel3D() {
         zIndex: 1,
       }}
     >
-      {/* Sticky pinned div — also gets the radius */}
+      {/* Sticky pinned div - also gets the radius */}
       <div
         className="sticky top-0 h-screen w-full flex flex-col items-center justify-center overflow-hidden"
         style={{
@@ -80,7 +80,7 @@ export function ProductCarousel3D() {
           borderRadius: sectionRadius,
         }}
       >
-        {/* Heading — NO eyebrow text */}
+        {/* Heading - NO eyebrow text */}
         <div className="absolute top-[12%] left-0 right-0 text-center z-30 pointer-events-none px-6">
           <h2 className="font-display text-3xl md:text-5xl font-bold text-background">
             Our <span className="italic">products.</span>

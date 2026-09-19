@@ -30,7 +30,7 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
 const RESERVATIONS_FILE = path.join(DATA_DIR, 'reservations.json');
 
-// This suite overwrites products.json / reservations.json — back them up first
+// This suite overwrites products.json / reservations.json - back them up first
 const BACKUP_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'tp-inventory-test-'));
 for (const f of ['products.json', 'reservations.json']) {
   if (fs.existsSync(path.join(DATA_DIR, f))) {
@@ -66,7 +66,7 @@ function setupTestProduct(stock) {
 }
 
 function getProduct() {
-  // Read from SQLite (source of truth) — not products.json — so that
+  // Read from SQLite (source of truth) - not products.json - so that
   // multi-process test results are visible even when child processes
   // don't sync back to the JSON cache.
   const db = getDb();

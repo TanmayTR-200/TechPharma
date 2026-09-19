@@ -62,7 +62,7 @@ export default function CheckoutPage() {
         }
       }
     } catch (e) {
-      // Addresses not available — user can still type manually
+      // Addresses not available - user can still type manually
     }
   }
 

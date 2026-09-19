@@ -1,5 +1,5 @@
 /**
- * Auth API integration tests — runs the REAL server via supertest.
+ * Auth API integration tests - runs the REAL server via supertest.
  *
  * Isolation:
  *  - MONGODB_URI is blanked → server runs on file storage (tests never touch Mongo/Atlas)
@@ -56,7 +56,7 @@ afterAll(() => {
   }
   fs.rmSync(BACKUP_DIR, { recursive: true, force: true });
 
-  // otps.json is created by the tests (no backup existed) — remove the leftover
+  // otps.json is created by the tests (no backup existed) - remove the leftover
   if (fs.existsSync(OTPS_FILE)) fs.rmSync(OTPS_FILE);
 });
 

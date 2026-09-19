@@ -1,9 +1,9 @@
 /**
- * Dashboard API integration tests — runs the REAL server via supertest.
+ * Dashboard API integration tests - runs the REAL server via supertest.
  *
  * Regression guard: /api/dashboard must never 500 for the admin account.
- * (A TDZ crash — the byNewest comparator was used before its const
- * declaration inside the admin branch — once broke every admin request
+ * (A TDZ crash - the byNewest comparator was used before its const
+ * declaration inside the admin branch - once broke every admin request
  * while non-admin users kept working.)
  *
  * Isolation mirrors auth.test.js: MONGODB_URI blanked (file storage),
@@ -49,7 +49,7 @@ afterAll(() => {
       try {
         if (fs.existsSync(f)) fs.unlinkSync(f);
       } catch (e) {
-        // Windows: the running server may still hold the SQLite file open —
+        // Windows: the running server may still hold the SQLite file open -
         // the temp file is disposable, so a locked unlink is not a failure.
       }
     });

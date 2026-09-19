@@ -155,7 +155,7 @@ function syncAllProductsToCache() {
   }
 }
 
-// Upsert product stock — called when a product is created or stock is edited.
+// Upsert product stock - called when a product is created or stock is edited.
 // Preserves reserved_stock: available = total - reserved.
 function upsertProduct(productId, stock) {
   const database = getDb();
@@ -185,7 +185,7 @@ function ensureProductSeeded(productId, stock) {
   `).run(productId, stock, stock);
 }
 
-// Clear all tables — for testing only
+// Clear all tables - for testing only
 function resetForTesting() {
   const database = getDb();
   database.prepare('DELETE FROM inventory_stock').run();

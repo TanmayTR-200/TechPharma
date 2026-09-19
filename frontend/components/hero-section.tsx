@@ -48,7 +48,7 @@ export function HeroSection() {
 
   return (
     <section ref={ref} className="relative min-h-[85vh] overflow-hidden z-10">
-      {/* Background image — right side visible, left fades to solid */}
+      {/* Background image - right side visible, left fades to solid */}
       <div className="absolute inset-0 z-0">
         <img
           src="/hero-bg.png"
@@ -59,7 +59,7 @@ export function HeroSection() {
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/90 to-transparent" />
       </div>
 
-      {/* Content — left-aligned, generous padding */}
+      {/* Content - left-aligned, generous padding */}
       <div className="relative z-10 min-h-[85vh] flex items-center">
         <div className="w-full max-w-7xl mx-auto px-6 sm:px-8">
           <div className="max-w-xl">
@@ -73,7 +73,7 @@ export function HeroSection() {
               The B2B Industrial Marketplace
             </motion.p>
 
-            {/* Headline — word-by-word stagger, large serif */}
+            {/* Headline - word-by-word stagger, large serif */}
             <h1 className="font-display text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[0.9] text-foreground mb-6">
               {headlineWords.map((word, i) => (
                 <motion.span

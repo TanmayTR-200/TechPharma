@@ -28,7 +28,7 @@ function AuthContent() {
 
   return (
     <div className="min-h-screen flex items-stretch relative z-10">
-      {/* Left — brand showcase */}
+      {/* Left - brand showcase */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-center p-16 bg-foreground text-background">
         <Link href="/" className="inline-flex items-center gap-2.5 mb-12">
           <span className="font-display text-lg font-bold tracking-[0.2em] uppercase text-background">TechPharma</span>
@@ -53,7 +53,7 @@ function AuthContent() {
         </div>
       </div>
 
-      {/* Right — auth form */}
+      {/* Right - auth form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 py-12">
         <div className="w-full max-w-sm mx-auto">
           {/* Mobile logo */}

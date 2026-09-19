@@ -25,12 +25,12 @@ export function ServerStatus() {
           retryCountRef.current = 0;
           setStatus('connected');
         } else {
-          // Health check returned but not ok — genuinely down
+          // Health check returned but not ok - genuinely down
           setStatus('disconnected');
         }
       } catch {
         if (cancelled) return;
-        // Fetch failed — likely Render cold start.
+        // Fetch failed - likely Render cold start.
         // Retry with backoff instead of immediately showing "disconnected".
         retryCountRef.current += 1;
 
@@ -48,7 +48,7 @@ export function ServerStatus() {
 
     checkConnection();
 
-    // Periodic check every 30s — REGARDLESS of current status, so the
+    // Periodic check every 30s - REGARDLESS of current status, so the
     // indicator recovers on its own once the server is back up.
     const checkInterval = setInterval(() => {
       retryCountRef.current = 0;

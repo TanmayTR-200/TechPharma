@@ -52,7 +52,7 @@ function migrateProducts() {
     }
   });
 
-  // Insert new products into SQLite — don't overwrite existing rows
+  // Insert new products into SQLite - don't overwrite existing rows
   // (SQLite is source of truth once seeded)
   const insertStmt = db.prepare(
     `INSERT OR IGNORE INTO inventory_stock
@@ -91,7 +91,7 @@ function migrateProducts() {
 
   if (jsonChanged) {
     fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
-    // Only seed an empty cache — never replace one that already holds more
+    // Only seed an empty cache - never replace one that already holds more
     // data (e.g. documents merged from MongoDB before this ran).
     if (global.dataCache && (!Array.isArray(global.dataCache.products) || global.dataCache.products.length === 0)) {
       global.dataCache.products = products;
@@ -137,7 +137,7 @@ async function reserve({ productId, quantity, userId, idempotencyKey }) {
       return { reservation: rowToReservation(existing), idempotent: true };
     }
 
-    // Conditional atomic stock decrement — the core oversell prevention.
+    // Conditional atomic stock decrement - the core oversell prevention.
     // If available_stock < quantity, zero rows are updated → 409.
     // The partial unique index on idempotency_key also prevents a race
     // where two processes insert the same key simultaneously.
@@ -392,7 +392,7 @@ async function createOrder({ userId, cartItems, buyerUser, paymentMethod, shippi
         throw { status: 400, message: `Product is no longer available: ${product.name}` };
       }
 
-      // Conditional atomic decrement — oversell prevention
+      // Conditional atomic decrement - oversell prevention
       const result = db.prepare(
         `UPDATE inventory_stock
            SET available_stock = available_stock - ?,

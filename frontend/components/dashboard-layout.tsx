@@ -28,7 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Admins manage the whole platform — make the scope visible in the nav,
+  // Admins manage the whole platform - make the scope visible in the nav,
   // and drop seller-oriented items (messaging buyers/suppliers) entirely.
   const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
   const navItems = sidebarItems

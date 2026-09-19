@@ -99,7 +99,7 @@ export function useAuthForm() {
         throw new Error(verifyResult.message);
       }
 
-      // Step 3: OTP verified — NOW create the user
+      // Step 3: OTP verified - NOW create the user
       toast({
         title: 'Verified!',
         description: 'Creating your account...',
