@@ -15,6 +15,7 @@ interface TrackingData {
   shippedAt: string | null
   deliveredAt: string | null
   shippingAddress: { name: string; city: string; state: string; pincode: string }
+  sellerAddress?: { name: string; email: string; company: string; address: string; phone: string } | null
 }
 
 const statusSteps = [
@@ -48,7 +49,10 @@ export default function TrackOrderPage() {
     setError('')
     setData(null)
     try {
-      const res = await fetch(`${API_URL}/api/orders/track/${trackId.trim()}`)
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL}/api/orders/track/${trackId.trim()}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
       const result = await res.json()
       if (!result.success) {
         setError(result.message || 'Order not found')
@@ -172,13 +176,32 @@ export default function TrackOrderPage() {
             </div>
 
             {/* Shipping address */}
-            {data.shippingAddress && (
+            {(data.shippingAddress || data.sellerAddress) && (
               <div className="border border-border p-6">
-                <h2 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Delivery Address</h2>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p className="text-foreground">{data.shippingAddress.name}</p>
-                  <p>{[data.shippingAddress.city, data.shippingAddress.state].filter(Boolean).join(', ')}</p>
-                  <p>{data.shippingAddress.pincode}</p>
+                <h2 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Shipment</h2>
+                <div className={`grid ${data.sellerAddress ? 'sm:grid-cols-2' : ''} gap-6`}>
+                  {data.sellerAddress && (
+                    <div>
+                      <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-2">From — Seller</h3>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        {data.sellerAddress.name && <p className="text-foreground font-medium">{data.sellerAddress.name}</p>}
+                        {data.sellerAddress.company && <p>{data.sellerAddress.company}</p>}
+                        {data.sellerAddress.address && <p>{data.sellerAddress.address}</p>}
+                        {data.sellerAddress.phone && <p>Phone: {data.sellerAddress.phone}</p>}
+                        {data.sellerAddress.email && <p>{data.sellerAddress.email}</p>}
+                      </div>
+                    </div>
+                  )}
+                  {data.shippingAddress && (
+                    <div>
+                      <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-2">To — Delivery Address</h3>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        {data.shippingAddress.name && <p className="text-foreground font-medium">{data.shippingAddress.name}</p>}
+                        <p>{[data.shippingAddress.city, data.shippingAddress.state].filter(Boolean).join(', ')}</p>
+                        <p>{data.shippingAddress.pincode}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

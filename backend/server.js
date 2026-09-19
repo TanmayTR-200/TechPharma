@@ -2843,26 +2843,49 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
       }
     });
 
-    res.json({ success: true, orders: userOrders.map(o => ({
-      _id: o._id,
-      orderNumber: o.orderNumber || o._id.slice(-6),
-      trackingId: o.trackingId || null,
-      buyerName: o.buyerName || null,
-      buyerEmail: o.buyerEmail || null,
-      items: o.items.map(item => ({
-        product: item.product,
-        name: item.product?.name,
-        quantity: item.quantity,
-        price: item.price,
-        sellerId: item.sellerId || null,
-        supplierName: item.supplierName || null,
-      })),
-      totalAmount: o.totalAmount || 0,
-      status: o.status || 'pending',
-      paymentMethod: o.paymentMethod || 'cod',
-      shippingAddress: o.shippingAddress || {},
-      createdAt: o.createdAt
-    })) });
+    const isAdmin = isAdminUserId(req.user._id);
+
+    res.json({ success: true, orders: userOrders.map(o => {
+      // Admin-only: resolve seller (from) address from the first item's sellerId
+      let sellerAddress = null;
+      if (isAdmin) {
+        const sellerId = o.items?.[0]?.sellerId || o.items?.[0]?.product?.sellerId;
+        if (sellerId) {
+          const seller = userMap.get(sellerId);
+          if (seller) {
+            sellerAddress = {
+              name: seller.name || '',
+              email: seller.email || '',
+              company: seller.company?.name || '',
+              address: seller.company?.address || seller.state || '',
+              phone: seller.phone || ''
+            };
+          }
+        }
+      }
+
+      return {
+        _id: o._id,
+        orderNumber: o.orderNumber || o._id.slice(-6),
+        trackingId: o.trackingId || null,
+        buyerName: o.buyerName || null,
+        buyerEmail: o.buyerEmail || null,
+        items: o.items.map(item => ({
+          product: item.product,
+          name: item.product?.name,
+          quantity: item.quantity,
+          price: item.price,
+          sellerId: item.sellerId || null,
+          supplierName: item.supplierName || null,
+        })),
+        totalAmount: o.totalAmount || 0,
+        status: o.status || 'pending',
+        paymentMethod: o.paymentMethod || 'cod',
+        shippingAddress: o.shippingAddress || {},
+        sellerAddress,
+        createdAt: o.createdAt
+      };
+    }) });
   } catch (error) {
     console.error('Orders error:', error);
     res.status(500).json({ success: false, message: 'Error fetching orders' });
@@ -2894,6 +2917,11 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
     const order = orders.find(o => o._id === req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
+
+    // Admins are read-only — they cannot update order status
+    if (isAdminUserId(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'Admins cannot update order status' });
+    }
 
     // Only the seller can update order status
     const isSeller = order.items.some(item => String(item.sellerId) === String(req.user._id));
@@ -2941,12 +2969,44 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
 });
 
 // Track order by tracking ID (public — no auth required)
+// If admin token provided, also return seller (from) address
 app.get('/api/orders/track/:trackingId', async (req, res) => {
   try {
     const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
     const order = orders.find(o => o.trackingId === req.params.trackingId);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found. Check your tracking ID.' });
+    }
+
+    // Resolve seller info for admin
+    let sellerInfo = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      try {
+        const token = authHeader.split(' ')[1];
+        if (token) {
+          const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+          const users = readJsonFile(path.join(__dirname, './data/users.json'));
+          const currentUser = users.find(u => String(u._id) === String(decoded.userId));
+          if (currentUser && (currentUser.role === 'admin' || String(currentUser.email || '').toLowerCase() === 'techpharma10@gmail.com')) {
+            const sellerId = order.items?.[0]?.sellerId || order.items?.[0]?.product?.sellerId;
+            if (sellerId) {
+              const seller = users.find(u => String(u._id) === String(sellerId));
+              if (seller) {
+                sellerInfo = {
+                  name: seller.name || '',
+                  email: seller.email || '',
+                  company: seller.company?.name || '',
+                  address: seller.company?.address || seller.state || '',
+                  phone: seller.phone || ''
+                };
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // ignore token errors, continue without seller info
+      }
     }
 
     res.json({
@@ -2969,7 +3029,8 @@ app.get('/api/orders/track/:trackingId', async (req, res) => {
           city: order.shippingAddress?.city || '',
           state: order.shippingAddress?.state || '',
           pincode: order.shippingAddress?.pincode || ''
-        }
+        },
+        sellerAddress: sellerInfo
       }
     });
   } catch (error) {
@@ -2985,10 +3046,11 @@ app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
     const order = orders.find(o => o._id === req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
-    // Buyer can view their own invoice; seller can view for their items
+    // Buyer can view their own invoice; seller can view for their items; admin can view any
     const isBuyer = String(order.userId) === String(req.user._id);
     const isSeller = (order.items || []).some(item => String(item.sellerId) === String(req.user._id));
-    if (!isBuyer && !isSeller) {
+    const isAdmin = req.user.role === 'admin' || isAdminUserId(req.user._id);
+    if (!isBuyer && !isSeller && !isAdmin) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 

@@ -239,7 +239,7 @@ export default function SalesPage() {
                               ))}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              {orderSteps.filter(s => s !== 'pending').map(s => {
+                              {!isAdmin && orderSteps.filter(s => s !== 'pending').map(s => {
                                 const stepIdx = orderSteps.indexOf(s)
                                 const isNext = s === nextStep
                                 const isPast = stepIdx <= currentStepIdx

@@ -27,6 +27,13 @@ interface Order {
     state?: string
     pincode?: string
   }
+  sellerAddress?: {
+    name?: string
+    email?: string
+    company?: string
+    address?: string
+    phone?: string
+  } | null
 }
 
 const statusConfig: Record<string, { color: string; icon: any }> = {
@@ -347,8 +354,8 @@ export default function OrdersPage() {
               )}
             </div>
 
-            {/* Update status — seller only */}
-            {selectedOrder.status && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && user && selectedOrder.items?.some(item => String(item.sellerId) === String(user._id)) && (
+            {/* Update status — seller only (admins are read-only) */}
+            {!isAdmin && selectedOrder.status && selectedOrder.status !== 'delivered' && selectedOrder.status !== 'cancelled' && user && selectedOrder.items?.some(item => String(item.sellerId) === String(user._id)) && (
               <div className="border-t border-border pt-4 mb-4">
                 <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Update status</h3>
                 <div className="flex flex-wrap gap-2">
@@ -399,16 +406,35 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Shipping address */}
-            {selectedOrder.shippingAddress && (
+            {/* Addresses — From (seller) + To (delivery) */}
+            {(selectedOrder.shippingAddress || selectedOrder.sellerAddress) && (
               <div className="border-t border-border pt-4">
-                <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Delivery address</h3>
-                <div className="text-sm text-muted-foreground space-y-1">
-                  <p className="text-foreground">{selectedOrder.shippingAddress.name || ''}</p>
-                  <p>{selectedOrder.shippingAddress.line1 || ''}</p>
-                  <p>{[selectedOrder.shippingAddress.city, selectedOrder.shippingAddress.state].filter(Boolean).join(', ')}</p>
-                  <p>{selectedOrder.shippingAddress.pincode || ''}</p>
-                  {selectedOrder.shippingAddress.phone && <p>Phone: {selectedOrder.shippingAddress.phone}</p>}
+                <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Addresses</h3>
+                <div className={`grid ${selectedOrder.sellerAddress ? 'sm:grid-cols-2' : ''} gap-4`}>
+                  {selectedOrder.sellerAddress && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">From — Seller</p>
+                      <div className="text-sm text-muted-foreground space-y-0.5">
+                        {selectedOrder.sellerAddress.name && <p className="text-foreground font-medium">{selectedOrder.sellerAddress.name}</p>}
+                        {selectedOrder.sellerAddress.company && <p>{selectedOrder.sellerAddress.company}</p>}
+                        {selectedOrder.sellerAddress.address && <p>{selectedOrder.sellerAddress.address}</p>}
+                        {selectedOrder.sellerAddress.phone && <p>Phone: {selectedOrder.sellerAddress.phone}</p>}
+                        {selectedOrder.sellerAddress.email && <p>{selectedOrder.sellerAddress.email}</p>}
+                      </div>
+                    </div>
+                  )}
+                  {selectedOrder.shippingAddress && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">To — Delivery</p>
+                      <div className="text-sm text-muted-foreground space-y-0.5">
+                        <p className="text-foreground">{selectedOrder.shippingAddress.name || ''}</p>
+                        <p>{selectedOrder.shippingAddress.line1 || ''}</p>
+                        <p>{[selectedOrder.shippingAddress.city, selectedOrder.shippingAddress.state].filter(Boolean).join(', ')}</p>
+                        <p>{selectedOrder.shippingAddress.pincode || ''}</p>
+                        {selectedOrder.shippingAddress.phone && <p>Phone: {selectedOrder.shippingAddress.phone}</p>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
