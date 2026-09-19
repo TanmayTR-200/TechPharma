@@ -35,6 +35,14 @@ const statusConfig: Record<string, { color: string; icon: any }> = {
 
 const orderSteps = ['pending', 'processing', 'shipped', 'delivered']
 
+// Admin-only: named timeline steps so the sales card shows which stage an order is on
+const stepLabels: Record<string, string> = {
+  pending: 'Placed',
+  processing: 'Processing',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+}
+
 export default function SalesPage() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.email === 'techpharma10@gmail.com'
@@ -238,6 +246,17 @@ export default function SalesPage() {
                                 </div>
                               ))}
                             </div>
+                            {isAdmin && (
+                              <div className="flex items-center gap-1 mb-3">
+                                {orderSteps.map((step, idx) => (
+                                  <div key={step} className="flex-1">
+                                    <p className={'text-[10px] ' + (idx === currentStepIdx ? 'text-foreground font-semibold' : idx < currentStepIdx ? 'text-muted-foreground/70' : 'text-muted-foreground/40')}>
+                                      {stepLabels[step] || step}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                             <div className="flex items-center gap-2 flex-wrap">
                               {!isAdmin && orderSteps.filter(s => s !== 'pending').map(s => {
                                 const stepIdx = orderSteps.indexOf(s)
