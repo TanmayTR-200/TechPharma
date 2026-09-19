@@ -26,6 +26,24 @@ function StatSkeleton() {
   )
 }
 
+// Admin-only: transaction stage shown next to the 'New order' label in the
+// activity feed, so the feed reads as a moving lifecycle, not just 'new'.
+const stageLabels: Record<string, string> = {
+  pending: 'Order placed',
+  processing: 'Order processing',
+  shipped: 'Order shipped',
+  delivered: 'Order delivered',
+  cancelled: 'Order cancelled',
+}
+
+const stageBadgeClass: Record<string, string> = {
+  pending: 'bg-secondary text-muted-foreground',
+  processing: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+  shipped: 'bg-sky-500/15 text-sky-600 dark:text-sky-400',
+  delivered: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
+  cancelled: 'bg-red-500/15 text-red-600 dark:text-red-400',
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
   const router = useRouter()
@@ -152,7 +170,12 @@ export default function DashboardPage() {
                           {n.type === 'sale' ? <TrendingUp className="h-3.5 w-3.5" /> : n.type === 'order' ? <Package className="h-3.5 w-3.5" /> : <ShoppingCart className="h-3.5 w-3.5" />}
                         </div>
                         <div className="min-w-0">
-                          <span className={'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full mb-1 ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : n.type === 'order' ? 'bg-amber-500/15 text-amber-600' : 'bg-sky-500/15 text-sky-600')}>{n.type === 'sale' ? 'New sale' : n.type === 'order' ? 'New order' : 'Order placed'}</span>
+                          <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                            <span className={'inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ' + (n.type === 'sale' ? 'bg-emerald-500/15 text-emerald-600' : n.type === 'order' ? 'bg-amber-500/15 text-amber-600' : 'bg-sky-500/15 text-sky-600')}>{n.type === 'sale' ? 'New sale' : n.type === 'order' ? 'New order' : 'Order placed'}</span>
+                            {isAdmin && n.type === 'order' && n.status && (
+                              <span className={'inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-medium ' + (stageBadgeClass[n.status] || 'bg-secondary text-muted-foreground')}>{stageLabels[n.status] || n.status}</span>
+                            )}
+                          </div>
                           <p className="text-sm font-medium text-foreground truncate">{n.product}{n.itemCount > 1 ? ' (+' + (n.itemCount - 1) + ' more)' : ''}</p>
                           <p className="text-xs text-muted-foreground truncate">{n.type === 'sale' && n.counterparty ? 'From ' + n.counterparty : n.type === 'order' && n.counterparty ? 'By ' + n.counterparty : 'Your purchase'}</p>
                         </div>
