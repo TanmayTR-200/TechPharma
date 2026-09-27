@@ -29,13 +29,16 @@ DECLARE
   failed   int := 0;
 BEGIN
   FOR c IN
-    SELECT c.oid,
-           c.conrelid::regclass::text AS tbl,
-           c.conname,
-           n.nspname               AS schema
-    FROM pg_constraint c
-    JOIN pg_namespace n ON n.oid = c.connamespace
-    WHERE NOT c.convalidated
+    -- NOTE: the table alias must NOT be `c` - that is the record variable, and
+    -- referencing `c.oid` in this query would resolve to the not-yet-assigned
+    -- record ("record c is not assigned yet"). Alias the relation as `con`.
+    SELECT con.oid,
+           con.conrelid::regclass::text AS tbl,
+           con.conname,
+           n.nspname                  AS schema
+    FROM pg_constraint con
+    JOIN pg_namespace n ON n.oid = con.connamespace
+    WHERE NOT con.convalidated
       AND n.nspname = 'public'
     ORDER BY 2, 3
   LOOP
