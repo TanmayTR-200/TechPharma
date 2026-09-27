@@ -47,16 +47,64 @@ const report = {
 };
 
 // ---------------------------------------------------------------------------
+// Duplicate-account merge
+// ---------------------------------------------------------------------------
+//
+// MongoDB only enforces uniqueness on _id, so a legacy collection can hold two
+// accounts with the same email. PostgreSQL enforces users_email_lower_key, so
+// one of them has to be dropped. Dropping it silently would orphan whatever it
+// owned (products, orders, carts), because those rows reference the id that is
+// being discarded.
+//
+// MONGODB_MERGE lets the operator state which account survives:
+//
+//   MONGODB_MERGE=1787600000000:1787482669584
+//
+// Every reference to the discarded id (seller_id, order.user_id, cart owner,
+// message sender/receiver) is redirected to the surviving id, and the
+// duplicate's own user row is dropped. The SOURCE database is never modified -
+// this redirect happens only while writing to PostgreSQL, so MongoDB remains a
+// faithful backup.
+const MERGE_MAP = new Map();
+{
+  const raw = process.env.MONGODB_MERGE || '';
+  for (const pair of raw.split(',')) {
+    const [from, to] = pair.split(':').map((s) => (s || '').trim());
+    if (from && to) MERGE_MAP.set(from, to);
+  }
+}
+
+/** Ids explicitly discarded by a merge; their user rows must not be written. */
+const MERGED_AWAY = new Set(MERGE_MAP.keys());
+
+/**
+ * Redirect an id through the merge map.
+ * Returns the id unchanged when no merge applies.
+ */
+function applyMerge(id) {
+  return id && MERGE_MAP.has(id) ? MERGE_MAP.get(id) : id;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Mongo _id (ObjectId/number/string) -> TEXT primary key. */
+/**
+ * Mongo _id (ObjectId/number/string) -> TEXT primary key.
+ *
+ * Any duplicate-account merge configured in MONGODB_MERGE is applied here, so
+ * every id the script touches (user ids, product ids, sender/receiver ids) is
+ * redirected consistently without each call site having to remember to.
+ */
 function toId(value) {
   if (value === null || value === undefined) return null;
+  let id;
   if (typeof value === 'object' && typeof value.toHexString === 'function') {
-    return value.toHexString(); // ObjectId -> hex string
+    id = value.toHexString(); // ObjectId -> hex string
+  } else {
+    id = String(value);
   }
-  return String(value);
+  return applyMerge(id);
 }
 
 function toDate(value, fallback) {
@@ -460,6 +508,19 @@ async function importUsers(client, src) {
   // account or aborting the whole migration.
   const seenEmails = new Map();
   for (const doc of docs) {
+    const rawId = toId(doc._id !== undefined ? doc._id : doc.id);
+    if (rawId && MERGED_AWAY.has(rawId)) {
+      // Explicitly merged away by MONGODB_MERGE: the surviving account is
+      // imported instead, and every reference to this id is already redirected.
+      report.skipped.push({
+        collection: 'users',
+        id: rawId,
+        reason: 'merged into ' + MERGE_MAP.get(rawId)
+          + ' by MONGODB_MERGE - references redirected, this account not imported',
+      });
+      continue;
+    }
+
     const m = mapUser(doc);
     if (!m) continue;
     const email = m.params[0];
@@ -854,9 +915,15 @@ async function main() {
       await client.query('ROLLBACK').catch(() => {});
       console.error('[migrate] rolled back - nothing was written');
     }
-    // An SRV failure is a network problem, not a credential one, so point at
-    // the concrete workaround instead of just repeating the driver message.
-    if (/querySrv|SRV/i.test(err.message) && !directHost) {
+    // An error with no message still hides the useful part, so surface the code
+    // and the config that produced it. An empty `err.message` from the pg
+    // driver almost always means the socket never opened - typically the
+    // provider's SRV record is blocked on this network (see the notes above) -
+    // so say that instead of printing a blank line.
+    const detail = err.message || ('(no message; code=' + (err.code || 'none')
+      + ') - the connection was never established. Check that this machine can '
+      + 'reach the database host, and that the password in .env is correct.');
+    if (/querySrv|SRV/i.test(detail) && !directHost) {
       console.error('');
       console.error('[migrate] This looks like your network cannot resolve MongoDB SRV');
       console.error('[migrate] records (_mongodb._tcp.*), not a bad password.');
@@ -873,7 +940,7 @@ async function main() {
       console.error('[migrate] "Connect" dialog and copy the SRV host and replica set.');
       console.error('[migrate]');
     }
-    console.error('[migrate] FAILED:', err.message);
+    console.error('[migrate] FAILED:', detail);
     process.exitCode = 1;
   } finally {
     if (client) client.release();
