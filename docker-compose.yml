@@ -1,6 +1,67 @@
-version: '3.8'
-
+# TechPharma - application services.
+#
+# The primary database is HOSTED (Supabase), so the backend and frontend work
+# without a local database and without this machine being on.
+# No `version` key: it is obsolete in the Compose v2 spec.
+#
+# The local `postgres` service below is now an OPTIONAL developer convenience.
+# It only starts when you explicitly enable the `localdb` profile:
+#
+#   docker compose up -d                     # app + Supabase (default)
+#   docker compose --profile localdb up -d   # app + local postgres
+#
+# There is no need to run a local database in normal use. When DATABASE_URL
+# points at a hosted provider, the `postgres` service is not started at all, so
+# there is nothing to keep alive locally.
 services:
+  # Local PostgreSQL - OPTIONAL. Disabled by default (see the `profiles` key),
+  # because the primary database is hosted. Data lives in the `pgdata` volume,
+  # so it survives `docker compose down` and is removed only by
+  # `docker compose down -v`.
+  postgres:
+    profiles: [localdb]
+    image: postgres:16-alpine
+    container_name: techpharma-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-techpharma}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-techpharma}
+      - POSTGRES_DB=${POSTGRES_DB:-techpharma}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - techpharma-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-techpharma} -d ${POSTGRES_DB:-techpharma}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Applies backend/migrations/*.sql once per `docker compose up`.
+  # Uses the app's own runner (npm run db:migrate), which records each file in
+  # `schema_migrations` and is therefore safe to re-run. It is a separate
+  # one-shot service rather than a postgres volume mount because 003_constraints.sql
+  # uses bare `ALTER TABLE ... ADD CONSTRAINT`, which would fail on a second run
+  # and would bypass the migration ledger entirely.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: techpharma-migrate
+    command: ["npm", "run", "db:migrate"]
+    restart: "no"
+    environment:
+      - NODE_ENV=production
+      # Hosted database. TLS is required, and `postgres.js` also enables it
+      # automatically for any non-loopback host.
+      - PG_SSL=${PG_SSL:-true}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL must be set in .env}
+    networks:
+      - techpharma-network
+
   backend:
     build:
       context: ./backend
@@ -13,6 +74,10 @@ services:
       - NODE_ENV=production
       - PORT=5000
       - JWT_SECRET=${JWT_SECRET:-your-secret-jwt-key-change-in-production}
+      # Hosted database (Supabase). TLS is on; `postgres.js` also auto-enables it
+      # for non-loopback hosts.
+      - PG_SSL=${PG_SSL:-true}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL must be set in .env}
       - MONGODB_URI=${MONGODB_URI:-}
       - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
       - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
@@ -24,6 +89,13 @@ services:
       - backend-data:/app/data
     networks:
       - techpharma-network
+    depends_on:
+      # Schema is created before the API starts, so it never serves requests
+      # against missing tables. `service_completed_successfully` makes compose
+      # wait for the one-shot migration to finish. There is no dependency on the
+      # local `postgres` service: the database is remote.
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/api/health"]
       interval: 30s
@@ -49,7 +121,10 @@ services:
     networks:
       - techpharma-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      # 127.0.0.1, not "localhost": /etc/hosts in the container also maps
+      # localhost to ::1, while Next.js binds IPv4 only, so a `localhost`
+      # probe is refused and marks a working app unhealthy.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -57,6 +132,9 @@ services:
 
 volumes:
   backend-data:
+    driver: local
+  # PostgreSQL cluster - keeps all data across restarts.
+  pgdata:
     driver: local
 
 networks:
