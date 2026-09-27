@@ -676,7 +676,30 @@ async function main() {
     process.exit(1);
   }
 
-  const mongo = new MongoClient(process.env.MONGODB_URI, {
+  // Some networks (notably a few Indian ISPs) cannot answer the
+  // `_mongodb._tcp.<cluster>` SRV query that a `mongodb+srv://` URI requires, so
+  // the driver fails with `querySrv ETIMEOUT` / `ECONNREFUSED` before it ever
+  // opens a socket. Ordinary A lookups work fine, so when that happens we can
+  // fall back to a normal `mongodb://` URI pointing straight at one shard.
+  //
+  // The fallback needs the shard host and the replica-set name:
+  //   MONGODB_DIRECT_HOST  (default: derived from MONGODB_DIRECT_HOST below)
+  //   MONGODB_REPLICA_SET  e.g. atlas-xxxxx-shard-0
+  // Both are printed by the error path so the user can copy them in.
+  const directHost = process.env.MONGODB_DIRECT_HOST;
+  const replicaSet = process.env.MONGODB_REPLICA_SET;
+  let mongoUri = process.env.MONGODB_URI;
+
+  if (/^mongodb\+srv:\/\//.test(mongoUri) && directHost) {
+    const u = new URL(mongoUri.replace('mongodb+srv://', 'mongodb://'));
+    const auth = u.username ? u.username + ':' + encodeURIComponent(u.password) + '@' : '';
+    mongoUri = 'mongodb://' + auth + directHost
+      + '/?authSource=admin&tls=true'
+      + (replicaSet ? '&replicaSet=' + encodeURIComponent(replicaSet) : '');
+    console.log('[migrate] using a direct (non-SRV) URI to bypass the blocked SRV lookup');
+  }
+
+  const mongo = new MongoClient(mongoUri, {
     serverSelectionTimeoutMS: 20000,
     tlsAllowInvalidCertificates: true,
   });
@@ -754,6 +777,25 @@ async function main() {
     if (client) {
       await client.query('ROLLBACK').catch(() => {});
       console.error('[migrate] rolled back - nothing was written');
+    }
+    // An SRV failure is a network problem, not a credential one, so point at
+    // the concrete workaround instead of just repeating the driver message.
+    if (/querySrv|SRV/i.test(err.message) && !directHost) {
+      console.error('');
+      console.error('[migrate] This looks like your network cannot resolve MongoDB SRV');
+      console.error('[migrate] records (_mongodb._tcp.*), not a bad password.');
+      console.error('[migrate]');
+      console.error('[migrate] Fix 1 (permanent): set DNS to 1.1.1.1 / 8.8.8.8, then run');
+      console.error('[migrate]   ipconfig /flushdns');
+      console.error('[migrate]');
+      console.error('[migrate] Fix 2 (workaround): connect straight to one shard, which');
+      console.error('[migrate] uses an ordinary A lookup that does work:');
+      console.error('[migrate]   $env:MONGODB_DIRECT_HOST="ac-2qhanpu-shard-00-00.y6syo8m.mongodb.net:27017"');
+      console.error('[migrate]   $env:MONGODB_REPLICA_SET="atlas-mt48xs-shard-0"');
+      console.error('[migrate]');
+      console.error('[migrate] To find those for your own cluster, open its Atlas');
+      console.error('[migrate] "Connect" dialog and copy the SRV host and replica set.');
+      console.error('[migrate]');
     }
     console.error('[migrate] FAILED:', err.message);
     process.exitCode = 1;
