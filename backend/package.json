@@ -10,6 +10,8 @@
     "db:migrate": "node src/db/migrate.js",
     "db:import": "node scripts/import-json-to-postgres.js",
     "db:import:dry": "node scripts/import-json-to-postgres.js --dry-run",
+    "db:migrate:mongo": "node scripts/migrate-mongo-to-postgres.js",
+    "db:migrate:mongo:dry": "node scripts/migrate-mongo-to-postgres.js --dry-run",
     "test:pg": "jest --runInBand --forceExit tests/postgres.test.js"
   },
   "dependencies": {
