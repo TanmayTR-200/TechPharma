@@ -686,8 +686,31 @@ async function main() {
   try {
     console.log('[migrate] connecting to MongoDB Atlas...');
     await mongo.connect();
-    const src = mongo.db();
+    // MONGODB_DATABASE overrides the database named in the URI. Atlas projects
+    // frequently keep the application data in a database other than the one in
+    // the connection string (this project uses `test`), and reading the wrong
+    // one silently migrates nothing.
+    const src = process.env.MONGODB_DATABASE
+      ? mongo.db(process.env.MONGODB_DATABASE)
+      : mongo.db();
     console.log('[migrate] source database: ' + src.databaseName);
+
+    // Fail loudly rather than importing zero documents: an empty source is
+    // almost always a wrong database name, and a silent no-op is worse than
+    // an error because it looks like success.
+    const probe = await src.listCollections({}, { nameOnly: true }).toArray();
+    if (probe.length === 0) {
+      const known = await mongo.db('admin').command({ listDatabases: 1 })
+        .then((r) => r.databases.map((d) => d.name))
+        .catch(() => []);
+      console.error('[migrate] database "' + src.databaseName + '" has no collections.');
+      if (known.length) {
+        console.error('[migrate] databases on this cluster: ' + known.join(', '));
+        console.error('[migrate] set MONGODB_DATABASE=<name> to pick one.');
+      }
+      process.exitCode = 1;
+      return;
+    }
 
     // One transaction for the whole run: a partial import cannot happen.
     pool = getPool();
