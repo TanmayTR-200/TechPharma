@@ -84,6 +84,31 @@ function docId(doc) {
   return toId(doc._id !== undefined ? doc._id : doc.id);
 }
 
+/**
+ * Read a whole collection, tolerating one that does not exist.
+ *
+ * A MongoDB database only has the collections that were ever written to, so a
+ * fresh or lightly-used project has no `reservations`, `messages`, etc. Calling
+ * `.find()` on a missing collection returns null in the driver, which surfaces as
+ * "Cannot read properties of undefined". A missing collection simply means zero
+ * documents, which is recorded as a warning and skipped.
+ *
+ * @param {import('mongodb').Db} src
+ * @param {string} name
+ * @returns {Promise<object[]>} documents, or [] when the collection is absent
+ */
+async function readCollection(src, name) {
+  const docs = await src.collection(name).find({}).toArray();
+  if (docs.length === 0) {
+    const exists = await src.listCollections({ name }, { nameOnly: true }).hasNext();
+    if (!exists) {
+      const note = 'collection "' + name + '" does not exist in the source - skipped';
+      if (report.warnings.indexOf(note) === -1) report.warnings.push(note);
+    }
+  }
+  return docs;
+}
+
 /** Everything not mapped to a column goes to the metadata JSONB payload. */
 function collectMeta(doc, consumed) {
   const meta = {};
@@ -334,6 +359,21 @@ SQL.products = [
   '  updated_at = EXCLUDED.updated_at, metadata = EXCLUDED.metadata',
 ].join(' ');
 
+// inventory_stock is the checkout authority. The WHERE clause means an existing
+// row is only refreshed while it is still untouched (total_stock = 0), so a
+// re-run cannot roll real stock back to the imported snapshot.
+SQL.inventory_stock = [
+  'INSERT INTO inventory_stock (product_id, total_stock, available_stock,',
+  '  reserved_stock, sold, sales_count)',
+  'VALUES ($1,$2,$3,$4,$5,$6)',
+  'ON CONFLICT (product_id) DO UPDATE SET',
+  '  total_stock = EXCLUDED.total_stock,',
+  '  available_stock = EXCLUDED.available_stock,',
+  '  reserved_stock = EXCLUDED.reserved_stock, sold = EXCLUDED.sold,',
+  '  sales_count = EXCLUDED.sales_count, updated_at = now()',
+  'WHERE inventory_stock.total_stock = 0',
+].join(' ');
+
 SQL.orders = [
   'INSERT INTO orders (id, user_id, tracking_id, order_number, buyer_name,',
   '  buyer_email, status, payment_method, total_amount, shipping_address,',
@@ -408,19 +448,48 @@ SQL.reservations = [
 // ---------------------------------------------------------------------------
 
 async function importUsers(client, src) {
-  const docs = await src.users.find({}).toArray();
+  const docs = await readCollection(src, 'users');
   let n = 0;
+
+  // The users table enforces a case-insensitive unique email
+  // (users_email_lower_key), but MongoDB only enforces uniqueness on _id, so a
+  // legacy collection can legitimately contain two accounts with the same
+  // address. Detect those up front and keep the OLDEST account (lowest id is the
+  // earliest-created for the Date.now() ids this project generates); the
+  // duplicate is reported and skipped rather than silently overwriting an
+  // account or aborting the whole migration.
+  const seenEmails = new Map();
   for (const doc of docs) {
     const m = mapUser(doc);
     if (!m) continue;
-    if (!DRY_RUN) await client.query(SQL.users, m.params);
+    const email = m.params[0];
+    const prior = seenEmails.get(email);
+    if (prior === undefined) {
+      seenEmails.set(email, m);
+    } else {
+      const keep = prior.id <= m.id ? prior : m;
+      const drop = prior.id <= m.id ? m : prior;
+      seenEmails.set(email, keep);
+      report.skipped.push({
+        collection: 'users',
+        id: drop.id,
+        reason: 'duplicate email ' + email + ' (also ' + keep.id
+          + ') - kept the older account, skipped this one',
+      });
+    }
+  }
+
+  for (const m of seenEmails.values()) {
+    // mapUser.params omits the id (it is the conflict key); prepend it so the
+    // 11 columns line up with the 11 placeholders in SQL.users.
+    if (!DRY_RUN) await client.query(SQL.users, [m.id].concat(m.params));
     n++;
   }
   report.imported.users = n;
 }
 
 async function importProducts(client, src, userIds) {
-  const docs = await src.products.find({}).toArray();
+  const docs = await readCollection(src, 'products');
   let n = 0;
   for (const doc of docs) {
     const m = mapProduct(doc);
@@ -438,10 +507,12 @@ async function importProducts(client, src, userIds) {
     }
 
     if (!DRY_RUN) {
-      await client.query(SQL.products, m.params);
+      // mapProduct.params omits the id (it is the conflict key); prepend it so
+      // the 19 columns line up with the 19 placeholders in SQL.products.
+      await client.query(SQL.products, [m.id].concat(m.params));
       // Mirror stock into inventory_stock, the checkout authority. Written so
       // available + reserved = total, which inventory_stock_available_check
-      // requires.
+      // requires. Indices are shifted by one now that id leads the array.
       const total = num(m.params[10] !== null ? m.params[10] : m.params[9], 0);
       const reserved = num(m.params[12], 0);
       await client.query(SQL.inventory_stock, [
@@ -459,7 +530,7 @@ async function importProducts(client, src, userIds) {
 }
 
 async function importOrders(client, src, userIds, productIds) {
-  const docs = await src.orders.find({}).toArray();
+  const docs = await readCollection(src, 'orders');
   let n = 0;
   let items = 0;
 
@@ -518,7 +589,7 @@ async function importOrders(client, src, userIds, productIds) {
 }
 
 async function importCarts(client, src, userIds) {
-  const docs = await src.carts.find({}).toArray();
+  const docs = await readCollection(src, 'carts');
   let n = 0;
   let items = 0;
 
@@ -570,7 +641,7 @@ async function importCarts(client, src, userIds) {
 }
 
 async function importMessages(client, src) {
-  const docs = await src.messages.find({}).toArray();
+  const docs = await readCollection(src, 'messages');
   let n = 0;
   for (const doc of docs) {
     const m = mapMessage(doc);
@@ -581,27 +652,31 @@ async function importMessages(client, src) {
       invalid('messages', m.id, 'missing senderId/receiverId (required)');
       continue;
     }
-    if (!DRY_RUN) await client.query(SQL.messages, m.params);
+    // mapMessage.params omits the id (it is the conflict key); prepend it so
+    // the 7 columns line up with the 7 placeholders in SQL.messages.
+    if (!DRY_RUN) await client.query(SQL.messages, [m.id].concat(m.params));
     n++;
   }
   report.imported.messages = n;
 }
 
 async function importNotifications(client, src) {
-  const docs = await src.notifications.find({}).toArray();
+  const docs = await readCollection(src, 'notifications');
   let n = 0;
   for (const doc of docs) {
     const m = mapNotification(doc);
     if (!m) continue;
     // user_id is nullable: NULL means platform-wide, which is preserved.
-    if (!DRY_RUN) await client.query(SQL.notifications, m.params);
+    // mapNotification.params omits the id (it is the conflict key); prepend it
+    // so the 9 columns line up with the 9 placeholders in SQL.notifications.
+    if (!DRY_RUN) await client.query(SQL.notifications, [m.id].concat(m.params));
     n++;
   }
   report.imported.notifications = n;
 }
 
 async function importReservations(client, src, productIds) {
-  const docs = await src.reservations.find({}).toArray();
+  const docs = await readCollection(src, 'reservations');
   let n = 0;
   for (const doc of docs) {
     const m = mapReservation(doc);
@@ -745,9 +820,10 @@ async function main() {
       console.log('[migrate] applied migrations: ' + applied.applied.join(', '));
     }
 
-    // Ids present in the source, so foreign keys can be resolved.
-    const userDocs = await src.users.find({}, { projection: { _id: 1 } }).toArray();
-    const productDocs = await src.products.find({}, { projection: { _id: 1 } }).toArray();
+    // Ids present in the source, so foreign keys can be resolved. Both
+    // collections may legitimately be absent, hence the tolerant reader.
+    const userDocs = await readCollection(src, 'users');
+    const productDocs = await readCollection(src, 'products');
     const userIds = new Set(userDocs.map((d) => toId(d._id)));
     const productIds = new Set(productDocs.map((d) => toId(d._id)));
     console.log('[migrate] source has ' + userIds.size + ' user(s), '
@@ -807,3 +883,4 @@ async function main() {
 }
 
 main();
+
