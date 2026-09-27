@@ -22,19 +22,27 @@ function isEnabled() {
 }
 
 /**
- * Load an optional provider CA bundle (PEM file contents).
+ * Path of the optional provider CA bundle.
  *
  * Supabase and other hosted free tiers sit behind proxies whose certificate
  * chain is not rooted in the bundled Mozilla CA list, so a strict connection
  * fails with "self-signed certificate in certificate chain". By default the
- * connection stays encrypted but does not verify the peer
- * (`rejectUnauthorized: false`). Setting PG_SSL_CA_FILE to a PEM bundle
- * switches verification back on.
+ * connection stays encrypted but does not verify the peer. Setting
+ * PG_SSL_CA_FILE to a PEM bundle switches verification on.
+ *
+ * @returns {string|undefined}
+ */
+function caFilePath() {
+  return process.env.PG_SSL_CA_FILE || undefined;
+}
+
+/**
+ * Load the optional provider CA bundle (PEM file contents).
  *
  * @returns {string|undefined} PEM contents, or undefined when not configured
  */
 function caBundle() {
-  const caFile = process.env.PG_SSL_CA_FILE;
+  const caFile = caFilePath();
   if (!caFile) return undefined;
   try {
     return require('fs').readFileSync(caFile, 'utf8');
@@ -115,13 +123,21 @@ function getPool() {
     max: Number(process.env.PG_POOL_MAX) || 10,
     idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT) || 30000,
     connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT) || 5000,
-    // rejectUnauthorized stays false: hosted free tiers (Supabase poolers
-    // included) present certificate chains that do not verify against the
-    // bundled Mozilla CA list, so verification fails with
-    // "self-signed certificate in certificate chain". Traffic is still
-    // encrypted. Set PG_SSL_CA_FILE to a provider CA bundle to verify
-    // properly instead.
-    ssl: useSsl ? { rejectUnauthorized: !process.env.PG_SSL_CA_FILE, ca: caBundle() } : false,
+    // TLS is enabled for hosted providers, but the peer certificate is NOT
+    // verified by default: Supabase's poolers present a chain that does not
+    // validate against the bundled Mozilla CA list, which fails with
+    // "self-signed certificate in certificate chain". Traffic remains
+    // encrypted either way.
+    //
+    // Verification is opt-in: set PG_SSL_CA_FILE to a provider CA bundle
+    // (Supabase dashboard -> Database -> SSL Certificate) and rejectUnauthorized
+    // becomes true, verifying against that bundle instead.
+    ssl: useSsl
+      ? {
+          rejectUnauthorized: Boolean(caFilePath()),
+          ...(caFilePath() ? { ca: caBundle() } : {}),
+        }
+      : false,
   });
 
   pool.on('error', (err) => {
