@@ -34,3 +34,6 @@ coverage/
 .vscode/
 *.swp
 *.swo
+
+# pg_dump output: contains real user data and bcrypt password hashes. Never commit.
+backups/
