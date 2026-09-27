@@ -14,6 +14,10 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-for-auth-tests';
 process.env.MONGODB_URI = '';
+// Exercise the legacy JSON/cache store: these suites assert on data/*.json and
+// must not depend on a live PostgreSQL. Repository/SQL coverage lives in
+// tests/postgres.test.js (run with PG_TEST=1 + DATABASE_URL).
+process.env.PG_DISABLED = 'true';
 process.env.PORT = '5991';
 process.env.AUTH_RATE_LIMIT_MAX = '100000';
 process.env.RESET_RATE_LIMIT_MAX = '100000';

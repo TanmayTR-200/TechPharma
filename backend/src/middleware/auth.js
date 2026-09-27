@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
-const path = require('path');
-const fs = require('fs');
+
+// Users repository - PostgreSQL when DATABASE_URL is set, the shared JSON/cache
+// store otherwise. No SQL or table knowledge leaks into this middleware.
+const { users: usersRepo } = require('../db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 
@@ -23,6 +25,11 @@ function blacklistToken(token) {
   tokenBlacklist.add(token);
 }
 
+// Look up a user by id through the repository.
+async function lookupUser(id) {
+  return usersRepo.findById(id);
+}
+
 module.exports = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -43,20 +50,18 @@ module.exports = async (req, res, next) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // Check if password was changed after this token was issued
-    const usersPath = path.join(__dirname, '../../data/users.json');
-    if (fs.existsSync(usersPath)) {
-      const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
-      const user = users.find(u => u._id === (decoded.userId || decoded._id));
-      if (user && user.passwordChangedAt) {
-        const tokenIssuedAt = new Date(decoded.iat * 1000);
-        const passwordChangedAt = new Date(user.passwordChangedAt);
-        if (tokenIssuedAt < passwordChangedAt) {
-          return res.status(401).json({
-            success: false,
-            message: 'Session expired. Please log in again.'
-          });
-        }
+    // Check if password was changed after this token was issued.
+    // Looks the user up through the repository (O(1) primary-key lookup in
+    // PostgreSQL, cache index in legacy mode) instead of re-reading the file.
+    const user = await lookupUser(decoded.userId || decoded._id);
+    if (user && user.passwordChangedAt) {
+      const tokenIssuedAt = new Date(decoded.iat * 1000);
+      const passwordChangedAt = new Date(user.passwordChangedAt);
+      if (tokenIssuedAt < passwordChangedAt) {
+        return res.status(401).json({
+          success: false,
+          message: 'Session expired. Please log in again.'
+        });
       }
     }
 

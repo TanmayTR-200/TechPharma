@@ -14,11 +14,18 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 require('dotenv').config();
 
-// Inventory reservation system
-const inventory = require('./src/inventory/reservation');
+// Inventory reservation system (PostgreSQL when DATABASE_URL is set,
+// SQLite-backed store in src/inventory/* otherwise - same API either way)
+const inventory = require('./src/db/inventory');
 const inventoryRoutes = require('./src/routes/inventory');
+inventoryRoutes.setInventory(inventory);
 const { withLock } = require('./src/inventory/lock');
 const rateLimit = require('express-rate-limit');
+
+// PostgreSQL-backed data access layer (Phase 5/6). Repositories use PostgreSQL when
+// DATABASE_URL is set and the legacy JSON/cache store otherwise, so every route
+// below keeps working exactly as before on environments without a database.
+const { users: usersRepo, otps: otpsRepo, products: productsRepo, orders: ordersRepo, notifications: notificationsRepo, carts: cartsRepo, isPostgresEnabled, storeName } = require('./src/db');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -141,8 +148,15 @@ const RESET_EMAIL_COOLDOWN_MS = 60 * 1000; // min 60s between reset emails per e
 // ===== Password History (blocks reuse of recent passwords) =====
 const PASSWORD_HISTORY_LIMIT = 5;
 
-async function isPreviouslyUsedPassword(newPassword, user) {
-  const hashes = [...(user.passwordHistory || [])];
+// Password reuse check. History comes from the users repository (the
+// password_history table in PostgreSQL, the document field in legacy mode);
+// `passwordHistory` may be passed in when the caller already loaded it.
+async function isPreviouslyUsedPassword(newPassword, user, passwordHistory) {
+  const hashes = [
+    ...(Array.isArray(passwordHistory)
+      ? passwordHistory
+      : (Array.isArray(user.passwordHistory) ? user.passwordHistory : []))
+  ];
   if (user.password) hashes.push(user.password);
   for (const hash of hashes) {
     if (await bcrypt.compare(newPassword, hash)) return true;
@@ -151,51 +165,36 @@ async function isPreviouslyUsedPassword(newPassword, user) {
 }
 
 // ===== OTP Store (persistent - survives restarts/deploys) =====
-// Stored in data/otps.json (persisted to MongoDB via the 'otps' collection),
-// because signup OTPs belong to emails that don't have a user document yet.
-const OTPS_FILE = path.join(__dirname, './data/otps.json');
-
-function getOtpEntry(email, purpose) {
-  const key = String(email).toLowerCase();
-  const entries = readJsonFile(OTPS_FILE).filter(e => e.expiresAt > Date.now());
-  return entries.find(e => e.email === key && e.purpose === purpose) || null;
+// Owned by src/db/otps.js: PostgreSQL `otps` table, or data/otps.json (mirrored to
+// MongoDB through the shared writer) when DATABASE_URL is not configured.
+// Signup OTPs belong to emails that don't have a user document yet, so they live
+// in their own store rather than on `users`.
+async function getOtpEntry(email, purpose) {
+  return otpsRepo.get(email, purpose);
 }
 
-function setOtpEntry(email, purpose, otp, ttlMs) {
-  const key = String(email).toLowerCase();
-  // Drop this email/purpose's old entry and any expired entries
-  const entries = readJsonFile(OTPS_FILE).filter(e =>
-    !(e.email === key && e.purpose === purpose) && e.expiresAt > Date.now()
-  );
-  entries.push({ _id: `${key}__${purpose}`, email: key, purpose, otp, expiresAt: Date.now() + ttlMs });
-  writeJsonFile(OTPS_FILE, entries);
+async function setOtpEntry(email, purpose, otp, ttlMs) {
+  return otpsRepo.set(email, purpose, otp, ttlMs);
 }
 
-function deleteOtpEntry(email, purpose) {
-  const key = String(email).toLowerCase();
-  writeJsonFile(OTPS_FILE, readJsonFile(OTPS_FILE).filter(e => !(e.email === key && e.purpose === purpose)));
+async function deleteOtpEntry(email, purpose) {
+  return otpsRepo.remove(email, purpose);
 }
 
 // Apply a new password: hash + history, invalidate any outstanding reset link,
 // and AWAIT persistence so a process restart can't resurrect the old token/password
-async function applyNewPassword(user, users, usersFile, newPassword) {
-  const history = user.passwordHistory || [];
-  // Legacy users have no history - record the outgoing password so it can't be reused
-  if (user.password && history[history.length - 1] !== user.password) {
-    history.push(user.password);
-  }
+// Apply a new password: hash + history, invalidate any outstanding reset link,
+// and AWAIT persistence so a process restart can't resurrect the old token/password.
+// The atomic part (password + password_history + lockout reset) lives in
+// usersRepo.setPassword so a crash can never leave a half-applied password change.
+async function applyNewPassword(user, newPassword) {
   const newHash = await bcrypt.hash(newPassword, 12);
-  history.push(newHash);
-
-  user.password = newHash;
-  user.passwordHistory = history.slice(-PASSWORD_HISTORY_LIMIT);
-  user.resetToken = null;
-  user.passwordChangedAt = new Date().toISOString();
-  // A successful reset proves account ownership - clear any lockout
-  user.failedAttempts = 0;
-  user.lockedUntil = null;
-  await writeJsonFile(usersFile, users);
+  const updated = await usersRepo.setPassword(user._id, newHash);
+  if (!updated) {
+    throw new Error('Failed to persist the new password');
+  }
   clearAttempts(user.email);
+  return updated;
 }
 
 // ===== Input Sanitization =====
@@ -230,6 +229,20 @@ const pendingMongoWrites = new Set();
 const dataCache = {};
 global.dataCache = dataCache; // Expose cache for route modules (dashboard.js etc)
 const COLLECTIONS = ['users', 'products', 'orders', 'carts', 'notifications', 'messages', 'conversations', 'reservations', 'otps'];
+
+// Snapshot of what MongoDB currently holds, per collection:
+//   colName -> Map< String(_id), { rawId, serialized } >
+// Lets writeJsonFile send only the documents that actually changed instead of
+// rewriting the whole collection on every write. rawId is kept so deletes use
+// the exact _id type MongoDB stores.
+const persistedState = {};
+const serializeDoc = (doc) => JSON.stringify(doc);
+
+// Per-collection id index: colName -> Map< String(_id), doc >
+// Built lazily from the cache; holds references, so in-place mutation stays valid.
+const idIndex = {};
+// Secondary index: `${colName}:${field}` -> Map< String(value), doc >
+const fieldIndex = {};
 
 async function connectMongoDB() {
   const uri = process.env.MONGODB_URI;
@@ -327,12 +340,25 @@ async function connectMongoDB() {
         const stock = p.available_stock !== undefined
           ? p.available_stock
           : (p.stock !== undefined ? p.stock : (p.total_stock || 0));
-        inventory.ensureProductSeeded(p._id, stock);
-        synced++;
+        // Awaited: in PostgreSQL mode ensureProductSeeded can reject (e.g. FK to
+        // a product not yet imported) - one bad product must not skip the
+        // seedPersistedState/flush steps below, and never crash as an
+        // unhandled rejection.
+        try {
+          await inventory.ensureProductSeeded(p._id, stock);
+          synced++;
+        } catch (seedErr) {
+          console.error(`[inventory] Could not seed ${p._id}:`, seedErr.message);
+        }
       }
-      console.log(`[inventory] Synced ${synced} products from cache to SQLite inventory`);
+      console.log(`[inventory] Synced ${synced} products from cache to the inventory store`);
     } catch (syncErr) {
       console.error('[inventory] Product sync to SQLite failed:', syncErr.message);
+    }
+
+    // Record what Mongo now holds so the first write only sends real changes
+    for (const col of COLLECTIONS) {
+      await seedPersistedState(col);
     }
 
     // Stock changes are persisted to MongoDB by the hook registered at startup;
@@ -389,6 +415,10 @@ async function connectMongoDB() {
           }
         }
         console.log('Data loaded into memory cache');
+        // Record what Mongo now holds so the first write only sends real changes
+        for (const col of COLLECTIONS) {
+          await seedPersistedState(col);
+        }
         flushPendingMongoWrites();
         clearInterval(retryInterval);
       } catch (retryErr) {
@@ -420,12 +450,43 @@ function readJsonFile(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
-// Admin identity: role 'admin' in users.json, with exact-email fallback.
-// Mirrors the gate used by /api/sold-products/:sellerId.
-function isAdminUserId(userId) {
-  const users = readJsonFile(path.join(__dirname, './data/users.json'));
-  const user = users.find(u => String(u._id) === String(userId));
+// Admin identity: role 'admin' in users, with exact-email fallback.
+// Mirrors the gate used by /api/sold-products/:sellerId. Reads through the
+// users repository (PostgreSQL when configured, shared cache otherwise) so the
+// answer never depends on a raw data/*.json read or on the legacy mirror
+// being perfectly up to date.
+async function isAdminUserId(userId) {
+  const user = await usersRepo.findById(userId);
   return !!(user && (user.role === 'admin' || String(user.email || '').toLowerCase() === 'techpharma10@gmail.com'));
+}
+
+// O(1) lookup by _id. The index is built lazily from the cache and dropped by
+// writeJsonFile whenever the collection changes. Replaces the O(n) pattern
+// `readJsonFile(file).find(x => x._id === id)`.
+function findById(colName, id) {
+  if (id === undefined || id === null) return null;
+  if (!idIndex[colName]) {
+    idIndex[colName] = new Map((dataCache[colName] || []).map(d => [String(d._id), d]));
+  }
+  return idIndex[colName].get(String(id)) || null;
+}
+
+// O(1) lookup by a unique field (email, trackingId, ...). First match wins,
+// matching the behaviour of the `.find()` calls it replaces.
+function findByField(colName, field, value) {
+  if (value === undefined || value === null) return null;
+  const key = `${colName}:${field}`;
+  if (!fieldIndex[key]) {
+    const index = new Map();
+    for (const doc of dataCache[colName] || []) {
+      const v = doc[field];
+      if (v === undefined || v === null) continue;
+      const vKey = String(v);
+      if (!index.has(vKey)) index.set(vKey, doc);
+    }
+    fieldIndex[key] = index;
+  }
+  return fieldIndex[key].get(String(value)) || null;
 }
 
 // Helper to write data (update cache immediately + persist to MongoDB in background)
@@ -433,17 +494,32 @@ function writeJsonFile(filePath, data) {
   const colName = getCollectionName(filePath);
   // Update cache immediately (sync, so reads see the change)
   dataCache[colName] = data;
+  // Cache changed - drop the indexes so they are rebuilt lazily on the next lookup
+  delete idIndex[colName];
+  for (const key of Object.keys(fieldIndex)) {
+    if (key.startsWith(colName + ':')) delete fieldIndex[key];
+  }
   // Persist to file immediately so data survives restarts
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
   } catch (err) {
     console.error(`File write error (${filePath}):`, err.message);
   }
-  // Persist to MongoDB - returns a promise so auth-critical handlers can await it;
-  // other callers ignore the return and keep fire-and-forget behavior
+  // Persist to MongoDB - only the documents that actually changed.
+  // Returns a promise so auth-critical handlers can await it; other callers
+  // ignore the return and keep fire-and-forget behavior.
   if (mongoDb) {
-    return persistToMongo(colName, data).catch(err => {
+    const delta = diffCollection(colName, data);
+    // Advance the snapshot synchronously so a second write that starts before
+    // this one finishes still diffs against the latest intended state.
+    persistedState[colName] = delta.next;
+    if (delta.toUpsert.length === 0 && delta.toDelete.length === 0) {
+      return Promise.resolve();
+    }
+    return persistDelta(colName, delta).catch(err => {
       console.error(`MongoDB write error (${colName}):`, err.message);
+      // Snapshot is now unreliable - force a full re-sync on flush
+      delete persistedState[colName];
       pendingMongoWrites.add(colName);
     });
   }
@@ -459,32 +535,98 @@ function flushPendingMongoWrites() {
   for (const colName of cols) {
     const data = dataCache[colName];
     if (data === undefined) continue;
-    persistToMongo(colName, data).catch(err => {
+    // After an outage the snapshot is stale - drop it so this sends everything
+    delete persistedState[colName];
+    const delta = diffCollection(colName, data);
+    persistedState[colName] = delta.next;
+    persistDelta(colName, delta).catch(err => {
       console.error(`MongoDB flush error (${colName}):`, err.message);
+      delete persistedState[colName];
       pendingMongoWrites.add(colName);
     });
   }
 }
 
-// Persist data to MongoDB (upsert all docs, delete removed ones)
-async function persistToMongo(colName, data) {
-  const col = mongoDb.collection(colName);
-  if (data.length === 0) {
-    await col.deleteMany({});
-    return;
-  }
-  // Upsert each document by _id
-  const ops = data.map(doc => ({
-    replaceOne: {
-      filter: { _id: doc._id },
-      replacement: doc,
-      upsert: true
+// Work out which documents actually differ from what MongoDB already holds.
+// prev === undefined means "unknown state" - send everything.
+function diffCollection(colName, data) {
+  const prev = persistedState[colName];
+  const next = new Map();
+  const toUpsert = [];
+  const toDelete = [];
+
+  for (const doc of data) {
+    const key = String(doc._id);
+    const serialized = serializeDoc(doc);
+    next.set(key, { rawId: doc._id, serialized });
+    if (!prev || prev.get(key)?.serialized !== serialized) {
+      toUpsert.push(doc);
     }
-  }));
-  await col.bulkWrite(ops);
-  // Delete documents that are no longer present
-  const ids = data.map(d => d._id);
-  await col.deleteMany({ _id: { $nin: ids } });
+  }
+
+  if (prev) {
+    for (const [key, entry] of prev) {
+      if (!next.has(key)) toDelete.push(entry.rawId);
+    }
+  }
+
+  return { toUpsert, toDelete, next };
+}
+
+// Apply a diff to MongoDB. Only touches documents that changed, and only ever
+// deletes ids this process previously wrote - never a blanket collection wipe.
+async function persistDelta(colName, { toUpsert, toDelete }) {
+  const col = mongoDb.collection(colName);
+  if (toUpsert.length > 0) {
+    await col.bulkWrite(toUpsert.map(doc => ({
+      replaceOne: {
+        filter: { _id: doc._id },
+        replacement: doc,
+        upsert: true
+      }
+    })));
+  }
+  if (toDelete.length > 0) {
+    await col.deleteMany({ _id: { $in: toDelete } });
+  }
+}
+
+// Record what MongoDB currently holds for a collection, so the first write
+// after startup does not re-send every document.
+async function seedPersistedState(colName) {
+  if (!mongoDb) return;
+  const docs = await mongoDb.collection(colName).find({}).toArray();
+  persistedState[colName] = new Map(
+    docs.map(d => [String(d._id), { rawId: d._id, serialized: serializeDoc(d) }])
+  );
+}
+
+// Share the storage helpers with route modules that cannot require this file
+// (that would be a circular import) - same pattern as global.dataCache above.
+global.readJsonFile = readJsonFile;
+global.writeJsonFile = writeJsonFile;
+global.findById = findById;
+global.findByField = findByField;
+
+// Warm the legacy users cache from PostgreSQL on startup.
+//
+// Transitional (Phases 6-11): routes that are not migrated yet (dashboard admin
+// tiles, sold-products, orders/messages joins) still read the in-memory cache, so
+// on a fresh container (empty data/ directory) they would see no users at all.
+// Once PostgreSQL is the source of truth the cache is filled once here instead of
+// being re-seeded by MongoDB. Skipped when the cache already matches, and
+// removable in Phase 12 together with dataCache itself.
+async function warmLegacyUsersCache() {
+  if (!isPostgresEnabled() || process.env.PG_WARM_USERS_CACHE === 'false') return;
+  try {
+    const rows = await usersRepo.listAll();
+    const cached = dataCache.users || [];
+    if (rows.length === cached.length) return;
+    writeJsonFile(path.join(__dirname, './data/users.json'), rows);
+    console.log(`[postgres] users cache warmed from PostgreSQL: ${rows.length} record(s) (was ${cached.length})`);
+  } catch (err) {
+    console.warn('[postgres] could not warm the users cache:', err.message);
+  }
 }
 
 // Initialize storage
@@ -579,11 +721,22 @@ app.use('/api/', apiLimiter);
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
+    // PostgreSQL is the source of truth once DATABASE_URL is configured; without it
+    // the application keeps running on the legacy JSON/cache storage.
+    const pgEnabled = isPostgresEnabled();
+    let pgHealthy = null;
+    if (pgEnabled) {
+      pgHealthy = await require('./src/db/postgres').healthCheck();
+    }
+
     res.json({ 
       status: 'ok', 
       timestamp: new Date().toISOString(),
-      storage: mongoDb ? 'mongodb-atlas' : 'file-based',
-      inventory: 'sqlite-wal',
+      storage: pgEnabled ? 'postgresql' : (mongoDb ? 'mongodb-atlas' : 'file-based'),
+      dataStore: storeName(),
+      postgresEnabled: pgEnabled,
+      postgresHealthy: pgHealthy,
+      inventory: pgEnabled ? 'postgres' : 'sqlite-wal',
       mongoConnected: !!mongoDb,
       mongoUriSet: !!process.env.MONGODB_URI,
       mongoError: mongoConnectionError,
@@ -668,19 +821,19 @@ app.get('/api/seed', async (req, res) => {
       dataCache['users'] = defaultUsers;
       results.push(`Seeded ${defaultUsers.length} users`);
     } else {
-      // Update existing users to add phone if missing
-      const users = readJsonFile(path.join(__dirname, './data/users.json'));
+      // Update existing users to add phone if missing (repo-backed: PostgreSQL
+      // when configured, JSON cache otherwise - Mongo seeding itself untouched)
+      const users = await usersRepo.listAll();
       let phoneUpdated = 0;
       for (const u of users) {
-        if (!u.phone) {
-          if (u._id === '1760257427529') u.phone = '+91 800-123-4567';
-          else if (u._id === '1760360335467') u.phone = '+91 900-123-4567';
-          else u.phone = '';
-          phoneUpdated++;
-        }
+        if (u.phone) continue;
+        let phone = '';
+        if (u._id === '1760257427529') phone = '+91 800-123-4567';
+        else if (u._id === '1760360335467') phone = '+91 900-123-4567';
+        await usersRepo.update(u._id, { phone });
+        phoneUpdated++;
       }
       if (phoneUpdated > 0) {
-        writeJsonFile(path.join(__dirname, './data/users.json'), users);
         results.push(`Updated ${phoneUpdated} users with phone`);
       }
       results.push(`Users already exist (${existingUsers})`);
@@ -689,16 +842,15 @@ app.get('/api/seed', async (req, res) => {
     // Seed products
     const existingProducts = await mongoDb.collection('products').countDocuments();
     if (existingProducts === 0) {
-      const productsFile = path.join(__dirname, './data/products.json');
-      if (fs.existsSync(productsFile)) {
-        const products = JSON.parse(fs.readFileSync(productsFile, 'utf8'));
-        if (products.length > 0) {
-          await mongoDb.collection('products').insertMany(products);
-          dataCache['products'] = products;
-          results.push(`Seeded ${products.length} products`);
-        }
+      // Read through the products repository (PostgreSQL or JSON cache) instead
+      // of the raw file; the Mongo insertMany below is unchanged.
+      const products = await productsRepo.list();
+      if (products.length > 0) {
+        await mongoDb.collection('products').insertMany(products);
+        dataCache['products'] = products;
+        results.push(`Seeded ${products.length} products`);
       } else {
-        results.push('No products.json file found');
+        results.push('No products found to seed');
       }
     } else {
       results.push(`Products already exist (${existingProducts})`);
@@ -773,7 +925,7 @@ if (process.env.NODE_ENV === 'production') {
 // Debug endpoint - list all users (emails only, no passwords)
 app.get('/api/debug/users', async (req, res) => {
   try {
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const users = await usersRepo.listAll();
     res.json({
       success: true,
       count: users.length,
@@ -801,21 +953,19 @@ app.get('/api/debug/cache', (req, res) => {
   res.json(result);
 });
 
-// One-time migration - add phone to existing users
+// One-time migration - add phone to existing users (repository-backed)
 app.get('/api/debug/migrate-phones', async (req, res) => {
   try {
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
+    const users = await usersRepo.listAll();
     let updated = 0;
-    users.forEach(u => {
-      if (!u.phone) {
-        if (u._id === '1760257427529') u.phone = '+91 800-123-4567';
-        else if (u._id === '1760360335467') u.phone = '+91 900-123-4567';
-        else u.phone = '';
-        updated++;
-      }
-    });
-    writeJsonFile(usersFile, users);
+    for (const u of users) {
+      if (u.phone) continue;
+      let phone = '';
+      if (u._id === '1760257427529') phone = '+91 800-123-4567';
+      else if (u._id === '1760360335467') phone = '+91 900-123-4567';
+      await usersRepo.update(u._id, { phone });
+      updated++;
+    }
     res.json({ success: true, message: `Updated ${updated} users with phone numbers` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -823,8 +973,8 @@ app.get('/api/debug/migrate-phones', async (req, res) => {
 });
 
 // Debug endpoint - inspect orders to see why they don't show
-app.get('/api/debug/orders', (req, res) => {
-  const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+app.get('/api/debug/orders', async (req, res) => {
+  const orders = await ordersRepo.list();
   res.json({
     success: true,
     count: orders.length,
@@ -845,12 +995,10 @@ app.get('/api/debug/orders', (req, res) => {
 // Debug endpoint - clear old products from MongoDB
 app.get('/api/debug/clear-products', async (req, res) => {
   try {
-    const productsFile = path.join(__dirname, './data/products.json');
-    writeJsonFile(productsFile, []);
+    await productsRepo.clear();
     if (mongoDb) {
       await mongoDb.collection('products').deleteMany({});
     }
-    dataCache['products'] = [];
     res.json({ success: true, message: 'All products cleared' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -860,48 +1008,48 @@ app.get('/api/debug/clear-products', async (req, res) => {
 // Debug endpoint - clear all notifications
 app.get('/api/debug/clear-notifications', async (req, res) => {
   try {
-    const notifFile = path.join(__dirname, './data/notifications.json');
-    writeJsonFile(notifFile, []);
+    await notificationsRepo.clear();
     if (mongoDb) {
       await mongoDb.collection('notifications').deleteMany({});
     }
-    dataCache['notifications'] = [];
     res.json({ success: true, message: 'All notifications cleared' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Debug endpoint - fix product stock to match total_stock
+// Debug endpoint - fix product stock to match total_stock.
+// Reserved totals come from the inventory store (SQLite/PostgreSQL), not from
+// the stale reservations.json file - reservations moved out of JSON long ago.
 app.get('/api/debug/fix-stock', async (req, res) => {
   try {
-    const productsFile = path.join(__dirname, './data/products.json');
-    const reservations = readJsonFile(path.join(__dirname, './data/reservations.json'));
-    const activeReservations = reservations.filter(r => r.status === 'ACTIVE');
-    const reservedByProduct = {};
-    activeReservations.forEach(r => {
-      reservedByProduct[r.product_id] = (reservedByProduct[r.product_id] || 0) + r.quantity;
-    });
-    const products = readJsonFile(productsFile);
-    products.forEach(p => {
+    const reservedByProduct = await inventory.getActiveReservationTotals();
+    const products = await productsRepo.list();
+    const summary = [];
+    for (const p of products) {
       if (p.total_stock !== undefined) {
         const sold = p.sold || 0;
-        const reserved = reservedByProduct[p._id] || 0;
-        p.reserved_stock = reserved;
-        p.available_stock = p.total_stock - sold - reserved;
-        p.stock = p.available_stock;
+        const reserved = reservedByProduct.get(String(p._id)) || 0;
+        const available = p.total_stock - sold - reserved;
+        await productsRepo.update(p._id, {
+          reserved_stock: reserved,
+          available_stock: available,
+          stock: available,
+        });
+        summary.push({ _id: p._id, name: p.name, stock: available, available_stock: available, total_stock: p.total_stock, sold });
       } else {
         // No inventory migration yet - reset to original stock
-        p.stock = p.stock || 0;
-      }
-    });
-    writeJsonFile(productsFile, products);
-    if (mongoDb) {
-      for (const p of products) {
-        await mongoDb.collection('products').updateOne({ _id: p._id }, { $set: { stock: p.stock, available_stock: p.available_stock } });
+        const stock = p.stock || 0;
+        await productsRepo.update(p._id, { stock });
+        summary.push({ _id: p._id, name: p.name, stock, available_stock: p.available_stock, total_stock: p.total_stock, sold: p.sold });
       }
     }
-    res.json({ success: true, products: products.map(p => ({ _id: p._id, name: p.name, stock: p.stock, available_stock: p.available_stock, total_stock: p.total_stock, sold: p.sold })) });
+    if (mongoDb) {
+      for (const s of summary) {
+        await mongoDb.collection('products').updateOne({ _id: s._id }, { $set: { stock: s.stock, available_stock: s.available_stock } });
+      }
+    }
+    res.json({ success: true, products: summary });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -910,12 +1058,10 @@ app.get('/api/debug/fix-stock', async (req, res) => {
 // Debug endpoint - clear all orders
 app.get('/api/debug/clear-orders', async (req, res) => {
   try {
-    const ordersFile = path.join(__dirname, './data/orders.json');
-    writeJsonFile(ordersFile, []);
+    await ordersRepo.clear();
     if (mongoDb) {
       await mongoDb.collection('orders').deleteMany({});
     }
-    dataCache['orders'] = [];
     res.json({ success: true, message: 'All orders cleared' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -925,24 +1071,25 @@ app.get('/api/debug/clear-orders', async (req, res) => {
 // Debug endpoint - migrate admin account to techpharma10@gmail.com
 app.get('/api/debug/migrate-admin', async (req, res) => {
   try {
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const admin = users.find(u => u._id === '1760257427529');
+    const admin = await usersRepo.findById('1760257427529');
     if (admin) {
-      admin.email = 'techpharma10@gmail.com';
-      admin.name = 'TechPharma_Admin';
-      admin.password = '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC';
-      admin.passwordHistory = ['$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC'];
-      admin.passwordChangedAt = new Date().toISOString();
+      await usersRepo.update(admin._id, {
+        email: 'techpharma10@gmail.com',
+        name: 'TechPharma_Admin',
+      });
+      // setPassword records the hash in password_history (PG table / JSON array)
+      // and stamps passwordChangedAt, exactly like a real password change.
+      await usersRepo.setPassword(
+        admin._id,
+        '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC'
+      );
     }
-    writeJsonFile(usersFile, users);
     if (mongoDb) {
       await mongoDb.collection('users').updateOne(
         { _id: '1760257427529' },
         { $set: { email: 'techpharma10@gmail.com', name: 'TechPharma_Admin', password: '$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC', passwordHistory: ['$2b$12$HUZBEhjnYvwv4GQ/SSHSbekaDtuQQf5L7eDsTawdBISxAwQ8lozEC'], passwordChangedAt: new Date().toISOString() } }
       );
     }
-    dataCache['users'] = users;
     res.json({ success: true, message: 'Admin account migrated to techpharma10@gmail.com' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -962,11 +1109,11 @@ const authMiddleware = async (req, res, next) => {
 
     const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
 
-    // Check if password was changed after this token was issued.
+    // Look the user up through the repository (PostgreSQL when configured,
+    // shared cache otherwise) - no direct data/*.json read on the auth path.
     // 1s grace: JWT iat is truncated to whole seconds, so a token issued right
     // after a password change would otherwise compare as "older" than the change.
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const user = users.find(u => u._id === decoded.userId);
+    const user = await usersRepo.findById(decoded.userId);
     if (user && user.passwordChangedAt) {
       const tokenIssuedAt = new Date(decoded.iat * 1000);
       const passwordChangedAt = new Date(user.passwordChangedAt);
@@ -1017,12 +1164,10 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       });
     }
 
-    // Read users from file
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-
-    // Check if user exists
-    if (users.find(u => u.email === email)) {
+    // Duplicate check + insert go through the users repository: PostgreSQL when
+    // DATABASE_URL is set, the JSON/cache store otherwise. The email uniqueness is
+    // also enforced by a case-insensitive UNIQUE index in PostgreSQL.
+    if (await usersRepo.findByEmail(email)) {
       return res.status(409).json({
         success: false,
         message: 'An account with this email already exists. Please log in instead.'
@@ -1030,7 +1175,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const user = {
+    const user = await usersRepo.create({
       _id: Date.now().toString(),
       email,
       password: hashedPassword,
@@ -1041,16 +1186,10 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       phone: phone,
       state: state,
       createdAt: new Date().toISOString()
-    };
-
-    // Add to users array and save
-    users.push(user);
-    writeJsonFile(usersFile, users);
+    });
 
     // Create welcome notification
-    const notifFile = path.join(__dirname, './data/notifications.json');
-    const allNotifs = readJsonFile(notifFile);
-    allNotifs.push({
+    await notificationsRepo.create({
       _id: user._id + '-welcome',
       userId: user._id,
       title: 'Welcome to TechPharma!',
@@ -1059,7 +1198,6 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
       archived: false,
       createdAt: new Date().toISOString()
     });
-    writeJsonFile(notifFile, allNotifs);
 
     const token = jwt.sign({ userId: user._id }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
 
@@ -1248,9 +1386,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
     // Check if email is already registered - respond identically either way
     // (no account-existence oracle); registered emails silently get no OTP
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    if (users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
+    if (await usersRepo.findByEmail(email)) {
       console.log('[OTP] Suppressed send for already-registered email');
       return res.json({ success: true, message: 'OTP sent successfully' });
     }
@@ -1262,7 +1398,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
     // Generate 6-digit OTP (persisted - survives restarts mid-signup)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    setOtpEntry(email, 'signup', otp, 5 * 60 * 1000);
+    await setOtpEntry(email, 'signup', otp, 5 * 60 * 1000);
 
     // Respond immediately - send email in background (don't block the request)
     res.json({ success: true, message: 'OTP sent successfully' });
@@ -1290,13 +1426,13 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and OTP are required' });
     }
 
-    const entry = getOtpEntry(email, 'signup');
+    const entry = await getOtpEntry(email, 'signup');
     if (!entry) {
       return res.status(400).json({ success: false, message: 'No OTP requested for this email' });
     }
 
     if (Date.now() > entry.expiresAt) {
-      deleteOtpEntry(email, 'signup');
+      await deleteOtpEntry(email, 'signup');
       return res.status(400).json({ success: false, message: 'OTP expired' });
     }
 
@@ -1304,7 +1440,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid OTP' });
     }
 
-    deleteOtpEntry(email, 'signup');
+    await deleteOtpEntry(email, 'signup');
     verifiedEmails.add(email.toLowerCase());
     // Auto-clear the verified flag after 5 minutes (in case registration fails and they need to retry)
     setTimeout(() => verifiedEmails.delete(email.toLowerCase()), 5 * 60 * 1000);
@@ -1325,15 +1461,13 @@ app.post('/api/auth/send-delete-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    const user = await usersRepo.findByEmail(email);
     if (!user) {
       return res.status(400).json({ success: false, message: 'Unable to process this request.' });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    setOtpEntry(email, 'delete', otp, 5 * 60 * 1000);
+    await setOtpEntry(email, 'delete', otp, 5 * 60 * 1000);
 
     // Respond immediately - send email in background
     res.json({ success: true, message: 'OTP sent successfully' });
@@ -1360,7 +1494,7 @@ app.post('/api/auth/delete-account', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email and OTP are required' });
     }
 
-    const entry = getOtpEntry(email, 'delete');
+    const entry = await getOtpEntry(email, 'delete');
     if (!entry) {
       return res.status(400).json({ success: false, message: 'No OTP requested for this email' });
     }
@@ -1374,19 +1508,21 @@ app.post('/api/auth/delete-account', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid OTP' });
     }
 
-    deleteOtpEntry(email, 'delete');
+    await deleteOtpEntry(email, 'delete');
 
-    // Delete user
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const filteredUsers = users.filter(u => u.email.toLowerCase() !== email.toLowerCase());
-    writeJsonFile(usersFile, filteredUsers);
+    // Delete the user through the users repository (PostgreSQL cascades
+    // password_history + saved_addresses; legacy mode rewrites users.json).
+    // The record is fetched BEFORE deletion so the notification cleanup below has a
+    // real id to match - the previous code filtered the array first and then looked
+    // the user up in the already-filtered array, so their notifications were never
+    // actually removed (see docs/POSTGRES_MIGRATION.md, "bugs found during audit").
+    const user = await usersRepo.findByEmail(email);
+    if (user) {
+      await usersRepo.remove(user._id);
+    }
 
-    // Delete user's notifications
-    const notifFile = path.join(__dirname, './data/notifications.json');
-    const allNotifs = readJsonFile(notifFile);
-    const filteredNotifs = allNotifs.filter(n => n.userId !== filteredUsers.find(u => u.email === email)?._id);
-    writeJsonFile(notifFile, filteredNotifs);
+    // Delete user's notifications (no-op when the user record was not found)
+    await notificationsRepo.removeForUser(user ? user._id : null);
 
     res.json({ success: true, message: 'Account deleted successfully' });
   } catch (error) {
@@ -1436,12 +1572,8 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
       });
     }
 
-    // Read users from file
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-
-    // Find user
-    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    // Find user (case-insensitive) through the users repository
+    const user = await usersRepo.findByEmail(email);
 
     // Persistent per-email cooldown (survives restarts) - silently throttled,
     // same generic response (no user enumeration)
@@ -1451,11 +1583,10 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
         message: 'If an account exists with that email, you will receive password reset instructions.'
       });
     }
-    if (user) user.lastResetEmailAt = new Date().toISOString();
-    
+
     // Generate reset token whether user exists or not (for security)
     const resetToken = jwt.sign(
-      { 
+      {
         userId: user?._id || 'invalid',
         purpose: 'reset'
       },
@@ -1471,13 +1602,15 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
       } catch (emailError) {
         console.error('Failed to send password reset email:', emailError.message);
       } finally {
-        // Store reset token with user - even if the email failed, so a manually
+        // Store the reset token on the user - even if the email failed, so a manually
         // shared link still works. Awaited: a restart must not lose the token.
-        user.resetToken = {
-          token: resetToken,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
-        };
-        await writeJsonFile(usersFile, users);
+        await usersRepo.update(user._id, {
+          lastResetEmailAt: new Date().toISOString(),
+          resetToken: {
+            token: resetToken,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
+          }
+        });
       }
     }
 
@@ -1508,9 +1641,7 @@ app.get('/api/auth/verify-reset-token', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid reset link' });
     }
 
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === decoded.userId);
+    const user = await usersRepo.findById(decoded.userId);
 
     if (!user) {
       return res.status(400).json({ success: false, message: 'Invalid or expired reset link' });
@@ -1556,12 +1687,8 @@ app.post('/api/auth/reset-password', resetLimiter, async (req, res) => {
       return res.status(400).json({ message: 'Invalid reset link' });
     }
 
-    // Read users
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-
-    // Find user
-    const user = users.find(u => u._id === decoded.userId);
+    // Find user through the users repository
+    const user = await usersRepo.findById(decoded.userId);
     if (!user) {
       return res.status(400).json({ message: 'Invalid or expired reset link' });
     }
@@ -1581,12 +1708,13 @@ app.post('/api/auth/reset-password', resetLimiter, async (req, res) => {
       return res.status(400).json({ message: 'This reset link has already been used. Please request a new one.' });
     }
 
-    // Block reuse of a recently used password
-    if (await isPreviouslyUsedPassword(password, user)) {
+    // Block reuse of a recently used password (history comes from the repository)
+    const resetHistory = await usersRepo.getPasswordHistory(user._id);
+    if (await isPreviouslyUsedPassword(password, user, resetHistory)) {
       return res.status(400).json({ message: 'You cannot reuse a recently used password. Please choose a new one.' });
     }
 
-    await applyNewPassword(user, users, usersFile, password);
+    await applyNewPassword(user, password);
 
     return res.json({
       success: true,
@@ -1620,9 +1748,7 @@ app.post('/api/auth/change-password', authMiddleware, changeLimiter, async (req,
       return res.status(400).json({ success: false, message: 'New password must be between 8 and 128 characters' });
     }
 
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === req.user._id);
+    const user = await usersRepo.findById(req.user._id);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Authentication required' });
     }
@@ -1632,11 +1758,12 @@ app.post('/api/auth/change-password', authMiddleware, changeLimiter, async (req,
       return res.status(400).json({ success: false, message: 'Incorrect email or password' });
     }
 
-    if (await isPreviouslyUsedPassword(newPassword, user)) {
+    const changeHistory = await usersRepo.getPasswordHistory(user._id);
+    if (await isPreviouslyUsedPassword(newPassword, user, changeHistory)) {
       return res.status(400).json({ success: false, message: 'You cannot reuse a recently used password. Please choose a new one.' });
     }
 
-    await applyNewPassword(user, users, usersFile, newPassword);
+    await applyNewPassword(user, newPassword);
 
     res.json({ success: true, message: 'Password updated successfully' });
   } catch (error) {
@@ -1660,12 +1787,8 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       });
     }
 
-    // Read users
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-
-    // Find user by email
-    const user = users.find(u => u.email === email);
+    // Find user by email (case-insensitive) through the users repository
+    const user = await usersRepo.findByEmail(email);
     if (!user) {
       recordFailedAttempt(email);
       return res.status(401).json({
@@ -1674,7 +1797,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
       });
     }
 
-    // Persistent lockout - state lives on the user doc, so it survives restarts/deploys
+    // Persistent lockout - state lives on the user record, so it survives restarts/deploys
     if (user.lockedUntil) {
       if (Date.now() < new Date(user.lockedUntil).getTime()) {
         console.warn(`[SECURITY] Login blocked for locked account: ${email}`);
@@ -1684,23 +1807,13 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
         });
       }
       // Lockout expired - reset the failure counter
-      user.failedAttempts = 0;
-      user.lockedUntil = null;
-      await writeJsonFile(usersFile, users);
+      await usersRepo.clearFailedLogin(user._id);
     }
 
     const isValidPassword = await bcrypt.compare(password, user.password);
     if (!isValidPassword) {
-      // Persist the failure count on the user doc
-      user.failedAttempts = (user.failedAttempts || 0) + 1;
-      user.lastFailedAt = new Date().toISOString();
-      if (user.failedAttempts >= 5) {
-        // Progressive lockout: 5th = 15min, 6th = 30min, etc.
-        const lockoutMultiplier = Math.max(1, user.failedAttempts - 4);
-        user.lockedUntil = new Date(Date.now() + (15 * 60 * 1000 * lockoutMultiplier)).toISOString();
-        console.warn(`[SECURITY] Account locked: ${email} after ${user.failedAttempts} failed attempts. Locked for ${15 * lockoutMultiplier} min.`);
-      }
-      await writeJsonFile(usersFile, users);
+      // Persist the failure count (and the progressive lockout) on the user record
+      await usersRepo.recordFailedLogin(email);
       return res.status(401).json({
         success: false,
         message: 'Incorrect email or password'
@@ -1711,11 +1824,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 
     // Clear failed attempts on successful login
     clearAttempts(email);
-    if (user.failedAttempts || user.lockedUntil) {
-      user.failedAttempts = 0;
-      user.lockedUntil = null;
-      await writeJsonFile(usersFile, users);
-    }
+    await usersRepo.clearFailedLogin(user._id);
 
     res.json({
       success: true,
@@ -1762,8 +1871,7 @@ app.post('/api/auth/refresh', async (req, res) => {
 // Profile endpoints (GET + PUT)
 app.get('/api/profile', authMiddleware, async (req, res) => {
   try {
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const user = users.find(u => u._id === req.user._id);
+    const user = await usersRepo.findById(req.user._id);
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
     res.json({
@@ -1783,35 +1891,38 @@ app.get('/api/profile', authMiddleware, async (req, res) => {
 
 app.put('/api/profile', authMiddleware, async (req, res) => {
   try {
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === req.user._id);
+    const user = await usersRepo.findById(req.user._id);
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
     const { company, phone, state } = req.body;
 
-    // Update fields
+    // Merge onto the stored profile, then persist only the changed fields
+    const nextCompany = { ...(user.company || {}) };
     if (company) {
-      if (!user.company) user.company = {};
-      if (company.name !== undefined) user.company.name = company.name;
-      if (company.description !== undefined) user.company.description = company.description;
-      if (company.website !== undefined) user.company.website = company.website;
-      if (company.address !== undefined) user.company.address = company.address;
-      if (company.logo !== undefined) user.company.logo = company.logo;
+      if (company.name !== undefined) nextCompany.name = company.name;
+      if (company.description !== undefined) nextCompany.description = company.description;
+      if (company.website !== undefined) nextCompany.website = company.website;
+      if (company.address !== undefined) nextCompany.address = company.address;
+      if (company.logo !== undefined) nextCompany.logo = company.logo;
     }
-    if (phone !== undefined) user.phone = phone;
-    if (state !== undefined) user.state = state;
 
-    writeJsonFile(usersFile, users);
+    const patch = {};
+    if (company) patch.company = nextCompany;
+    if (phone !== undefined) patch.phone = phone;
+    if (state !== undefined) patch.state = state;
+
+    const updated = Object.keys(patch).length > 0
+      ? await usersRepo.update(user._id, patch)
+      : user;
 
     res.json({
       success: true,
       message: 'Profile updated successfully',
-      name: user.name,
-      email: user.email,
-      phone: user.phone || '',
-      state: user.state || '',
-      company: user.company || {}
+      name: updated.name,
+      email: updated.email,
+      phone: updated.phone || '',
+      state: updated.state || '',
+      company: updated.company || {}
     });
   } catch (error) {
     console.error('Profile PUT error:', error);
@@ -1822,10 +1933,9 @@ app.put('/api/profile', authMiddleware, async (req, res) => {
 // ===== Saved Addresses =====
 app.get('/api/addresses', authMiddleware, async (req, res) => {
   try {
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const user = users.find(u => u._id === req.user._id);
+    const user = await usersRepo.findById(req.user._id);
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
-    res.json({ success: true, addresses: user.savedAddresses || [] });
+    res.json({ success: true, addresses: await usersRepo.listAddresses(user._id) });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch addresses' });
   }
@@ -1837,19 +1947,17 @@ app.post('/api/addresses', authMiddleware, async (req, res) => {
     if (!name || !line1 || !city || !pincode) {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === req.user._id);
+    const user = await usersRepo.findById(req.user._id);
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    if (!user.savedAddresses) user.savedAddresses = [];
-    const newAddress = {
+    const newAddress = await usersRepo.addAddress(user._id, {
       _id: Date.now().toString(),
       label: label || 'Home',
       name, phone: phone || '', line1, city, state: state || '', pincode,
-    };
-    user.savedAddresses.push(newAddress);
-    writeJsonFile(usersFile, users);
+    });
+    if (!newAddress) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
     res.status(201).json({ success: true, address: newAddress });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to save address' });
@@ -1859,24 +1967,21 @@ app.post('/api/addresses', authMiddleware, async (req, res) => {
 app.put('/api/addresses/:id', authMiddleware, async (req, res) => {
   try {
     const { label, name, phone, line1, city, state, pincode } = req.body;
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === req.user._id);
+    const user = await usersRepo.findById(req.user._id);
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    if (!user.savedAddresses) return res.status(404).json({ success: false, message: 'Address not found' });
-    const addr = user.savedAddresses.find(a => a._id === req.params.id);
+    const patch = {};
+    if (label !== undefined) patch.label = label;
+    if (name !== undefined) patch.name = name;
+    if (phone !== undefined) patch.phone = phone;
+    if (line1 !== undefined) patch.line1 = line1;
+    if (city !== undefined) patch.city = city;
+    if (state !== undefined) patch.state = state;
+    if (pincode !== undefined) patch.pincode = pincode;
+
+    const addr = await usersRepo.updateAddress(user._id, req.params.id, patch);
     if (!addr) return res.status(404).json({ success: false, message: 'Address not found' });
 
-    if (label !== undefined) addr.label = label;
-    if (name !== undefined) addr.name = name;
-    if (phone !== undefined) addr.phone = phone;
-    if (line1 !== undefined) addr.line1 = line1;
-    if (city !== undefined) addr.city = city;
-    if (state !== undefined) addr.state = state;
-    if (pincode !== undefined) addr.pincode = pincode;
-
-    writeJsonFile(usersFile, users);
     res.json({ success: true, address: addr });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to update address' });
@@ -1885,18 +1990,13 @@ app.put('/api/addresses/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/addresses/:id', authMiddleware, async (req, res) => {
   try {
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === req.user._id);
+    const user = await usersRepo.findById(req.user._id);
     if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
 
-    if (!user.savedAddresses) return res.status(404).json({ success: false, message: 'Address not found' });
-    const before = user.savedAddresses.length;
-    user.savedAddresses = user.savedAddresses.filter(a => a._id !== req.params.id);
-    if (user.savedAddresses.length === before) {
+    const removed = await usersRepo.deleteAddress(user._id, req.params.id);
+    if (!removed) {
       return res.status(404).json({ success: false, message: 'Address not found' });
     }
-    writeJsonFile(usersFile, users);
     res.json({ success: true, message: 'Address deleted' });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to delete address' });
@@ -1906,10 +2006,8 @@ app.delete('/api/addresses/:id', authMiddleware, async (req, res) => {
 // Protected Routes
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    // Read users from file
-    const usersFile = path.join(__dirname, './data/users.json');
-    const users = readJsonFile(usersFile);
-    const user = users.find(u => u._id === req.user._id);
+    // User comes from the repository (PostgreSQL when configured)
+    const user = await usersRepo.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({
@@ -1918,9 +2016,8 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
       });
     }
 
-    // Read products from file
-    const productsFile = path.join(__dirname, './data/products.json');
-    const products = readJsonFile(productsFile);
+    // User's products via the products repository (PostgreSQL, or JSON when PG is off)
+    const products = await productsRepo.list();
     const userProducts = products.filter(p => p.userId === user._id);
 
     res.json({
@@ -1964,7 +2061,7 @@ app.post('/api/auth/logout', authMiddleware, async (req, res) => {
 // Category counts
 app.get('/api/products/category-counts', async (req, res) => {
   try {
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const products = await productsRepo.list();
     const counts = {};
     products.forEach(p => {
       if ((!p.status || p.status === 'active') && p.category) {
@@ -1981,8 +2078,8 @@ app.get('/api/products/category-counts', async (req, res) => {
 // Featured products
 app.get('/api/products/featured', async (req, res) => {
   try {
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const products = await productsRepo.list();
+    const users = await usersRepo.listAll();
 
     const token = req.headers.authorization?.split(' ')[1];
     let isAuthed = false;
@@ -2015,8 +2112,8 @@ app.get('/api/products/featured', async (req, res) => {
 // All products for carousel (random 5)
 app.get('/api/products/all', async (req, res) => {
   try {
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const products = await productsRepo.list();
+    const users = await usersRepo.listAll();
 
     const token = req.headers.authorization?.split(' ')[1];
     let isAuthed = false;
@@ -2085,8 +2182,8 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 // Product Routes
 app.get('/api/products', async (req, res) => {
   try {
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const products = await productsRepo.list();
+    const users = await usersRepo.listAll();
 
     // Determine if requester is authenticated (supplier name only shown to logged-in users)
     const token = req.headers.authorization?.split(' ')[1];
@@ -2168,16 +2265,14 @@ app.get('/api/products', async (req, res) => {
 // Get single product by ID
 app.get('/api/products/:id', async (req, res) => {
   try {
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const product = products.find(p => p._id === req.params.id);
+    const product = await productsRepo.findById(req.params.id);
 
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
     // Fetch supplier name
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const supplier = users.find(u => u._id === product.userId);
+    const supplier = await usersRepo.findById(product.userId);
 
     // Only show real supplier name to authenticated users
     const token = req.headers.authorization?.split(' ')[1];
@@ -2206,16 +2301,6 @@ app.post('/api/products', authMiddleware, async (req, res) => {
   try {
     const { name, description, price, category, stock, images } = req.body;
 
-    // Read existing products
-    const productsPath = path.join(__dirname, './data/products.json');
-    let products = [];
-    try {
-      products = readJsonFile(productsPath);
-    } catch (err) {
-      console.error('Error reading products file:', err);
-    }
-
-    // Generate new ID
     // Generate unique product ID
     const productId = 'prod_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -2236,14 +2321,11 @@ app.post('/api/products', authMiddleware, async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
-    // Add to products array
-    products.push(product);
+    // Persist via the products repository (PostgreSQL, or JSON when PG is off)
+    await productsRepo.create(product);
 
-    // Save back to file
-    writeJsonFile(productsPath, products);
-
-    // Sync to SQLite inventory
-    inventory.upsertProduct(product._id, Number(stock));
+    // Sync to the inventory store (awaited: PG mode can reject)
+    await inventory.upsertProduct(product._id, Number(stock));
 
     res.status(201).json({
       success: true,
@@ -2262,44 +2344,40 @@ app.post('/api/products', authMiddleware, async (req, res) => {
 app.put('/api/products/:id', authMiddleware, async (req, res) => {
   try {
     const { name, description, price, category, stock, images, version } = req.body;
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const index = products.findIndex(p => p._id === req.params.id);
+    const existing = await productsRepo.findById(req.params.id);
 
-    if (index === -1) {
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    if (products[index].userId !== req.user._id) {
+    if (existing.userId !== req.user._id) {
       return res.status(403).json({ success: false, message: 'Not authorized to update this product' });
     }
 
     // Optimistic locking: check version
-    if (version !== undefined && products[index].version !== undefined && version !== products[index].version) {
+    if (version !== undefined && existing.version !== undefined && version !== existing.version) {
       return res.status(409).json({ success: false, message: 'Product was modified by another user. Please refresh and try again.' });
     }
 
-    const oldStock = products[index].stock;
+    const oldStock = existing.stock;
     const newStock = stock !== undefined ? Number(stock) : oldStock;
 
-    products[index] = {
-      ...products[index],
-      name: name?.trim() || products[index].name,
-      description: description?.trim() || products[index].description,
-      price: price !== undefined ? Number(price) : products[index].price,
-      category: category?.trim() || products[index].category,
+    const product = await productsRepo.update(req.params.id, {
+      name: name?.trim() || existing.name,
+      description: description?.trim() || existing.description,
+      price: price !== undefined ? Number(price) : existing.price,
+      category: category?.trim() || existing.category,
       stock: newStock,
       available_stock: newStock,
-      images: images || products[index].images,
-      version: (products[index].version || 0) + 1,
+      images: images || existing.images,
+      version: (existing.version || 0) + 1,
       updatedAt: new Date().toISOString()
-    };
+    });
 
-    writeJsonFile(path.join(__dirname, './data/products.json'), products);
+    // Sync stock change to the inventory store (awaited: PG mode can reject)
+    await inventory.upsertProduct(existing._id, newStock);
 
-    // Sync stock change to SQLite inventory
-    inventory.upsertProduct(products[index]._id, newStock);
-
-    res.json({ success: true, product: products[index] });
+    res.json({ success: true, product });
   } catch (error) {
     console.error('Update product error:', error);
     res.status(500).json({ success: false, message: 'Error updating product' });
@@ -2308,10 +2386,9 @@ app.put('/api/products/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   try {
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const index = products.findIndex(p => p._id === req.params.id);
+    const product = await productsRepo.findById(req.params.id);
 
-    if (index === -1) {
+    if (!product) {
       return res.status(404).json({
         success: false,
         message: 'Product not found'
@@ -2319,7 +2396,7 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
     }
 
     // Check if user owns the product
-    if (products[index].userId !== req.user._id) {
+    if (product.userId !== req.user._id) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to delete this product'
@@ -2327,11 +2404,11 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
     }
 
     // Remove product
-    const [deletedProduct] = products.splice(index, 1);
-    writeJsonFile(path.join(__dirname, './data/products.json'), products);
+    const deletedProduct = await productsRepo.remove(req.params.id);
 
-    // Remove from SQLite inventory
-    inventory.deleteProduct(deletedProduct._id);
+    // Remove from the inventory store (awaited: PG mode can reject;
+    // also no-op in PG because the products DELETE cascades inventory_stock)
+    await inventory.deleteProduct(product._id);
 
     res.json({
       success: true,
@@ -2350,17 +2427,15 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
 // Public supplier profile + their products
 app.get('/api/supplier/:id', async (req, res) => {
   try {
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const user = users.find(u => u._id === req.params.id);
+    const user = await usersRepo.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'Supplier not found' });
     }
 
     // Get all products listed by this supplier (public)
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const supplierProducts = products
-      .filter(p => (!p.status || p.status === 'active') && (p.userId === user._id || p.supplierId === user._id))
+    const supplierProducts = (await productsRepo.listBySeller(user._id))
+      .filter(p => !p.status || p.status === 'active')
       .map(p => ({
         _id: p._id,
         name: p.name,
@@ -2401,8 +2476,7 @@ app.get('/api/users/:id', authMiddleware, async (req, res) => {
       });
     }
 
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const user = users.find(u => u._id === req.params.id);
+    const user = await usersRepo.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -2434,13 +2508,13 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid user' });
     }
 
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const products = await productsRepo.list();
     const userProducts = products.filter(p => 
       String(p.userId || p.supplierId || '') === String(userId) && 
       (!p.status || p.status === 'active')
     );
 
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const orders = await ordersRepo.list();
     // Seller's orders = orders where any item has sellerId matching this user
     const userOrders = orders.filter(o => 
       (o.items || []).some(item => String(item.sellerId || '') === String(userId))
@@ -2448,9 +2522,9 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
     // Buyer's orders = orders they placed (shown under "Recent orders")
     const buyerOrders = orders.filter(o => String(o.userId) === String(userId));
 
-    // Admin detection: role from users.json, with email fallback for safety
-    const allUsers = readJsonFile(path.join(__dirname, './data/users.json'));
-    const isAdmin = isAdminUserId(userId);
+    // Admin detection: role from the users repository, with email fallback for safety
+    const allUsers = await usersRepo.listAll();
+    const isAdmin = await isAdminUserId(userId);
 
     // Newest-first comparator - must be declared before adminData/activity use it
     const byNewest = (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
@@ -2614,9 +2688,9 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
 app.get('/api/dashboard/analytics', authMiddleware, async (req, res) => {
   try {
     const userId = String(req.user._id || req.user.id);
-    const isAdmin = isAdminUserId(req.user._id);
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const isAdmin = await isAdminUserId(req.user._id);
+    const products = await productsRepo.list();
+    const orders = await ordersRepo.list();
     const productMap = new Map(products.map(p => [p._id, p]));
 
     // Admins see platform-wide analytics; sellers see their own
@@ -2678,7 +2752,7 @@ app.use('/api/inventory', inventoryRoutes);
 // Notification routes
 app.get('/api/notifications', authMiddleware, async (req, res) => {
   try {
-    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const all = await notificationsRepo.list();
     const userNotifs = all.filter(n => !n.userId || n.userId === req.user._id)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json({ success: true, notifications: userNotifs });
@@ -2690,7 +2764,7 @@ app.get('/api/notifications', authMiddleware, async (req, res) => {
 
 app.get('/api/notifications/archived', authMiddleware, async (req, res) => {
   try {
-    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const all = await notificationsRepo.list();
     const archived = all.filter(n => n.userId === req.user._id && n.archived)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     res.json({ success: true, notifications: archived });
@@ -2701,7 +2775,6 @@ app.get('/api/notifications/archived', authMiddleware, async (req, res) => {
 
 app.post('/api/notifications', authMiddleware, async (req, res) => {
   try {
-    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
     const newNotif = {
       _id: Date.now().toString(),
       userId: req.user._id,
@@ -2712,8 +2785,7 @@ app.post('/api/notifications', authMiddleware, async (req, res) => {
       archived: false,
       createdAt: new Date().toISOString()
     };
-    all.push(newNotif);
-    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    await notificationsRepo.create(newNotif);
     res.status(201).json({ success: true, notification: newNotif });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating notification' });
@@ -2722,15 +2794,11 @@ app.post('/api/notifications', authMiddleware, async (req, res) => {
 
 app.post('/api/notifications/:id/read', authMiddleware, async (req, res) => {
   try {
-    const result = await withLock(() => {
-      const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-      const idx = all.findIndex(n => n._id === req.params.id);
-      if (idx === -1) throw { status: 404, message: 'Not found' };
-      all[idx].read = true;
-      writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
-      return { notification: all[idx] };
-    });
-    res.json({ success: true, notification: result.notification });
+    const notification = await notificationsRepo.markRead(req.params.id);
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Not found' });
+    }
+    res.json({ success: true, notification });
   } catch (error) {
     const status = error.status || 500;
     res.status(status).json({ success: false, message: (status < 500 ? error.message : 'Internal server error') || 'Error marking as read' });
@@ -2739,17 +2807,7 @@ app.post('/api/notifications/:id/read', authMiddleware, async (req, res) => {
 
 app.post('/api/notifications/mark-all-read', authMiddleware, async (req, res) => {
   try {
-    await withLock(() => {
-      const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-      let changed = false;
-      all.forEach(n => {
-        if ((!n.userId || n.userId === req.user._id) && !n.read) {
-          n.read = true;
-          changed = true;
-        }
-      });
-      if (changed) writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
-    });
+    await notificationsRepo.markAllRead(req.user._id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error marking all as read' });
@@ -2758,12 +2816,9 @@ app.post('/api/notifications/mark-all-read', authMiddleware, async (req, res) =>
 
 app.post('/api/notifications/:id/archive', authMiddleware, async (req, res) => {
   try {
-    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-    const idx = all.findIndex(n => n._id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
-    all[idx].archived = true;
-    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
-    res.json({ success: true, notification: all[idx] });
+    const notification = await notificationsRepo.setArchived(req.params.id, true);
+    if (!notification) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, notification });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error archiving notification' });
   }
@@ -2771,12 +2826,9 @@ app.post('/api/notifications/:id/archive', authMiddleware, async (req, res) => {
 
 app.post('/api/notifications/:id/unarchive', authMiddleware, async (req, res) => {
   try {
-    const all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-    const idx = all.findIndex(n => n._id === req.params.id);
-    if (idx === -1) return res.status(404).json({ success: false, message: 'Not found' });
-    all[idx].archived = false;
-    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
-    res.json({ success: true, notification: all[idx] });
+    const notification = await notificationsRepo.setArchived(req.params.id, false);
+    if (!notification) return res.status(404).json({ success: false, message: 'Not found' });
+    res.json({ success: true, notification });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error unarchiving notification' });
   }
@@ -2784,9 +2836,7 @@ app.post('/api/notifications/:id/unarchive', authMiddleware, async (req, res) =>
 
 app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
   try {
-    let all = readJsonFile(path.join(__dirname, './data/notifications.json'));
-    all = all.filter(n => n._id !== req.params.id);
-    writeJsonFile(path.join(__dirname, './data/notifications.json'), all);
+    await notificationsRepo.remove(req.params.id);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error deleting notification' });
@@ -2796,18 +2846,18 @@ app.delete('/api/notifications/:id', authMiddleware, async (req, res) => {
 // Order routes (file-based)
 app.get('/api/orders', authMiddleware, async (req, res) => {
   try {
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
+    const orders = await ordersRepo.list();
     // Orders page = buyer's purchases only; admins see every order on the platform
-    const userOrders = isAdminUserId(req.user._id)
+    const userOrders = await isAdminUserId(req.user._id)
       ? orders
       : orders.filter(o => String(o.userId) === String(req.user._id));
 
     // Resolve product details for each order item
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const products = await productsRepo.list();
     const productMap = new Map(products.map(p => [p._id, p]));
 
     // Build user map for supplier names
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
+    const users = await usersRepo.listAll();
     const userMap = new Map(users.map(u => [u._id, u]));
 
     userOrders.forEach(order => {
@@ -2843,7 +2893,7 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
       }
     });
 
-    const isAdmin = isAdminUserId(req.user._id);
+    const isAdmin = await isAdminUserId(req.user._id);
 
     res.json({ success: true, orders: userOrders.map(o => {
       // Admin-only: resolve seller (from) address from the first item's sellerId
@@ -2894,11 +2944,11 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
 
 app.post('/api/orders/:id/archive', authMiddleware, async (req, res) => {
   try {
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const order = orders.find(o => o._id === req.params.id && o.userId === req.user._id);
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    order.archived = true;
-    writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
+    const order = await ordersRepo.findById(req.params.id);
+    if (!order || order.userId !== req.user._id) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    await ordersRepo.update(order._id, { archived: true });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error archiving order' });
@@ -2914,12 +2964,11 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid status' });
     }
 
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const order = orders.find(o => o._id === req.params.id);
+    const order = await ordersRepo.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     // Admins are read-only - they cannot update order status
-    if (isAdminUserId(req.user._id)) {
+    if (await isAdminUserId(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Admins cannot update order status' });
     }
 
@@ -2929,17 +2978,16 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Only the seller can update order status' });
     }
 
-    order.status = status;
+    const patch = { status };
     if (status === 'shipped' && !order.shippedAt) {
-      order.shippedAt = new Date().toISOString();
+      patch.shippedAt = new Date().toISOString();
     }
     if (status === 'delivered' && !order.deliveredAt) {
-      order.deliveredAt = new Date().toISOString();
+      patch.deliveredAt = new Date().toISOString();
     }
-    writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
+    const updatedOrder = await ordersRepo.update(order._id, patch);
 
     // Notify the buyer about the status update
-    const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
     const statusMessages = {
       processing: 'Your order is being processed',
       shipped: 'Your order has been shipped',
@@ -2947,7 +2995,7 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
       cancelled: 'Your order has been cancelled',
     };
     if (statusMessages[status]) {
-      notifications.push({
+      await notificationsRepo.create({
         _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + 'st',
         userId: order.userId,
         title: 'Order update',
@@ -2958,10 +3006,9 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
         createdAt: new Date().toISOString(),
         metadata: { orderId: order._id },
       });
-      writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
     }
 
-    res.json({ success: true, message: 'Order status updated', order });
+    res.json({ success: true, message: 'Order status updated', order: updatedOrder || order });
   } catch (error) {
     console.error('Update order status error:', error);
     res.status(500).json({ success: false, message: 'Failed to update order status' });
@@ -2972,8 +3019,7 @@ app.put('/api/orders/:id/status', authMiddleware, async (req, res) => {
 // If admin token provided, also return seller (from) address
 app.get('/api/orders/track/:trackingId', async (req, res) => {
   try {
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const order = orders.find(o => o.trackingId === req.params.trackingId);
+    const order = await ordersRepo.findByTrackingId(req.params.trackingId);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found. Check your tracking ID.' });
     }
@@ -2986,12 +3032,11 @@ app.get('/api/orders/track/:trackingId', async (req, res) => {
         const token = authHeader.split(' ')[1];
         if (token) {
           const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
-          const users = readJsonFile(path.join(__dirname, './data/users.json'));
-          const currentUser = users.find(u => String(u._id) === String(decoded.userId));
+          const currentUser = await usersRepo.findById(decoded.userId);
           if (currentUser && (currentUser.role === 'admin' || String(currentUser.email || '').toLowerCase() === 'techpharma10@gmail.com')) {
             const sellerId = order.items?.[0]?.sellerId || order.items?.[0]?.product?.sellerId;
             if (sellerId) {
-              const seller = users.find(u => String(u._id) === String(sellerId));
+              const seller = await usersRepo.findById(sellerId);
               if (seller) {
                 sellerInfo = {
                   name: seller.name || '',
@@ -3042,25 +3087,23 @@ app.get('/api/orders/track/:trackingId', async (req, res) => {
 // Get invoice data for an order
 app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
   try {
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const order = orders.find(o => o._id === req.params.id);
+    const order = await ordersRepo.findById(req.params.id);
     if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
 
     // Buyer can view their own invoice; seller can view for their items; admin can view any
     const isBuyer = String(order.userId) === String(req.user._id);
     const isSeller = (order.items || []).some(item => String(item.sellerId) === String(req.user._id));
-    const isAdmin = req.user.role === 'admin' || isAdminUserId(req.user._id);
+    const isAdmin = req.user.role === 'admin' || await isAdminUserId(req.user._id);
     if (!isBuyer && !isSeller && !isAdmin) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const buyer = users.find(u => u._id === order.userId) || {};
+    const buyer = await usersRepo.findById(order.userId) || {};
 
     // Get the actual seller info from the first item's sellerId
     const sellerId = order.items?.[0]?.sellerId || order.items?.[0]?.product?.sellerId;
-    const seller = users.find(u => u._id === sellerId) || {};
-    const sellerProducts = readJsonFile(path.join(__dirname, './data/products.json'));
+    const seller = await usersRepo.findById(sellerId) || {};
+    const sellerProducts = await productsRepo.list();
     const sellerProduct = sellerProducts.find(p => p._id === (order.items?.[0]?.product?._id || order.items?.[0]?.productId)) || {};
 
     res.json({
@@ -3167,10 +3210,10 @@ function buildSoldProducts(orders, users, products, sellerId, includeAll = false
 // Sold products for the current user (the seller)
 app.get('/api/sold-products', authMiddleware, async (req, res) => {
   try {
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const { products: sold, sales } = buildSoldProducts(orders, users, products, req.user._id, isAdminUserId(req.user._id));
+    const orders = await ordersRepo.list();
+    const users = await usersRepo.listAll();
+    const products = await productsRepo.list();
+    const { products: sold, sales } = buildSoldProducts(orders, users, products, req.user._id, await isAdminUserId(req.user._id));
     res.json({ success: true, products: sold, sales });
   } catch (error) {
     console.error('Sold products error:', error);
@@ -3183,16 +3226,15 @@ app.get('/api/sold-products/:sellerId', authMiddleware, async (req, res) => {
   try {
     // Only the seller themselves or an admin can view a seller's sales data
     if (req.params.sellerId !== req.user._id) {
-      const users = readJsonFile(path.join(__dirname, './data/users.json'));
-      const currentUser = users.find(u => u._id === req.user._id);
+      const currentUser = await usersRepo.findById(req.user._id);
       if (!currentUser || currentUser.role !== 'admin') {
         return res.status(403).json({ success: false, message: 'Not authorized to view this seller\'s data' });
       }
     }
 
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const users = readJsonFile(path.join(__dirname, './data/users.json'));
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const orders = await ordersRepo.list();
+    const users = await usersRepo.listAll();
+    const products = await productsRepo.list();
     const { products: pp, sales } = buildSoldProducts(orders, users, products, req.params.sellerId);
     res.json({ success: true, products: pp, sales });
   } catch (error) {
@@ -3203,8 +3245,8 @@ app.get('/api/sold-products/:sellerId', authMiddleware, async (req, res) => {
 
 app.get('/api/orders/stats', authMiddleware, async (req, res) => {
   try {
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    const userOrders = isAdminUserId(req.user._id) ? orders : orders.filter(o => o.userId === req.user._id);
+    const orders = await ordersRepo.list();
+    const userOrders = await isAdminUserId(req.user._id) ? orders : orders.filter(o => o.userId === req.user._id);
     res.json({
       success: true,
       stats: {
@@ -3219,26 +3261,22 @@ app.get('/api/orders/stats', authMiddleware, async (req, res) => {
   }
 });
 
-// Cart routes (file-based)
-const getCartFilePath = () => path.join(__dirname, './data/carts.json');
+// Cart routes (repository-backed)
 
 app.get('/api/cart', authMiddleware, async (req, res) => {
   try {
-    const carts = readJsonFile(getCartFilePath());
-    let cart = carts.find(c => c.userId === req.user._id);
+    let cart = await cartsRepo.findByUser(req.user._id);
     if (!cart) {
       return res.json({ success: true, cart: { items: [], total: 0 } });
     }
 
     // Resolve product details for each cart item
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
-    const userMap = new Map(readJsonFile(path.join(__dirname, './data/users.json')).map(u => [u._id, u]));
+    const products = await productsRepo.list();
 
     cart.items = cart.items.map(item => {
       if (item.product && item.product.name) return item; // already has product data
-      const product = products.find(p => p._id === item.productId);
+      const product = products.find(p => String(p._id) === String(item.productId));
       if (product) {
-        const supplier = userMap.get(product.userId);
         return {
           ...item,
           product: {
@@ -3270,10 +3308,9 @@ app.post('/api/cart/add', authMiddleware, async (req, res) => {
     const { productId, quantity } = req.body;
     const qty = parseInt(quantity) || 1;
 
-    const result = await withLock(() => {
-      const carts = readJsonFile(getCartFilePath());
-      const products = readJsonFile(path.join(__dirname, './data/products.json'));
-      const product = products.find(p => p._id === productId);
+    const result = await withLock(async () => {
+      let cart = await cartsRepo.findByUser(req.user._id);
+      const product = await productsRepo.findById(productId);
 
       if (!product) {
         throw { status: 404, message: 'Product not found' };
@@ -3285,10 +3322,8 @@ app.post('/api/cart/add', authMiddleware, async (req, res) => {
         throw { status: 409, message: `Only ${available} units available` };
       }
 
-      let cart = carts.find(c => c.userId === req.user._id);
       if (!cart) {
         cart = { _id: Date.now().toString() + Math.random().toString(36).slice(2, 6), userId: req.user._id, items: [], total: 0, version: 0 };
-        carts.push(cart);
       }
 
       const existingItem = cart.items.find(item => item.productId === productId);
@@ -3318,7 +3353,7 @@ app.post('/api/cart/add', authMiddleware, async (req, res) => {
       cart.version = (cart.version || 0) + 1;
       cart.total = cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0);
 
-      writeJsonFile(getCartFilePath(), carts);
+      await cartsRepo.save(cart);
       return { cart };
     });
 
@@ -3334,9 +3369,8 @@ app.put('/api/cart/update/:productId', authMiddleware, async (req, res) => {
     const { productId } = req.params;
     const { quantity, cartVersion } = req.body;
 
-    const result = await withLock(() => {
-      const carts = readJsonFile(getCartFilePath());
-      const cart = carts.find(c => c.userId === req.user._id);
+    const result = await withLock(async () => {
+      const cart = await cartsRepo.findByUser(req.user._id);
 
       if (!cart) {
         throw { status: 404, message: 'Cart not found' };
@@ -3356,8 +3390,7 @@ app.put('/api/cart/update/:productId', authMiddleware, async (req, res) => {
         cart.items = cart.items.filter(item => item.productId !== productId);
       } else {
         // Validate against stock
-        const products = readJsonFile(path.join(__dirname, './data/products.json'));
-        const product = products.find(p => p._id === productId);
+        const product = await productsRepo.findById(productId);
         const available = product ? (product.available_stock !== undefined ? product.available_stock : product.stock || 0) : 0;
         if (quantity > available) {
           throw { status: 409, message: `Only ${available} units available` };
@@ -3368,7 +3401,7 @@ app.put('/api/cart/update/:productId', authMiddleware, async (req, res) => {
       cart.version = (cart.version || 0) + 1;
       cart.total = cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0);
 
-      writeJsonFile(getCartFilePath(), carts);
+      await cartsRepo.save(cart);
       return { cart };
     });
 
@@ -3383,9 +3416,8 @@ app.delete('/api/cart/remove/:productId', authMiddleware, async (req, res) => {
   try {
     const { productId } = req.params;
 
-    const result = await withLock(() => {
-      const carts = readJsonFile(getCartFilePath());
-      const cart = carts.find(c => c.userId === req.user._id);
+    const result = await withLock(async () => {
+      const cart = await cartsRepo.findByUser(req.user._id);
 
       if (!cart) {
         throw { status: 404, message: 'Cart not found' };
@@ -3395,7 +3427,7 @@ app.delete('/api/cart/remove/:productId', authMiddleware, async (req, res) => {
       cart.version = (cart.version || 0) + 1;
       cart.total = cart.items.reduce((sum, item) => sum + ((item.product?.price || 0) * item.quantity), 0);
 
-      writeJsonFile(getCartFilePath(), carts);
+      await cartsRepo.save(cart);
       return { cart };
     });
 
@@ -3411,14 +3443,13 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
     const { paymentMethod, shippingAddress, idempotencyKey } = req.body;
 
     // Read cart + buyer outside the SQLite transaction (not inventory-critical)
-    const carts = readJsonFile(getCartFilePath());
-    const cart = carts.find(c => c.userId === req.user._id);
+    const cart = await cartsRepo.findByUser(req.user._id);
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({ success: false, message: 'Cart is empty' });
     }
 
-    const buyerUser = readJsonFile(path.join(__dirname, './data/users.json')).find(u => u._id === req.user._id) || {};
+    const buyerUser = await usersRepo.findById(req.user._id) || {};
 
     // Atomic stock decrement + order creation (SQLite transaction).
     // If ANY item has insufficient stock, the entire transaction rolls back.
@@ -3431,20 +3462,21 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
       idempotencyKey
     });
 
-    // If idempotent hit, return existing order - no side effects
+    // 1. Persist the order for remaining read paths. Idempotent: PG mode
+    // inserts the row when the cross-database checkout tx could not, JSON mode
+    // pushes the legacy file. Also runs on idempotent replays so a crash
+    // between SQLite commit and persist gets repaired on retry.
+    await ordersRepo.finalizeCheckout(result.order);
+
+    // If idempotent hit, return existing order - no further side effects
     if (result.idempotent) {
       return res.json({ success: true, order: result.order, idempotent: true });
     }
 
     // --- Post-commit side effects (best-effort, not ACID-critical) ---
 
-    // 1. Add order to JSON cache (for existing read paths)
-    const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-    orders.push(result.order);
-    writeJsonFile(path.join(__dirname, './data/orders.json'), orders);
-
     // 2. Create seller notifications + low-stock alerts
-    const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
+    const newNotifications = [];
     const notified = new Set();
     result.order.items.forEach(item => {
       if (item.sellerId && !notified.has(item.sellerId)) {
@@ -3452,7 +3484,7 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
         const buyerDisplay = buyerUser.company?.name
           ? `${buyerUser.name || 'a buyer'} (${buyerUser.company.name})`
           : (buyerUser.name || buyerUser.email || 'a buyer');
-        notifications.push({
+        newNotifications.push({
           _id: Date.now().toString() + Math.random().toString(36).slice(2, 6),
           userId: item.sellerId,
           title: 'New order received',
@@ -3469,14 +3501,14 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
     // Low stock alerts - check each purchased product after stock decrement
     const LOW_STOCK_THRESHOLD = 5;
     const purchasedProductIds = new Set(cart.items.map(i => i.productId));
-    const products = readJsonFile(path.join(__dirname, './data/products.json'));
+    const products = await productsRepo.list();
     products.forEach(p => {
       if (!purchasedProductIds.has(p._id)) return;
       const currentStock = p.available_stock !== undefined ? p.available_stock : p.stock || 0;
       if (currentStock > 0 && currentStock <= LOW_STOCK_THRESHOLD) {
         const sellerId = p.userId || p.supplierId;
         if (sellerId) {
-          notifications.push({
+          newNotifications.push({
             _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + p._id,
             userId: sellerId,
             title: 'Low stock alert',
@@ -3491,13 +3523,13 @@ app.post('/api/cart/checkout', authMiddleware, async (req, res) => {
       }
     });
 
-    if (notifications.length > 0) writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
+    if (newNotifications.length > 0) await notificationsRepo.createMany(newNotifications);
 
     // 3. Clear cart
     cart.items = [];
     cart.total = 0;
     cart.version = (cart.version || 0) + 1;
-    writeJsonFile(getCartFilePath(), carts);
+    await cartsRepo.save(cart);
 
     res.json({ success: true, order: result.order, idempotent: false });
   } catch (error) {
@@ -3522,6 +3554,43 @@ const startServer = async () => {
     // Initialize storage FIRST - pre-loads products.json into cache synchronously
     // This ensures products are available from second 0, even before MongoDB connects
     initStorage();
+
+    // Initialize PostgreSQL (if configured and not disabled). isPostgresEnabled()
+    // checks both DATABASE_URL and the PG_DISABLED escape hatch, so tests and an
+    // emergency rollback never open a pool.
+    if (isPostgresEnabled()) {
+      try {
+        const pg = require('./src/db/postgres');
+        pg.getPool(); // Create and test the pool
+        await pg.healthCheck();
+        console.log('[postgres] Connection pool initialized and healthy');
+
+        // Apply pending migrations (idempotent - tracked in schema_migrations) so a
+        // fresh deploy has the tables its repositories expect.
+        const { runMigrations } = require('./src/db/migrate');
+        const { applied, skipped } = await runMigrations();
+        if (applied.length) {
+          console.log(`[postgres] migrations applied: ${applied.join(', ')}`);
+        } else {
+          console.log(`[postgres] schema up to date (${skipped.length} migrations)`);
+        }
+      } catch (pgErr) {
+        console.error('[postgres] Failed to initialize:', pgErr.message);
+        if (process.env.NODE_ENV === 'production') {
+          console.error('[postgres] Exiting: DATABASE_URL set but PostgreSQL is not usable');
+          process.exit(1);
+        }
+        // Dev/test: fall back to the legacy JSON store instead of running with a
+        // half-working database (PG_DISABLED is honoured by src/db/postgres.js).
+        process.env.PG_DISABLED = 'true';
+        console.warn('[postgres] Continuing on the JSON/cache store (dev mode)');
+      }
+    } else {
+      console.log('[postgres] DATABASE_URL not set, skipping PostgreSQL initialization');
+    }
+
+    // Keep the not-yet-migrated read paths (dashboard, products/orders joins) correct
+    await warmLegacyUsersCache();
 
     // Connect to MongoDB (don't block server start - data is already in cache from files)
     connectMongoDB().then(connected => {
@@ -3554,12 +3623,10 @@ const startServer = async () => {
 
     // Start weekly summary job - runs every 7 days
     const WEEKLY_INTERVAL = 7 * 24 * 60 * 60 * 1000;
-    const generateWeeklySummary = () => {
+    const generateWeeklySummary = async () => {
       try {
-        const products = readJsonFile(path.join(__dirname, './data/products.json'));
-        const orders = readJsonFile(path.join(__dirname, './data/orders.json'));
-        const notifications = readJsonFile(path.join(__dirname, './data/notifications.json'));
-        const users = readJsonFile(path.join(__dirname, './data/users.json'));
+        const orders = await ordersRepo.list();
+        const notifications = await notificationsRepo.list();
         const weekAgo = Date.now() - WEEKLY_INTERVAL;
 
         const sellers = new Map();
@@ -3577,12 +3644,12 @@ const startServer = async () => {
         });
 
         let created = 0;
+        const toCreate = [];
         sellers.forEach((stats, sellerId) => {
-          const seller = users.find(u => u._id === sellerId);
           const existing = notifications.find(n => n.userId === sellerId && n.type === 'weekly_summary' && new Date(n.createdAt).getTime() > weekAgo);
           if (existing) return; // Don't duplicate within the same week
 
-          notifications.push({
+          toCreate.push({
             _id: Date.now().toString() + Math.random().toString(36).slice(2, 6) + 'wk',
             userId: sellerId,
             title: 'Weekly sales summary',
@@ -3596,7 +3663,7 @@ const startServer = async () => {
         });
 
         if (created > 0) {
-          writeJsonFile(path.join(__dirname, './data/notifications.json'), notifications);
+          await notificationsRepo.createMany(toCreate);
           console.log(`[weekly-summary] Created ${created} summary notification(s)`);
         }
       } catch (err) {
@@ -3641,6 +3708,7 @@ Backend Server Running
 -----------------------------------------
 • Port: ${PORT}
 • URL: http://localhost:${PORT}
+• Data store: ${storeName()}${isPostgresEnabled() ? ' (source of truth)' : ' (legacy JSON/cache)'}
 • Cache: Pre-loaded from files (instant)
 • MongoDB: ${mongoDb ? 'Connected' : 'Connecting in background...'}
 =========================================`);
@@ -3649,11 +3717,20 @@ Backend Server Running
     const shutdown = async () => {
       try {
         console.log('\nShutting down...');
+        // Close PostgreSQL pool
+        if (process.env.DATABASE_URL) {
+          try {
+            const pg = require('./src/db/postgres');
+            await pg.closePool();
+          } catch (e) {
+            console.error('[postgres] Shutdown error:', e.message);
+          }
+        }
         await server.close();
         process.exit(0);
       } catch (err) {
         console.error('Shutdown error:', err);
-        process.exit(1);
+        process.exit(1)
       }
     };
 

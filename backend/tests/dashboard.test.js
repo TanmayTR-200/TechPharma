@@ -13,6 +13,9 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-for-dashboard-tests';
 process.env.MONGODB_URI = '';
+// Legacy JSON/cache store for this suite (see tests/postgres.test.js for the
+// PostgreSQL repository coverage).
+process.env.PG_DISABLED = 'true';
 process.env.PORT = '5993';
 process.env.AUTH_RATE_LIMIT_MAX = '100000';
 process.env.API_RATE_LIMIT_MAX = '100000';

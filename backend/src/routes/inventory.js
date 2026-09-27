@@ -1,7 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/auth');
-const inventory = require('../inventory/reservation');
+const sqliteInventory = require('../inventory/reservation');
+
+// Active implementation. server.js injects the PG-capable repo
+// (src/db/inventory.js) here at boot; before that (tests mounting the router
+// directly) the SQLite module answers, so behaviour is unchanged.
+let inventory = sqliteInventory;
+
+function setInventory(impl) {
+  if (impl) inventory = impl;
+}
 
 // POST /api/inventory/reserve
 // Body: { productId, quantity, idempotencyKey }
@@ -70,7 +79,10 @@ router.post('/cancel', authenticate, async (req, res) => {
 // GET /api/inventory/product/:id
 router.get('/product/:id', async (req, res) => {
   try {
-    const inv = inventory.getProductInventory(req.params.id);
+    const inv = typeof inventory.getProductInventoryAsync === 'function'
+      // PG-capable repo: async lookup (delegates to SQLite when PG is off)
+      ? await inventory.getProductInventoryAsync(req.params.id)
+      : inventory.getProductInventory(req.params.id);
     if (!inv) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
@@ -81,3 +93,4 @@ router.get('/product/:id', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.setInventory = setInventory;

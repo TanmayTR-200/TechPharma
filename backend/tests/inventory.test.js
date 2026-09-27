@@ -22,6 +22,9 @@ const { spawnSync } = require('child_process');
 
 // Use a dedicated test DB (not the production one)
 process.env.SQLITE_PATH = path.join(__dirname, '../data/test_inventory.db');
+// This suite drives the SQLite inventory store directly and (for createOrder)
+// global.dataCache - it must not be routed through PostgreSQL.
+process.env.PG_DISABLED = 'true';
 
 const inventory = require('../src/inventory/reservation');
 const { getDb } = require('../src/inventory/store');

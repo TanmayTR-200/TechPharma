@@ -1,35 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const path = require('path');
-const fs = require('fs');
 const authenticate = require('../middleware/auth');
 
-const getMessagesFilePath = () => path.join(__dirname, '../../data/messages.json');
-
-function readJsonFile(filePath) {
-  const colName = path.basename(filePath, '.json');
-  if (global.dataCache && global.dataCache[colName] !== undefined) {
-    return global.dataCache[colName];
-  }
-  if (!fs.existsSync(filePath)) {
-    return [];
-  }
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-}
-
-function writeJsonFile(filePath, data) {
-  const colName = path.basename(filePath, '.json');
-  if (global.dataCache) {
-    global.dataCache[colName] = data;
-  }
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
+// Repositories - PostgreSQL when DATABASE_URL is set, shared JSON/cache otherwise.
+const { users: usersRepo, messages: messagesRepo, notifications: notificationsRepo } = require('../db');
 
 // Get all conversations for the current user
 router.get('/conversations', authenticate, async (req, res) => {
   try {
-    const messages = readJsonFile(getMessagesFilePath());
-    const users = readJsonFile(path.join(__dirname, '../../data/users.json'));
+    const messages = await messagesRepo.list();
+    const users = await usersRepo.listAll();
 
     // Prebuild a user map ONCE to avoid N+1 lookups per conversation partner
     const userMap = new Map(users.map(u => [u._id, u]));
@@ -83,29 +63,18 @@ router.get('/conversations', authenticate, async (req, res) => {
 router.get('/:userId', authenticate, async (req, res) => {
   try {
     const { userId } = req.params;
-    const messages = readJsonFile(getMessagesFilePath());
-    const users = readJsonFile(path.join(__dirname, '../../data/users.json'));
 
-    // Filter messages between these two users (either direction)
-    const thread = messages
-      .filter(msg =>
-        (msg.senderId === req.user._id && msg.receiverId === userId) ||
-        (msg.senderId === userId && msg.receiverId === req.user._id)
-      )
-      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    // Messages between these two users (either direction), oldest first.
+    // Fetched BEFORE marking as read, so the response keeps pre-mark values -
+    // exactly like the old read-all/write-back implementation behaved.
+    const thread = await messagesRepo.findThread(req.user._id, userId);
 
     // Mark received messages as read
-    const updated = messages.map(msg => {
-      if (msg.senderId === userId && msg.receiverId === req.user._id) {
-        return { ...msg, read: true };
-      }
-      return msg;
-    });
-    writeJsonFile(getMessagesFilePath(), updated);
+    await messagesRepo.markReceivedFrom(userId, req.user._id);
 
     // Include the conversation partner's name so the chat UI can show
     // it without calling the restricted GET /api/users/:id endpoint
-    const partner = users.find(u => u._id === userId);
+    const partner = await usersRepo.findById(userId);
 
     res.json({ success: true, messages: thread, partner: partner ? { _id: partner._id, name: partner.name } : null });
   } catch (error) {
@@ -129,9 +98,7 @@ router.post('/send', authenticate, async (req, res) => {
 
     const { withLock } = require('../inventory/lock');
 
-    const result = await withLock(() => {
-      const messages = readJsonFile(getMessagesFilePath());
-
+    const result = await withLock(async () => {
       // Use collision-safe ID + server timestamp for ordering
       const now = Date.now();
       const newMessage = {
@@ -144,15 +111,12 @@ router.post('/send', authenticate, async (req, res) => {
         read: false,
       };
 
-      messages.push(newMessage);
-      writeJsonFile(getMessagesFilePath(), messages);
+      await messagesRepo.create(newMessage);
 
       // Create a notification for the recipient
-      const notifications = readJsonFile(path.join(__dirname, '../../data/notifications.json'));
-      const users = readJsonFile(path.join(__dirname, '../../data/users.json'));
-      const sender = users.find(u => u._id === req.user._id);
+      const sender = await usersRepo.findById(req.user._id);
       const senderName = sender?.name || 'Someone';
-      notifications.push({
+      await notificationsRepo.create({
         _id: now.toString() + Math.random().toString(36).slice(2, 6) + 'msg',
         userId: receiverId,
         title: 'New message',
@@ -163,7 +127,6 @@ router.post('/send', authenticate, async (req, res) => {
         createdAt: new Date().toISOString(),
         metadata: { senderId: req.user._id, senderName },
       });
-      writeJsonFile(path.join(__dirname, '../../data/notifications.json'), notifications);
 
       return { message: newMessage };
     });

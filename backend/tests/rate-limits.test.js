@@ -13,6 +13,9 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-for-rate-limit-tests';
 process.env.MONGODB_URI = '';
+// Legacy JSON/cache store for this suite; PostgreSQL repositories are covered by
+// tests/postgres.test.js.
+process.env.PG_DISABLED = 'true';
 process.env.PORT = '5992';
 process.env.EMAIL_USER = '';
 process.env.EMAIL_APP_PASSWORD = '';
