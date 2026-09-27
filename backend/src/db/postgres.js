@@ -22,6 +22,60 @@ function isEnabled() {
 }
 
 /**
+ * Load an optional provider CA bundle (PEM file contents).
+ *
+ * Supabase and other hosted free tiers sit behind proxies whose certificate
+ * chain is not rooted in the bundled Mozilla CA list, so a strict connection
+ * fails with "self-signed certificate in certificate chain". By default the
+ * connection stays encrypted but does not verify the peer
+ * (`rejectUnauthorized: false`). Setting PG_SSL_CA_FILE to a PEM bundle
+ * switches verification back on.
+ *
+ * @returns {string|undefined} PEM contents, or undefined when not configured
+ */
+function caBundle() {
+  const caFile = process.env.PG_SSL_CA_FILE;
+  if (!caFile) return undefined;
+  try {
+    return require('fs').readFileSync(caFile, 'utf8');
+  } catch (err) {
+    console.warn(`[postgres] Could not read PG_SSL_CA_FILE (${caFile}): ${err.message}`);
+    return undefined;
+  }
+}
+
+/**
+ * Remove SSL-related query parameters from a connection string.
+ *
+ * `pg` derives its `ssl` option by parsing `connectionString` and merging the
+ * parsed result OVER the options passed to `Pool`. A URL carrying
+ * `?sslmode=require` therefore forces `rejectUnauthorized: true` and silently
+ * overrides the setting computed in getPool() below, which fails against
+ * providers whose certificate chain Node cannot verify
+ * ("self-signed certificate in certificate chain").
+ *
+ * SSL is decided in exactly one place - getPool() - so the parameter is
+ * stripped here and the explicit `ssl` option is authoritative. Keeping
+ * `?sslmode=require` in DATABASE_URL stays harmless and self-documenting.
+ *
+ * @param {string} connectionString
+ * @returns {string} the same connection string without `ssl`/`sslmode` params
+ */
+function stripSslParams(connectionString) {
+  if (!connectionString) return connectionString;
+  const queryStart = connectionString.indexOf('?');
+  if (queryStart === -1) return connectionString;
+
+  const base = connectionString.slice(0, queryStart);
+  const kept = connectionString
+    .slice(queryStart + 1)
+    .split('&')
+    .filter((pair) => pair && !/^ssl(mode)?=/i.test(pair));
+
+  return kept.length ? `${base}?${kept.join('&')}` : base;
+}
+
+/**
  * Get or create the PostgreSQL connection pool.
  * Uses DATABASE_URL from environment (or individual PG* vars).
  */
@@ -55,11 +109,19 @@ function getPool() {
   const useSsl = !isLoopback && (wantsSsl || process.env.PG_SSL === 'true');
 
   pool = new Pool({
-    connectionString,
+    // Stripped so the explicit `ssl` option below wins over any `sslmode`
+    // embedded in the URL - see stripSslParams().
+    connectionString: stripSslParams(connectionString),
     max: Number(process.env.PG_POOL_MAX) || 10,
     idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT) || 30000,
     connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT) || 5000,
-    ssl: useSsl ? { rejectUnauthorized: false } : false,
+    // rejectUnauthorized stays false: hosted free tiers (Supabase poolers
+    // included) present certificate chains that do not verify against the
+    // bundled Mozilla CA list, so verification fails with
+    // "self-signed certificate in certificate chain". Traffic is still
+    // encrypted. Set PG_SSL_CA_FILE to a provider CA bundle to verify
+    // properly instead.
+    ssl: useSsl ? { rejectUnauthorized: !process.env.PG_SSL_CA_FILE, ca: caBundle() } : false,
   });
 
   pool.on('error', (err) => {
@@ -207,4 +269,5 @@ module.exports = {
   transaction,
   closePool,
   healthCheck,
+  stripSslParams,
 };
