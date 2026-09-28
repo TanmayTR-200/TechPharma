@@ -296,6 +296,35 @@ function mapOrder(doc) {
   };
 }
 
+/**
+ * One MongoDB order item -> { productId, productName }.
+ *
+ * An order item snapshots the product it was bought from as a NESTED object -
+ * `{ product: { _id, name }, quantity, price, sellerId }` - which is exactly the
+ * API document shape (see `itemToRow` in src/db/orders.js). The flat
+ * `item.productId` / `item.name` spellings are kept only as a fallback for
+ * hand-written or older documents.
+ *
+ * Reading ONLY the flat spellings gave every migrated order_items row a NULL
+ * product_id and an empty product_name, so the orders page fell back to its
+ * literal 'Product' placeholder.
+ */
+function orderItemSnapshot(item) {
+  const snap = item && typeof item.product === 'object' && item.product !== null
+    ? item.product
+    : {};
+  const rawId = snap._id !== undefined
+    ? snap._id
+    : (item && item.productId !== undefined ? item.productId : null);
+  const rawName = snap.name !== undefined
+    ? snap.name
+    : (item && item.name !== undefined ? item.name : (item && item.productName));
+  return {
+    productId: toId(rawId),
+    productName: rawName === undefined || rawName === null ? '' : String(rawName),
+  };
+}
+
 function mapMessage(doc) {
   const id = docId(doc);
   if (!id) return null;
@@ -616,9 +645,8 @@ async function importOrders(client, src, userIds, productIds) {
       await client.query(SQL.orders, [m.id, buyer].concat(m.params));
 
       for (const item of m.items) {
-        const productId = toId(item.productId === undefined
-          ? (item._id === undefined ? null : item._id)
-          : item.productId);
+        // The product snapshot is nested (item.product._id / item.product.name).
+        const { productId, productName } = orderItemSnapshot(item);
         // product_id is a FK: a missing product leaves the line intact with
         // NULL, because order history keeps the captured name and price.
         let link = productId;
@@ -633,7 +661,7 @@ async function importOrders(client, src, userIds, productIds) {
         await client.query(SQL.order_items, [
           m.id,
           link,
-          item.name || item.productName || '',
+          productName,
           num(item.quantity, 1),
           num(item.price, 0),
           toId(item.sellerId === undefined ? null : item.sellerId),
