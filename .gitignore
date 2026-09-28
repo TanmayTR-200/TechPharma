@@ -54,3 +54,12 @@ backend/data/test_inventory.db
 backend/data/test_inventory.db-wal
 backend/data/test_inventory.db-shm
 
+
+# Local dev run logs and crash dumps
+backend/err.txt
+backend/out.txt
+backend/server_err.txt
+backend/server_out.txt
+less.exe.stackdump
+logs/
+mem-log/

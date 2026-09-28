@@ -7,6 +7,39 @@ let pool = null;
 let isShuttingDown = false;
 
 /**
+ * Run a query, retrying once on a DNS-level connection failure.
+ *
+ * Some networks (and Windows machines whose DNS client is briefly unhappy)
+ * fail `dns.lookup` with ECONNREFUSED/EAI_AGAIN even though the host is
+ * perfectly reachable - a plain TCP connect to the same address succeeds.
+ * Node surfaces that as an AggregateError whose `.message` is empty, which is
+ * why this looks like a blank failure.
+ *
+ * Retrying once after a short pause rides out the blip instead of aborting a
+ * long migration. Only DNS/socket errors are retried: an authentication or SQL
+ * error will not fix itself, and retrying it only delays the real message.
+ *
+ * @param {() => Promise<any>} fn
+ * @returns {Promise<any>}
+ */
+async function withDnsRetry(fn) {
+  const isDnsish = (err) => {
+    const codes = [err && err.code, ...(Array.isArray(err && err.errors) ? err.errors.map((e) => e.code) : [])];
+    return codes.some((c) => c === 'ECONNREFUSED' || c === 'EAI_AGAIN' || c === 'ENOTFOUND' || c === 'ETIMEOUT');
+  };
+
+  try {
+    return await fn();
+  } catch (err) {
+    if (!isDnsish(err)) throw err;
+    console.warn('[postgres] DNS lookup failed (' + (err.code || 'unknown')
+      + '), retrying once in 1.5s...');
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return fn();
+  }
+}
+
+/**
  * Is PostgreSQL configured for this process?
  *
  * The migration is incremental: when DATABASE_URL is absent the application keeps
@@ -116,7 +149,7 @@ function getPool() {
     || (process.env.NODE_ENV === 'production' && process.env.PG_SSL !== 'false');
   const useSsl = !isLoopback && (wantsSsl || process.env.PG_SSL === 'true');
 
-  pool = new Pool({
+  const newPool = new Pool({
     // Stripped so the explicit `ssl` option below wins over any `sslmode`
     // embedded in the URL - see stripSslParams().
     connectionString: stripSslParams(connectionString),
@@ -140,10 +173,11 @@ function getPool() {
       : false,
   });
 
-  pool.on('error', (err) => {
+  newPool.on('error', (err) => {
     console.error('[postgres] Unexpected pool error:', err.message);
   });
 
+  pool = newPool;
   console.log('[postgres] Connection pool created');
   return pool;
 }
@@ -158,14 +192,19 @@ async function query(text, params) {
   const client = getPool();
   const start = Date.now();
   try {
-    const result = await client.query(text, params);
+    // A DNS blip on the very first connection otherwise surfaces as an
+    // AggregateError with an empty message, which is impossible to act on.
+    const result = await withDnsRetry(() => client.query(text, params));
     const duration = Date.now() - start;
     if (process.env.PG_DEBUG === 'true') {
       console.log('[postgres] Query:', text, 'params:', params, `(${duration}ms)`);
     }
     return result;
   } catch (err) {
-    console.error('[postgres] Query error:', err.message);
+    // Node's connection errors often carry an empty message; print the code so
+    // the cause is visible in logs.
+    const why = err.message || `(no message; code=${err.code || 'unknown'})`;
+    console.error('[postgres] Query error:', why);
     console.error('[postgres] Query:', text, 'params:', params);
     throw err;
   }

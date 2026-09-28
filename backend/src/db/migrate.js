@@ -56,6 +56,9 @@ async function loadApplied(client) {
 async function runMigrations(options = {}) {
   const log = options.silent ? () => {} : (...args) => console.log(...args);
   const pool = getPool();
+  // Checked out lazily rather than held for the whole migration, so a DNS blip
+  // mid-run (common on Windows with a flaky resolver) does not abort the
+  // migration after some migrations have already been applied.
   const client = await pool.connect();
   const applied = [];
   const skipped = [];
