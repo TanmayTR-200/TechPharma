@@ -34,6 +34,7 @@ require('dotenv').config();
 const { MongoClient } = require('mongodb');
 const { getPool, closePool } = require('../src/db/postgres');
 const { runMigrations } = require('../src/db/migrate');
+const { pickItemName } = require('../src/db/order-item-name');
 
 const DRY_RUN = process.argv.includes('--dry-run');
 const onlyArg = process.argv.find((a) => a.startsWith('--only='));
@@ -321,7 +322,10 @@ function orderItemSnapshot(item) {
     : (item && item.name !== undefined ? item.name : (item && item.productName));
   return {
     productId: toId(rawId),
-    productName: rawName === undefined || rawName === null ? '' : String(rawName),
+    // A placeholder ('Product') is dropped rather than stored: the row then has
+    // no snapshot and the API resolves the live products.name on read, while
+    // migrations/004_order_item_names.sql repairs the value in the table.
+    productName: pickItemName(rawName),
   };
 }
 

@@ -34,6 +34,7 @@ const users = require('../src/db/users');
 const otps = require('../src/db/otps');
 const products = require('../src/db/products');
 const inventory = require('../src/db/inventory');
+const orders = require('../src/db/orders');
 const { runMigrations } = require('../src/db/migrate');
 
 const RUN = String(Date.now());
@@ -481,3 +482,88 @@ describePg('PostgreSQL inventory reservations', () => {
     await expect(stockFor(id)).resolves.toMatchObject({ available_stock: 3, reserved_stock: 0, sold: 0 });
   });
 });
+
+// Regression guard for the "order item named Product" bug: the MongoDB order
+// migration stored no name snapshot at all and the JSON import stored the
+// literal 'Product', so the orders page rendered a product literally called
+// "Product". Reads must resolve a missing/placeholder snapshot from the live
+// catalog (never invent a name), while a real snapshot always wins - it is the
+// only record left once the product is deleted.
+describePg('PostgreSQL order item product names', () => {
+  const productId = (name) => `pgtest-orderitem-${name}-${RUN}`;
+  const orderId = (name) => `pgtest-order-${name}-${RUN}`;
+
+  beforeAll(async () => {
+    await runMigrations();
+  });
+
+  afterEach(async () => {
+    await db.query('DELETE FROM orders WHERE id LIKE $1', [`pgtest-order-%-${RUN}`]);
+    await db.query('DELETE FROM products WHERE id LIKE $1', [`pgtest-orderitem-%-${RUN}`]);
+  });
+
+  async function seedProduct(name, displayName) {
+    const id = productId(name);
+    await db.query(
+      `INSERT INTO products (id, name, price, status)
+       VALUES ($1, $2, 1500, 'active')
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name`,
+      [id, displayName || `Order item test ${name}`]
+    );
+    return id;
+  }
+
+  async function seedOrder(name, items) {
+    const id = orderId(name);
+    await db.query(
+      `INSERT INTO orders (id, buyer_name, status, total_amount)
+       VALUES ($1, 'Order Item Test Buyer', 'pending', 1500)`,
+      [id]
+    );
+    for (const item of items) {
+      await db.query(
+        `INSERT INTO order_items (order_id, product_id, product_name, quantity, price)
+         VALUES ($1, $2, $3, 1, 1500)`,
+        [id, item.product_id, item.product_name]
+      );
+    }
+    return id;
+  }
+
+  test('an empty snapshot resolves to the catalog name instead of the literal placeholder', async () => {
+    const pid = await seedProduct('empty');
+    const oid = await seedOrder('empty', [{ product_id: pid, product_name: '' }]);
+
+    const order = await orders.findById(oid);
+    expect(order.items).toHaveLength(1);
+    expect(order.items[0].product).toEqual({ _id: pid, name: 'Order item test empty' });
+  });
+
+  test('a placeholder snapshot in the table is replaced by the catalog name on read', async () => {
+    const pid = await seedProduct('placeholder');
+    const oid = await seedOrder('placeholder', [{ product_id: pid, product_name: 'Product' }]);
+
+    const order = await orders.findById(oid);
+    expect(order.items[0].product.name).toBe('Order item test placeholder');
+  });
+
+  test('a real snapshot wins over a renamed product (history is preserved)', async () => {
+    const pid = await seedProduct('renamed', 'Voltage Relay');
+    const oid = await seedOrder('renamed', [{ product_id: pid, product_name: 'Voltage Relay (2025)' }]);
+
+    const list = await orders.list();
+    const order = list.find((o) => o._id === oid);
+    expect(order.items[0].product.name).toBe('Voltage Relay (2025)');
+  });
+
+  test('the snapshot survives product deletion, when product_id is nulled', async () => {
+    const pid = await seedProduct('deleted');
+    const oid = await seedOrder('deleted', [{ product_id: pid, product_name: 'Order item test deleted' }]);
+
+    await db.query('DELETE FROM products WHERE id = $1', [pid]);
+
+    const order = await orders.findById(oid);
+    expect(order.items[0].product).toEqual({ _id: null, name: 'Order item test deleted' });
+  });
+});
+

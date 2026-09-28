@@ -20,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { getPool, closePool } = require('../src/db/postgres');
 const { runMigrations } = require('../src/db/migrate');
+const { pickItemName } = require('../src/db/order-item-name');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -358,6 +359,12 @@ async function importProducts(client, knownUserIds) {
 
 async function importOrders(client, knownUserIds, knownProductIds) {
   const orders = readCollection('orders');
+  // Catalog names by id: an order item snapshot is what the order history and
+  // the invoice show, so fall back to the product's real name when the document
+  // does not carry one - never to a placeholder (see src/db/order-item-name.js).
+  const productNames = new Map(
+    readCollection('products').map((p) => [String(p._id), p.name])
+  );
 
   for (const o of orders) {
     if (!o._id) { fail('orders', o, 'missing _id'); continue; }
@@ -440,7 +447,11 @@ async function importOrders(client, knownUserIds, knownProductIds) {
          VALUES ($1,$2,$3,$4,$5,$6)`,
         [
           id, knownProduct,
-          str((item.product && item.product.name) || item.name, 'Product'),
+          pickItemName(
+            item.product && item.product.name,
+            item.name,
+            knownProduct ? productNames.get(knownProduct) : null
+          ),
           Math.max(1, Math.trunc(num(item.quantity, 1))),
           num(item.price, 0), sellerId,
         ]

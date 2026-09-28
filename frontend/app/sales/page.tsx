@@ -229,7 +229,7 @@ export default function SalesPage() {
                             <div className="space-y-1">
                               {order.items.map((item, idx) => (
                                 <div key={idx} className="flex justify-between text-sm p-2 bg-card border border-border rounded">
-                                  <span className="text-foreground">{item.product?.name || item.name || 'Product'} × {item.quantity}</span>
+                                  <span className="text-foreground">{item.product?.name || item.name || 'Unavailable item'} × {item.quantity}</span>
                                   <span className="text-muted-foreground">{fmt((item.price || 0) * (item.quantity || 1))}</span>
                                 </div>
                               ))}

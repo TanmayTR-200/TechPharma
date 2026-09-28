@@ -13,6 +13,7 @@
 // (routes/inventory.js, server.js) work unchanged.
 
 const fs = require('fs');
+const { pickItemName } = require('../db/order-item-name');
 const {
   getDb,
   syncProductToCache,
@@ -412,7 +413,12 @@ async function createOrder({ userId, cartItems, buyerUser, paymentMethod, shippi
       }
 
       orderItems.push({
-        product: { _id: item.product ? item.product._id : productId, name: item.product ? item.product.name : 'Product' },
+        product: {
+          _id: item.product ? item.product._id : productId,
+          // The cart snapshot is a copy; the catalog record is authoritative and
+          // is already loaded above. Never write a placeholder name.
+          name: pickItemName(item.product && item.product.name, product.name),
+        },
         quantity: quantity,
         price: product.price || 0,
         sellerId: product.userId || product.supplierId || null,

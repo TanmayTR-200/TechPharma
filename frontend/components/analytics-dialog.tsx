@@ -71,7 +71,7 @@ export function AnalyticsDialog() {
       const productSales = new Map<string, number>();
       apiData.data?.orders?.forEach(order => {
         order.items?.forEach(item => {
-          const productName = item.product?.name || 'Unknown Product';
+          const productName = item.product?.name || 'Unavailable item';
           const quantity = Number(item.quantity || 0);
           productSales.set(productName, (productSales.get(productName) || 0) + quantity);
         });

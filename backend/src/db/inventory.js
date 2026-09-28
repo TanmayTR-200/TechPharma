@@ -21,6 +21,7 @@
 
 const db = require('./postgres');
 const products = require('./products');
+const { pickItemName } = require('./order-item-name');
 
 const sqlite = require('../inventory/reservation');
 
@@ -476,7 +477,11 @@ async function createOrder({ userId, cartItems, buyerUser, paymentMethod, shippi
         orderItems.push({
           product: {
             _id: (item.product && item.product._id) || productId,
-            name: (item.product && item.product.name) || meta.name || 'Product',
+            // Capture the catalog name: the cart's snapshot is a convenience
+            // copy that legacy carts may lack, while products.name is NOT NULL.
+            // Never a placeholder - an unusable name stays empty and is resolved
+            // from the catalog when the order is read.
+            name: pickItemName(item.product && item.product.name, meta.name),
           },
           quantity: qty,
           price: Number(meta.price) || 0,
@@ -511,7 +516,7 @@ async function createOrder({ userId, cartItems, buyerUser, paymentMethod, shippi
           [
             orderId,
             oi.product._id ? String(oi.product._id) : null,
-            oi.product.name || 'Product', oi.quantity, oi.price,
+            oi.product.name, oi.quantity, oi.price,
             oi.sellerId ? String(oi.sellerId) : null,
           ]
         );

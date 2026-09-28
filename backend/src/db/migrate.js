@@ -14,6 +14,11 @@
 //   npm run db:migrate                 (uses DATABASE_URL)
 //   const { runMigrations } = require('./src/db/migrate'); await runMigrations();
 
+// Loaded here too (not only in server.js) so the documented `npm run db:migrate`
+// CLI picks up backend/.env - it used to abort with "DATABASE_URL environment
+// variable is not set" unless the caller exported the URL by hand.
+require('dotenv').config();
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');

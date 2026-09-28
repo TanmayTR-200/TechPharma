@@ -383,7 +383,7 @@ export default function OrdersPage() {
               <h3 className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mb-3">Items</h3>
               <div className="space-y-3">
                 {selectedOrder.items?.map((item, idx) => {
-                  const name = item.product?.name || item.name || 'Product'
+                  const name = item.product?.name || item.name || 'Unavailable item'
                   return (
                     <div key={idx} className="flex items-center justify-between text-sm">
                       <div>

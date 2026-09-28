@@ -12,9 +12,15 @@
 // An order item is stored normalised across orders + order_items; on read the
 // item is rebuilt as the nested `product` snapshot the API has always used.
 // Order-level extras land in the `metadata` JSONB column.
+//
+// The item name comes from the order_items.product_name snapshot (what the
+// product was called when it was bought). Rows written before that snapshot was
+// captured hold an empty name; for those the live products.name is used, so a
+// display name is never invented - see src/db/order-item-name.js.
 
 const db = require('./postgres');
 const legacy = require('./legacy');
+const { pickItemName } = require('./order-item-name');
 
 const COLLECTION = 'orders';
 
@@ -29,11 +35,14 @@ function toDateOrNull(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// order_items row -> legacy item shape ({ product, quantity, price, sellerId })
+// order_items row -> legacy item shape ({ product, quantity, price, sellerId }).
+// The snapshot wins; `live_product_name` (from the products join) only fills in
+// a snapshot that is missing or a placeholder, and '' is passed through as-is
+// rather than replaced by a made-up name.
 function rowToItem(row) {
   if (!row) return null;
   const item = {
-    product: { _id: row.product_id || null, name: row.product_name || '' },
+    product: { _id: row.product_id || null, name: pickItemName(row.product_name, row.live_product_name) },
     quantity: row.quantity,
     price: Number(row.price) || 0,
   };
@@ -47,7 +56,7 @@ function itemToRow(orderId, item) {
   return [
     orderId,
     productId ? String(productId) : null,
-    (item && item.product && item.product.name) || '',
+    pickItemName(item && item.product && item.product.name, item && item.name),
     Math.max(1, Math.trunc(Number(item.quantity) || 1)),
     Number(item.price) || 0,
     item.sellerId ? String(item.sellerId) : null,
@@ -127,10 +136,20 @@ function orderRowParams(id, r) {
 // ---------------------------------------------------------------------------
 
 // order_id -> [order_items rows] for the given orders (insertion order).
+//
+// products.name is joined in as `live_product_name`: the snapshot in
+// order_items.product_name is what the order history shows, and the join only
+// steps in for rows whose snapshot is empty (legacy imports/migrations) or a
+// placeholder. A deleted product nulls product_id, leaving the snapshot as the
+// only - and correct - source, so this never rewrites history.
 async function itemsFor(orderIds) {
   if (orderIds.length === 0) return new Map();
   const { rows } = await db.query(
-    'SELECT * FROM order_items WHERE order_id = ANY($1) ORDER BY id ASC',
+    `SELECT oi.*, p.name AS live_product_name
+       FROM order_items oi
+       LEFT JOIN products p ON p.id = oi.product_id
+      WHERE oi.order_id = ANY($1)
+      ORDER BY oi.id ASC`,
     [orderIds]
   );
   const map = new Map();
