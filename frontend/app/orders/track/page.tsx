@@ -162,7 +162,7 @@ export default function TrackOrderPage() {
                 {data.items.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between text-sm">
                     <div>
-                      <p className="font-medium text-foreground">{item.name}</p>
+                      <p className="font-medium text-foreground">{item.name || 'Unavailable item'}</p>
                       <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
                     </div>
                     <p className="text-foreground">₹{(item.price || 0).toFixed(2)}</p>

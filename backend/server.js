@@ -26,6 +26,9 @@ const rateLimit = require('express-rate-limit');
 // DATABASE_URL is set and the legacy JSON/cache store otherwise, so every route
 // below keeps working exactly as before on environments without a database.
 const { users: usersRepo, otps: otpsRepo, products: productsRepo, orders: ordersRepo, notifications: notificationsRepo, carts: cartsRepo, isPostgresEnabled, storeName } = require('./src/db');
+// Order-item product names: responses must never invent a placeholder (snapshot
+// first, live catalog second, '' otherwise - see src/db/order-item-name.js).
+const { pickItemName, isUsableName } = require('./src/db/order-item-name');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -2561,7 +2564,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
           .slice(0, 10)
           .map(o => ({
             id: o._id || o.id,
-            product: (o.items || [])[0]?.product?.name || 'Product',
+            product: pickItemName((o.items || [])[0]?.product?.name),
             itemCount: (o.items || []).length,
             buyer: o.buyerName || 'Buyer',
             amount: o.totalAmount || 0,
@@ -2626,7 +2629,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
           id: order._id || order.id,
           type: 'order',
           title: 'New order',
-          product: (order.items || [])[0]?.product?.name || 'Product',
+          product: pickItemName((order.items || [])[0]?.product?.name),
           itemCount: (order.items || []).length,
           amount: order.totalAmount || 0,
           status: order.status || 'pending',
@@ -2638,7 +2641,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
             id: order._id || order.id,
             type: 'purchase',
             title: 'Order placed',
-            product: (order.items || [])[0]?.product?.name || 'Product',
+            product: pickItemName((order.items || [])[0]?.product?.name),
             itemCount: (order.items || []).length,
             amount: order.totalAmount || 0,
             status: order.status || 'pending',
@@ -2652,7 +2655,7 @@ app.get('/api/dashboard', authMiddleware, async (req, res) => {
                 id: order._id || order.id,
                 type: 'sale',
                 title: 'New sale received',
-                product: items[0]?.product?.name || 'Product',
+                product: pickItemName(items[0]?.product?.name),
                 itemCount: items.length,
                 amount: items.reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 1)), 0),
                 status: order.status || 'pending',
@@ -2711,10 +2714,11 @@ app.get('/api/dashboard/analytics', authMiddleware, async (req, res) => {
         const sellerId = String(item.sellerId || product?.userId || product?.supplierId || '');
         if (isAdmin || sellerId === userId) {
           const amount = (item.price > 0 ? item.price : (product?.price || 0)) * (item.quantity || 1);
-          const name = item.product?.name && item.product?.name !== 'Product' ? item.product.name : (product?.name || 'Product');
+          const name = pickItemName(item.product?.name, product?.name);
           totalSales += amount;
           orderHasSale = true;
-          topSales.set(name, (topSales.get(name) || 0) + amount);
+          // Group only rows that still have a usable name; never label one 'Product'.
+          if (name) topSales.set(name, (topSales.get(name) || 0) + amount);
         }
       });
       if (orderHasSale) sellerOrders++;
@@ -2862,16 +2866,21 @@ app.get('/api/orders', authMiddleware, async (req, res) => {
 
     userOrders.forEach(order => {
       order.items = order.items.map(item => {
-        if (item.product && item.product.name && item.product.name !== 'Product' && item.price > 0) return item;
+        if (isUsableName(item.product?.name) && item.price > 0) return item;
         const product = productMap.get(item.product?._id || item.productId);
         if (product) {
           const supplier = userMap.get(product.userId);
           return {
             ...item,
-            product: { _id: product._id, name: product.name },
+            product: { _id: product._id, name: pickItemName(product.name, item.product?.name) },
             price: product.price,
             supplierName: supplier?.name || 'Seller'
           };
+        }
+        // Placeholder snapshot with no live catalog record: serve '' and let the
+        // UI label it rather than presenting a made-up product name.
+        if (item.product && !isUsableName(item.product.name)) {
+          return { ...item, product: { ...item.product, name: '' } };
         }
         return item;
       });
@@ -3060,7 +3069,7 @@ app.get('/api/orders/track/:trackingId', async (req, res) => {
         trackingId: order.trackingId,
         status: order.status || 'pending',
         items: (order.items || []).map(item => ({
-          name: item.product?.name || 'Product',
+          name: pickItemName(item.product?.name),
           quantity: item.quantity,
           price: item.price
         })),
@@ -3140,7 +3149,7 @@ app.get('/api/orders/:id/invoice', authMiddleware, async (req, res) => {
           phone: seller.phone || ''
         },
         items: (order.items || []).map(item => ({
-          name: item.product?.name || 'Product',
+          name: pickItemName(item.product?.name),
           quantity: item.quantity,
           price: item.price || 0,
           total: (item.price || 0) * (item.quantity || 1)
@@ -3167,7 +3176,7 @@ function buildSoldProducts(orders, users, products, sellerId, includeAll = false
       const product = productMap.get(item.product?._id || item.productId);
       const realItem = {
         productId: item.product?._id || item.productId || product?._id || null,
-        productName: item.product?.name && item.product?.name !== 'Product' ? item.product.name : (product?.name || 'Product'),
+        productName: pickItemName(item.product?.name, product?.name),
         quantity: item.quantity,
         price: item.price > 0 ? item.price : (product?.price ?? 0),
         sellerId: item.sellerId || product?.userId || product?.supplierId || null,

@@ -176,7 +176,7 @@ export default function DashboardPage() {
                               <span className={'inline-flex items-center text-[10px] px-2 py-0.5 rounded-full font-medium ' + (stageBadgeClass[n.status] || 'bg-secondary text-muted-foreground')}>{stageLabels[n.status] || n.status}</span>
                             )}
                           </div>
-                          <p className="text-sm font-medium text-foreground truncate">{n.product}{n.itemCount > 1 ? ' (+' + (n.itemCount - 1) + ' more)' : ''}</p>
+                          <p className="text-sm font-medium text-foreground truncate">{n.product || 'Unavailable item'}{n.itemCount > 1 ? ' (+' + (n.itemCount - 1) + ' more)' : ''}</p>
                           <p className="text-xs text-muted-foreground truncate">{n.type === 'sale' && n.counterparty ? 'From ' + n.counterparty : n.type === 'order' && n.counterparty ? 'By ' + n.counterparty : 'Your purchase'}</p>
                         </div>
                       </div>

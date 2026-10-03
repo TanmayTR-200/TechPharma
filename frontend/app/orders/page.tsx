@@ -179,7 +179,7 @@ export default function OrdersPage() {
             <tbody>
               ${inv.items.map((item: any) => `
                 <tr>
-                  <td>${item.name}</td>
+                  <td>${item.name || 'Unavailable item'}</td>
                   <td style="text-align: center;">${item.quantity}</td>
                   <td style="text-align: right;">₹${item.price.toFixed(2)}</td>
                   <td style="text-align: right;">₹${item.total.toFixed(2)}</td>
