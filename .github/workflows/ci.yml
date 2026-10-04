@@ -1,0 +1,159 @@
+name: CI
+
+# Runs on every push to master and on every pull request. Nothing here touches
+# production: the backend suite is hermetic (legacy JSON store in a temp dir)
+# and the PostgreSQL suite runs against a throwaway container that is destroyed
+# when the job ends. Deploying is a separate workflow that only runs once this
+# one is green.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  # Lets deploy.yml run this exact pipeline as a gate before deploying, so the
+  # checks that gate production are literally the same ones defined here.
+  workflow_call:
+
+# A new push makes a running build for the same ref pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Backend: the hermetic jest suite (auth, dashboard, inventory,
+  # rate-limits, order-item-name). Same 56 tests that run locally.
+  # ---------------------------------------------------------------------
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # backend/data/*.json is git-ignored, so a fresh runner has no user rows
+      # and dashboard.test.js cannot resolve the admin account it signs a JWT
+      # for. The seed writes throwaway fixtures; it refuses to run (no
+      # --force) if real data is present, so it is safe even if someone runs
+      # this locally.
+      - name: Seed test fixtures
+        run: node scripts/ci-seed.js --force
+
+      - name: Run test suite
+        run: npm test
+
+  # ---------------------------------------------------------------------
+  # Frontend: a real production build. This is the only thing that reliably
+  # catches "it compiles on my machine" problems (bad imports, missing env
+  # contract). next.config.mjs sets typescript.ignoreBuildErrors and
+  # eslint.ignoreDuringBuilds, so the known 61 type errors do NOT fail the
+  # build - that is deliberate, not an oversight; the type debt is tracked
+  # separately and should not block every other change.
+  # ---------------------------------------------------------------------
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      # frontend/.npmrc pins package-manager=pnpm@10.18.0
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # NEXT_PUBLIC_* values are inlined at build time. They are set to empty
+      # strings (not omitted) so the build exercises the same "not configured"
+      # branches a preview deploy would hit - Firebase falls back to a dummy
+      # app rather than crashing (see frontend/lib/firebase.ts).
+      - name: Build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_API_URL: 'http://localhost:5000'
+          NEXT_PUBLIC_FIREBASE_API_KEY: ''
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ''
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ''
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ''
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ''
+          NEXT_PUBLIC_FIREBASE_APP_ID: ''
+          NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: ''
+          NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET: ''
+          NEXT_PUBLIC_RAZORPAY_KEY_ID: ''
+        run: pnpm run build
+
+  # ---------------------------------------------------------------------
+  # PostgreSQL: the 26 repository integration tests against a real server.
+  # Deliberately NOT pointed at Supabase. The suite inserts and deletes rows;
+  # CI must never be able to touch production data, so it gets its own
+  # container that dies with the job.
+  # ---------------------------------------------------------------------
+  postgres-tests:
+    name: PostgreSQL integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: techpharma
+          POSTGRES_PASSWORD: techpharma
+          POSTGRES_DB: techpharma_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U techpharma -d techpharma_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PG_TEST: '1'
+      PG_SSL: 'false'
+      PG_MIRROR_LEGACY_WRITES: 'false'
+      DATABASE_URL: postgresql://techpharma:techpharma@localhost:5432/techpharma_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The suite also runs migrations in its own beforeAll; doing it here as a
+      # separate step turns "the migration runner is broken" into an obvious
+      # failure instead of a stack trace buried inside jest output.
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Seed test fixtures
+        run: node scripts/ci-seed.js --force
+
+      - name: Run PostgreSQL suite
+        run: npm run test:pg

@@ -1,0 +1,121 @@
+name: Deploy
+
+# Production deployment for pushes to master.
+#
+# Three jobs, in strict order:
+#   migrate -> apply pending SQL migrations to Supabase (idempotent)
+#   deploy  -> trigger Render via its deploy hook
+#   verify  -> wait for the service to come back and answer /api/health
+#
+# Migrations run BEFORE the deploy, not after, so the new code never starts
+# against a schema it does not expect. The runner is checksummed and re-runnable
+# (src/db/migrate.js), so a re-run on an already-migrated database is a no-op.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   DATABASE_URL        Supabase session-pooler URL, ?sslmode=require
+#   RENDER_DEPLOY_HOOK  Render > your service > Settings > Deploy Hook
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-master
+  # Deliberately NOT cancel-in-progress: a half-finished deploy must not be
+  # interrupted midway through a migration.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Waiting on the whole CI workflow rather than re-running the tests here:
+  # one source of truth for "is the code good", no duplicated config.
+  ci:
+    name: Wait for CI
+    uses: ./.github/workflows/ci.yml
+
+  migrate:
+    name: Apply database migrations
+    needs: ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PG_SSL: 'true'
+        run: npm run db:migrate
+
+  deploy:
+    name: Deploy to Render
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK secret is not set."
+            echo "Render > techpharma-5ml5 > Settings > Deploy Hook, then add it as a repository secret."
+            exit 1
+          fi
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK"
+          echo "Deploy hook accepted - Render is building the new commit."
+
+  verify:
+    name: Verify the deployment is live
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      # Render restarts the container, so the first request can fail while it
+      # boots. Retry rather than declaring the deploy broken immediately.
+      - name: Poll health endpoint
+        run: |
+          URL="https://techpharma-5ml5.onrender.com/api/health"
+          for attempt in $(seq 1 30); do
+            CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "$URL" || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "Healthy after ${attempt} attempt(s)."
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Attempt ${attempt}/30 -> HTTP ${CODE}, waiting 20s..."
+            sleep 20
+          done
+          echo "::error::Render did not become healthy within 10 minutes."
+          exit 1
+
+      # Vercel deploys the frontend independently and is not gated by this
+      # workflow, so confirm the site is serving. The domain is read from a
+      # repository variable rather than hardcoded, so this check is skipped
+      # (not failed) until VERCEL_URL is set - a wrong URL baked into CI is
+      # worse than no check. Set it under
+      # Settings > Secrets and variables > Actions > Variables.
+      - name: Check the frontend is reachable
+        run: |
+          if [ -z "$VERCEL_URL" ]; then
+            echo "VERCEL_URL variable not set - skipping the frontend check."
+            exit 0
+          fi
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" "$VERCEL_URL/" || echo "000")
+          echo "Frontend ${VERCEL_URL} -> HTTP ${CODE}"
+          if [ "$CODE" != "200" ]; then
+            echo "::warning::Frontend returned ${CODE} - Vercel may still be building."
+          fi
+        env:
+          VERCEL_URL: ${{ vars.VERCEL_URL }}
