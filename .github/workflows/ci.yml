@@ -15,8 +15,14 @@ on:
   workflow_call:
 
 # A new push makes a running build for the same ref pointless.
+#
+# github.event_name is part of the group on purpose. deploy.yml runs this
+# workflow again via workflow_call before deploying, and both runs target the
+# same ref - without this suffix the two runs share one group and whichever
+# starts second cancels the first (event_name is 'push' for a direct run and
+# 'workflow_call' when deploy.yml invokes it).
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 permissions:
