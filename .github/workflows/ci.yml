@@ -13,16 +13,19 @@ on:
   # Lets deploy.yml run this exact pipeline as a gate before deploying, so the
   # checks that gate production are literally the same ones defined here.
   workflow_call:
+    inputs:
+      # Distinguishes the deploy gate from the push-triggered run. Both target the
+      # same ref; sharing one concurrency group made whichever started second
+      # cancel the other, so the push-triggered CI always showed "cancelled".
+      run-suffix:
+        description: 'Unique label for the concurrency group (prevents run collisions)'
+        required: false
+        type: string
+        default: 'push'
 
 # A new push makes a running build for the same ref pointless.
-#
-# github.event_name is part of the group on purpose. deploy.yml runs this
-# workflow again via workflow_call before deploying, and both runs target the
-# same ref - without this suffix the two runs share one group and whichever
-# starts second cancels the first (event_name is 'push' for a direct run and
-# 'workflow_call' when deploy.yml invokes it).
 concurrency:
-  group: ci-${{ github.ref }}-${{ github.event_name }}
+  group: ci-${{ github.ref }}-${{ inputs.run-suffix }}
   cancel-in-progress: true
 
 permissions:
@@ -83,9 +86,16 @@ jobs:
         with:
           node-version: '18'
 
-      # frontend/.npmrc pins package-manager=pnpm@10.18.0
-      - name: Enable pnpm
-        run: corepack enable
+      # pnpm must be installed EXPLICITLY. frontend/package.json has no
+      # "packageManager" field (adding one would make Vercel switch its build to
+      # pnpm, since vercel.json currently installs with npm), so `corepack enable`
+      # alone falls back to Node 18's bundled pnpm 7 - which cannot read the v9
+      # pnpm-lock.yaml and fails at install. Pinning the same version
+      # frontend/.npmrc declares (pnpm@10.18.0) removes that class of surprise.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
